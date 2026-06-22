@@ -10,6 +10,50 @@ import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
 import TasksPage from './pages/TasksPage';
 
+import MySalaryPage from './pages/MySalaryPage';
+import MyLeavesPage from './pages/MyLeavesPage';
+import MyAttendancePage from './pages/MyAttendancePage';
+import ProfilePage from './pages/ProfilePage';
+import AnalyticsPage from './pages/AnalyticsPage';
+import HrDashboardPage from './pages/HrDashboardPage';
+import ProductivityPage from './pages/ProductivityPage';
+import CustDashboardPage from './pages/CustDashboardPage';
+import PermissionsPage from './pages/PermissionsPage';
+import HierarchyPage from './pages/HierarchyPage';
+import InvoiceViewPage from './pages/InvoiceViewPage';
+import JobDetailPage from './pages/JobDetailPage';
+import ReviewPage from './pages/ReviewPage';
+import CompanySettingsPage from './pages/CompanySettingsPage';
+import SuperAdminPage from './pages/SuperAdminPage';
+import DesignersViewPage from './pages/DesignersViewPage';
+import AssignProdPage from './pages/AssignProdPage';
+import ProdStepsPage from './pages/ProdStepsPage';
+import SalesAdminPage from './pages/SalesAdminPage';
+
+// Explicit page components for routes that have a finished React component.
+// Preferred over the ResourcePage/PageStub fallback in the route table below.
+const CUSTOM_PAGES = {
+  'my-salary': MySalaryPage,
+  'my-leaves': MyLeavesPage,
+  'my-attendance': MyAttendancePage,
+  'profile': ProfilePage,
+  'analytics': AnalyticsPage,
+  'hr-dashboard': HrDashboardPage,
+  'productivity': ProductivityPage,
+  'cust-dashboard': CustDashboardPage,
+  'permissions': PermissionsPage,
+  'hierarchy': HierarchyPage,
+  'invoice-view': InvoiceViewPage,
+  'job-detail': JobDetailPage,
+  'review': ReviewPage,
+  'company-settings': CompanySettingsPage,
+  'superadmin': SuperAdminPage,
+  'designers-view': DesignersViewPage,
+  'assign-prod': AssignProdPage,
+  'prod-steps': ProdStepsPage,
+  'sales-admin': SalesAdminPage,
+};
+
 // Routes that reuse another route's resource config.
 const RESOURCE_ALIASES = { 'manage-depts': 'departments' };
 
@@ -87,14 +131,17 @@ export default function App() {
             <Route path="/tasks" element={<TasksPage />} />
 
             {STUB_ROUTES.map(([path, title, legacyId, dbPath]) => {
+              const Comp = CUSTOM_PAGES[path];
               const cfg = RESOURCES[path] || RESOURCES[RESOURCE_ALIASES[path]];
               return (
                 <Route
                   key={path}
                   path={`/${path}`}
-                  element={cfg
-                    ? <ResourcePage config={cfg} />
-                    : <PageStub title={title} legacyId={legacyId} dbPath={dbPath} />}
+                  element={Comp
+                    ? <Comp />
+                    : cfg
+                      ? <ResourcePage config={cfg} />
+                      : <PageStub title={title} legacyId={legacyId} dbPath={dbPath} />}
                 />
               );
             })}

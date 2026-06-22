@@ -49,6 +49,13 @@ export const authApi = {
   setRole:    (uid, b)           => api.patch(`/auth/users/${uid}/role`, b).then(r => r.data),
 };
 
+export const meApi = {
+  payroll:      () => api.get('/me/payroll').then(r => r.data),
+  leaves:       () => api.get('/me/leaves').then(r => r.data),
+  attendance:   () => api.get('/me/attendance').then(r => r.data),
+  requestLeave: (body) => api.post('/me/leaves', body).then(r => r.data),
+};
+
 export const paymentApi = {
   order:  (body) => api.post('/payments/order', body).then(r => r.data),
   verify: (body) => api.post('/payments/verify', body).then(r => r.data),
