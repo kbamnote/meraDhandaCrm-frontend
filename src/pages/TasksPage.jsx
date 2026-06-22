@@ -13,8 +13,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { ref, onValue } from 'firebase/database';
-import { db } from '../services/firebase';
+import { ref, onValue, db } from '../services/realtime';
 import { dbApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../components/common/toast';

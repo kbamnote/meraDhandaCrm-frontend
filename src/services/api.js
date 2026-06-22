@@ -1,21 +1,22 @@
-// Axios-based API client. Injects the current user's Firebase ID token
-// into the Authorization header on every request, matching what the backend
-// middleware expects.
+// Axios API client. Injects our JWT (from localStorage) into the Authorization
+// header on every request. Replaces the old Firebase ID-token interceptor.
 
 import axios from 'axios';
-import { auth } from './firebase';
+
+const TOKEN_KEY = 'mpw_token';
+
+export function getToken() { return localStorage.getItem(TOKEN_KEY); }
+export function setToken(t) { if (t) localStorage.setItem(TOKEN_KEY, t); }
+export function clearToken() { localStorage.removeItem(TOKEN_KEY); }
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || '/api',
   timeout: 30000,
 });
 
-api.interceptors.request.use(async (config) => {
-  const user = auth.currentUser;
-  if (user) {
-    const token = await user.getIdToken();
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+api.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
@@ -24,11 +25,13 @@ api.interceptors.response.use(
   (err) => {
     const msg = err.response?.data?.error || err.message;
     console.warn('[api]', err.config?.method?.toUpperCase(), err.config?.url, '→', msg);
+    // Token expired/invalid → clear it so the app falls back to login.
+    if (err.response?.status === 401) clearToken();
     return Promise.reject(err);
   }
 );
 
-// Helpers that mirror the legacy "Firebase paths" used throughout the HTML.
+// Mirrors the legacy "Firebase paths" used throughout the app.
 export const dbApi = {
   list:   (col)         => api.get(`/db/${col}`).then(r => r.data),
   get:    (col, id)     => api.get(`/db/${col}/${id}`).then(r => r.data),
@@ -39,9 +42,11 @@ export const dbApi = {
 };
 
 export const authApi = {
-  me:        ()        => api.get('/auth/me').then(r => r.data),
-  bootstrap: (body={}) => api.post('/auth/bootstrap', body).then(r => r.data),
-  setRole:   (uid, b)  => api.patch(`/auth/users/${uid}/role`, b).then(r => r.data),
+  requestOtp: (phone)            => api.post('/auth/request-otp', { phone }).then(r => r.data),
+  verifyOtp:  (phone, code, name)=> api.post('/auth/verify-otp', { phone, code, name }).then(r => r.data),
+  me:         ()                 => api.get('/auth/me').then(r => r.data),
+  bootstrap:  (body = {})        => api.post('/auth/bootstrap', body).then(r => r.data),
+  setRole:    (uid, b)           => api.patch(`/auth/users/${uid}/role`, b).then(r => r.data),
 };
 
 export const paymentApi = {
@@ -59,7 +64,9 @@ export const uploadApi = {
 };
 
 export const chatApi = {
+  messages:    (convId)   => api.get(`/chat/messages/${convId}`).then(r => r.data),
   send:        (body)     => api.post('/chat/messages', body).then(r => r.data),
+  groups:      ()         => api.get('/chat/groups').then(r => r.data),
   createGroup: (body)     => api.post('/chat/groups', body).then(r => r.data),
   updateGroup: (id, body) => api.patch(`/chat/groups/${id}`, body).then(r => r.data),
 };

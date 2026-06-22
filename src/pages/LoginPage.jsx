@@ -1,39 +1,26 @@
-// Phone OTP login — mirrors the legacy flow:
-//   1. user enters phone -> reCAPTCHA verifier -> signInWithPhoneNumber
-//   2. backend confirmation result -> user enters OTP -> confirm()
-// On success, AuthContext picks up the auth state change and routes them in.
+// Phone + OTP login via the backend (JWT). Replaces Firebase phone auth.
+//   1. user enters phone        -> POST /auth/request-otp
+//   2. user enters the OTP code -> POST /auth/verify-otp -> { token, profile }
+// In dev (OTP_DEV_MODE=true) the server returns the code, which we show in a
+// toast so you can sign in without an SMS provider.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../services/firebase';
+import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../components/common/toast';
 
 export default function LoginPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, login } = useAuth();
   const nav = useNavigate();
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
-  const [confirmation, setConfirmation] = useState(null);
+  const [otpSent, setOtpSent] = useState(false);
   const [busy, setBusy] = useState(false);
-  const verifierRef = useRef(null);
 
   useEffect(() => {
     if (!loading && user) nav('/admin', { replace: true });
   }, [loading, user, nav]);
-
-  useEffect(() => {
-    // Set up an invisible reCAPTCHA once per mount.
-    if (!verifierRef.current) {
-      verifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-      });
-    }
-    return () => {
-      try { verifierRef.current?.clear(); } catch { /* ignore */ }
-      verifierRef.current = null;
-    };
-  }, []);
 
   const sendOtp = async (e) => {
     e.preventDefault();
@@ -42,12 +29,12 @@ export default function LoginPage() {
     }
     setBusy(true);
     try {
-      const result = await signInWithPhoneNumber(auth, phone, verifierRef.current);
-      setConfirmation(result);
-      showToast('OTP sent', 'success');
+      const res = await authApi.requestOtp(phone);
+      setOtpSent(true);
+      if (res.devCode) showToast(`Dev OTP: ${res.devCode}`, 'success');
+      else showToast('OTP sent', 'success');
     } catch (err) {
-      console.error(err);
-      showToast(err.message || 'Failed to send OTP', 'error');
+      showToast(err.response?.data?.error || 'Failed to send OTP', 'error');
     } finally { setBusy(false); }
   };
 
@@ -56,10 +43,11 @@ export default function LoginPage() {
     if (!otp || otp.length < 4) return showToast('Enter the OTP code', 'error');
     setBusy(true);
     try {
-      await confirmation.confirm(otp);
-      // AuthContext effect handles the redirect.
+      const { token, profile } = await authApi.verifyOtp(phone, otp);
+      login(token, profile);
+      nav('/admin', { replace: true });
     } catch (err) {
-      showToast('Invalid OTP. Try again.', 'error');
+      showToast(err.response?.data?.error || 'Invalid OTP. Try again.', 'error');
     } finally { setBusy(false); }
   };
 
@@ -72,7 +60,7 @@ export default function LoginPage() {
           <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: 4 }}>Sign in with your phone</p>
         </div>
 
-        {!confirmation ? (
+        {!otpSent ? (
           <form onSubmit={sendOtp}>
             <div className="form-group">
               <label>Phone number</label>
@@ -113,7 +101,7 @@ export default function LoginPage() {
             <button
               type="button"
               className="btn btn-ghost w-full mt-2"
-              onClick={() => { setConfirmation(null); setOtp(''); }}
+              onClick={() => { setOtpSent(false); setOtp(''); }}
             >
               Use a different number
             </button>

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ref, onValue } from 'firebase/database';
-import { db } from '../services/firebase';
+import { ref, onValue, db } from '../services/realtime';
 import { useAuth } from '../context/AuthContext';
 
 const STAT_PATHS = [

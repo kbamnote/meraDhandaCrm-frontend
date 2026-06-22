@@ -10,6 +10,17 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
       },
+      // Socket.IO (websocket) — realtime updates in dev
+      '/socket.io': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        ws: true,
+      },
+      // Uploaded files served by the backend
+      '/uploads': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
     },
   },
   build: {

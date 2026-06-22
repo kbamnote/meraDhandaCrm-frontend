@@ -1,43 +1,51 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
-import { auth } from '../services/firebase';
-import { authApi } from '../services/api';
+import { authApi, getToken, setToken, clearToken } from '../services/api';
+import { authSocket } from '../services/realtime';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);           // Firebase user
-  const [profile, setProfile] = useState(null);     // /mpw/users/{uid}
+  const [user, setUser] = useState(null);       // { uid, phone }
+  const [profile, setProfile] = useState(null); // users/{uid}
   const [loading, setLoading] = useState(true);
 
+  // On load: if we have a stored JWT, fetch the current profile.
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      setUser(fbUser);
-      if (fbUser) {
+    (async () => {
+      const token = getToken();
+      if (token) {
         try {
-          // Make sure a profile exists, then fetch it.
-          await authApi.bootstrap({}).catch(() => {});
           const me = await authApi.me();
+          setUser(me.user);
           setProfile(me.profile);
-        } catch (e) {
-          console.warn('Profile load failed:', e.message);
-          setProfile(null);
+          authSocket(token);
+        } catch {
+          clearToken();
         }
-      } else {
-        setProfile(null);
       }
       setLoading(false);
-    });
-    return () => unsub();
+    })();
   }, []);
 
-  const signOut = () => fbSignOut(auth);
+  // Called by LoginPage after a successful verify-otp.
+  const login = (token, prof) => {
+    setToken(token);
+    setProfile(prof);
+    setUser({ uid: prof?.id, phone: prof?.phone });
+    authSocket(token);
+  };
+
+  const signOut = () => {
+    clearToken();
+    setUser(null);
+    setProfile(null);
+  };
 
   const hasRole = (...roles) =>
     !!profile && (roles.includes(profile.role) || roles.includes(profile.customRole));
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut, hasRole, setProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, login, signOut, hasRole, setProfile }}>
       {children}
     </AuthContext.Provider>
   );
