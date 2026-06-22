@@ -3,10 +3,15 @@ import { AuthProvider } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/common/Guards';
 import PageStub from './components/common/PageStub';
+import ResourcePage from './components/common/ResourcePage';
+import { RESOURCES } from './config/resources';
 
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
 import TasksPage from './pages/TasksPage';
+
+// Routes that reuse another route's resource config.
+const RESOURCE_ALIASES = { 'manage-depts': 'departments' };
 
 import './components/common/toast';
 import './styles/global.css';
@@ -81,13 +86,18 @@ export default function App() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/tasks" element={<TasksPage />} />
 
-            {STUB_ROUTES.map(([path, title, legacyId, dbPath]) => (
-              <Route
-                key={path}
-                path={`/${path}`}
-                element={<PageStub title={title} legacyId={legacyId} dbPath={dbPath} />}
-              />
-            ))}
+            {STUB_ROUTES.map(([path, title, legacyId, dbPath]) => {
+              const cfg = RESOURCES[path] || RESOURCES[RESOURCE_ALIASES[path]];
+              return (
+                <Route
+                  key={path}
+                  path={`/${path}`}
+                  element={cfg
+                    ? <ResourcePage config={cfg} />
+                    : <PageStub title={title} legacyId={legacyId} dbPath={dbPath} />}
+                />
+              );
+            })}
           </Route>
 
           <Route path="*" element={<Navigate to="/admin" replace />} />
