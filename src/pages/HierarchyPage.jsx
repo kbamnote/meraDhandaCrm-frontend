@@ -7,6 +7,18 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
+import { useT } from '../i18n/LanguageContext';
+
+const S = {
+  orgHierarchy: { en: 'Org Hierarchy', hi: 'संगठन पदानुक्रम', hinglish: 'Org Hierarchy', gu: 'સંસ્થા પદાનુક્રમ', mr: 'संस्था उतरंड', mwr: 'संगठन पदानुक्रम' },
+  person: { en: 'person', hi: 'व्यक्ति', hinglish: 'person', gu: 'વ્યક્તિ', mr: 'व्यक्ती', mwr: 'व्यक्ति' },
+  people: { en: 'people', hi: 'लोग', hinglish: 'people', gu: 'લોકો', mr: 'लोक', mwr: 'लोग' },
+  across: { en: 'across', hi: 'में', hinglish: 'across', gu: 'માં', mr: 'मध्ये', mwr: 'में' },
+  department: { en: 'department', hi: 'विभाग', hinglish: 'department', gu: 'વિભાગ', mr: 'विभाग', mwr: 'विभाग' },
+  departments: { en: 'departments', hi: 'विभाग', hinglish: 'departments', gu: 'વિભાગો', mr: 'विभाग', mwr: 'विभाग' },
+  noUsers: { en: 'No users yet.', hi: 'अभी तक कोई यूज़र नहीं।', hinglish: 'Abhi tak koi user nahi.', gu: 'હજુ સુધી કોઈ યૂઝર નથી.', mr: 'अद्याप कोणतेही युझर नाहीत.', mwr: 'अजे तांई कोई यूज़र कोनी।' },
+  pending: { en: 'pending', hi: 'पेंडिंग', hinglish: 'pending', gu: 'પેન્ડિંગ', mr: 'प्रलंबित', mwr: 'पेंडिंग' },
+};
 
 const ROLE_BADGE = {
   admin: 'badge-red', superadmin: 'badge-red', owner: 'badge-red',
@@ -18,6 +30,7 @@ const ROLE_BADGE = {
 const UNASSIGNED = 'Unassigned';
 
 export default function HierarchyPage() {
+  const t = useT(S);
   const [users, setUsers] = useState({});
   const [departments, setDepartments] = useState({});
 
@@ -64,16 +77,16 @@ export default function HierarchyPage() {
   return (
     <div data-legacy-id="page-hierarchy">
       <div className="mb-4">
-        <h2 style={{ fontSize: 20, fontWeight: 600 }}>🏢 Org Hierarchy</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 600 }}>🏢 {t('orgHierarchy')}</h2>
         <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-          {totalUsers} {totalUsers === 1 ? 'person' : 'people'} across {groups.length}{' '}
-          {groups.length === 1 ? 'department' : 'departments'}
+          {totalUsers} {totalUsers === 1 ? t('person') : t('people')} {t('across')} {groups.length}{' '}
+          {groups.length === 1 ? t('department') : t('departments')}
         </div>
       </div>
 
       {!groups.length ? (
         <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
-          No users yet.
+          {t('noUsers')}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 12 }}>
@@ -100,7 +113,7 @@ export default function HierarchyPage() {
                     </div>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       <span className={`badge ${ROLE_BADGE[u.role] || 'badge-blue'}`}>
-                        {u.role || 'pending'}
+                        {u.role || t('pending')}
                       </span>
                       {u.customRole && (
                         <span className="badge badge-blue">{u.customRole}</span>

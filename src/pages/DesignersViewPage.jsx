@@ -5,8 +5,20 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
+import { useT } from '../i18n/LanguageContext';
+
+const S = {
+  designers: { en: 'Designers', hi: 'डिज़ाइनर', hinglish: 'Designers', gu: 'ડિઝાઇનર', mr: 'डिझायनर', mwr: 'डिज़ाइनर' },
+  designerOne: { en: 'designer', hi: 'डिज़ाइनर', hinglish: 'designer', gu: 'ડિઝાઇનર', mr: 'डिझायनर', mwr: 'डिज़ाइनर' },
+  designerMany: { en: 'designers', hi: 'डिज़ाइनर', hinglish: 'designers', gu: 'ડિઝાઇનર', mr: 'डिझायनर', mwr: 'डिज़ाइनर' },
+  jobs: { en: 'jobs', hi: 'जॉब', hinglish: 'jobs', gu: 'જોબ', mr: 'जॉब', mwr: 'जॉब' },
+  noDesigners: { en: 'No designers yet.', hi: 'अभी तक कोई डिज़ाइनर नहीं।', hinglish: 'Abhi tak koi designer nahi.', gu: 'હજુ સુધી કોઈ ડિઝાઇનર નથી.', mr: 'अद्याप कोणतेही डिझायनर नाहीत.', mwr: 'अजे तांई कोई डिज़ाइनर कोनी।' },
+  general: { en: 'General', hi: 'सामान्य', hinglish: 'General', gu: 'સામાન્ય', mr: 'सामान्य', mwr: 'सामान्य' },
+  assignedJobs: { en: 'assigned jobs', hi: 'असाइन की गई जॉब', hinglish: 'assigned jobs', gu: 'સોંપાયેલ જોબ', mr: 'नेमलेले जॉब', mwr: 'असाइन करी जॉब' },
+};
 
 export default function DesignersViewPage() {
+  const t = useT(S);
   const [designers, setDesigners] = useState({});
   const [jobs, setJobs] = useState({});
 
@@ -47,15 +59,15 @@ export default function DesignersViewPage() {
   return (
     <div data-legacy-id="page-designers-view">
       <div className="mb-4">
-        <h2 style={{ fontSize: 20, fontWeight: 600 }}>🎨 Designers</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 600 }}>🎨 {t('designers')}</h2>
         <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-          {designerList.length} {designerList.length === 1 ? 'designer' : 'designers'} · {jobList.length} jobs
+          {designerList.length} {designerList.length === 1 ? t('designerOne') : t('designerMany')} · {jobList.length} {t('jobs')}
         </div>
       </div>
 
       {!designerList.length ? (
         <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
-          No designers yet.
+          {t('noDesigners')}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
@@ -66,11 +78,11 @@ export default function DesignersViewPage() {
                 {d.status && <span className={statusBadge(d.status)}>{d.status}</span>}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8 }}>
-                {d.specialization || d.specialty || 'General'}
+                {d.specialization || d.specialty || t('general')}
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                 <span style={{ fontSize: 28, fontWeight: 700 }}>{jobCountFor(d)}</span>
-                <span style={{ fontSize: 12, color: 'var(--text3)' }}>assigned jobs</span>
+                <span style={{ fontSize: 12, color: 'var(--text3)' }}>{t('assignedJobs')}</span>
               </div>
             </div>
           ))}

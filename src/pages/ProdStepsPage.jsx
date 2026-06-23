@@ -5,6 +5,17 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
+import { useT } from '../i18n/LanguageContext';
+
+const S = {
+  productionSteps: { en: 'Production Steps', hi: 'प्रोडक्शन स्टेप्स', hinglish: 'Production Steps', gu: 'પ્રોડક્શન સ્ટેપ્સ', mr: 'प्रोडक्शन स्टेप्स', mwr: 'प्रोडक्शन स्टेप्स' },
+  itemOne: { en: 'item', hi: 'आइटम', hinglish: 'item', gu: 'આઇટમ', mr: 'आयटम', mwr: 'आइटम' },
+  itemMany: { en: 'items', hi: 'आइटम', hinglish: 'items', gu: 'આઇટમ', mr: 'आयटम', mwr: 'आइटम' },
+  across: { en: 'across', hi: 'में', hinglish: 'across', gu: 'માં', mr: 'मध्ये', mwr: 'में' },
+  stageOne: { en: 'stage', hi: 'स्टेज', hinglish: 'stage', gu: 'સ્ટેજ', mr: 'टप्पा', mwr: 'स्टेज' },
+  stageMany: { en: 'stages', hi: 'स्टेज', hinglish: 'stages', gu: 'સ્ટેજ', mr: 'टप्पे', mwr: 'स्टेज' },
+  noEntries: { en: 'No production entries yet.', hi: 'अभी तक कोई प्रोडक्शन एंट्री नहीं।', hinglish: 'Abhi tak koi production entry nahi.', gu: 'હજુ સુધી કોઈ પ્રોડક્શન એન્ટ્રી નથી.', mr: 'अद्याप कोणतीही प्रोडक्शन नोंद नाही.', mwr: 'अजे तांई कोई प्रोडक्शन एंट्री कोनी।' },
+};
 
 const STATUS_BADGE = {
   pending: 'badge badge-amber',
@@ -20,6 +31,7 @@ function statusBadgeClass(status) {
 }
 
 export default function ProdStepsPage() {
+  const t = useT(S);
   const [production, setProduction] = useState({});
 
   useEffect(() => {
@@ -45,15 +57,15 @@ export default function ProdStepsPage() {
   return (
     <div data-legacy-id="page-prod-steps">
       <div className="mb-4">
-        <h2 style={{ fontSize: 20, fontWeight: 600 }}>⚙️ Production Steps</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 600 }}>⚙️ {t('productionSteps')}</h2>
         <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-          {entries.length} {entries.length === 1 ? 'item' : 'items'} across {groups.length} {groups.length === 1 ? 'stage' : 'stages'}
+          {entries.length} {entries.length === 1 ? t('itemOne') : t('itemMany')} {t('across')} {groups.length} {groups.length === 1 ? t('stageOne') : t('stageMany')}
         </div>
       </div>
 
       {!entries.length ? (
         <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
-          No production entries yet.
+          {t('noEntries')}
         </div>
       ) : (
         <div className="flex gap-3" style={{ overflowX: 'auto', alignItems: 'flex-start', paddingBottom: 8 }}>

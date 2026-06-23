@@ -7,6 +7,25 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
+import { useT } from '../i18n/LanguageContext';
+
+const S = {
+  invoiceView: { en: 'Invoice View', hi: 'इनवॉइस व्यू', hinglish: 'Invoice View', gu: 'ઇન્વોઇસ વ્યૂ', mr: 'इनव्हॉइस व्ह्यू', mwr: 'इनवॉइस व्यू' },
+  invoice: { en: 'invoice', hi: 'इनवॉइस', hinglish: 'invoice', gu: 'ઇન્વોઇસ', mr: 'इनव्हॉइस', mwr: 'इनवॉइस' },
+  invoices: { en: 'invoices', hi: 'इनवॉइस', hinglish: 'invoices', gu: 'ઇન્વોઇસ', mr: 'इनव्हॉइस', mwr: 'इनवॉइस' },
+  print: { en: '🖨 Print', hi: '🖨 प्रिंट', hinglish: '🖨 Print', gu: '🖨 પ્રિન્ટ', mr: '🖨 प्रिंट', mwr: '🖨 प्रिंट' },
+  noInvoices: { en: 'No invoices yet.', hi: 'अभी तक कोई इनवॉइस नहीं।', hinglish: 'Abhi tak koi invoice nahi.', gu: 'હજુ સુધી કોઈ ઇન્વોઇસ નથી.', mr: 'अद्याप कोणतेही इनव्हॉइस नाहीत.', mwr: 'अजे तांई कोई इनवॉइस कोनी।' },
+  selectInvoice: { en: 'Select an invoice.', hi: 'कोई इनवॉइस चुनें।', hinglish: 'Koi invoice chunein.', gu: 'કોઈ ઇન્વોઇસ પસંદ કરો.', mr: 'एखादे इनव्हॉइस निवडा.', mwr: 'कोई इनवॉइस चुणो।' },
+  invoiceWord: { en: 'Invoice', hi: 'इनवॉइस', hinglish: 'Invoice', gu: 'ઇન્વોઇસ', mr: 'इनव्हॉइस', mwr: 'इनवॉइस' },
+  draft: { en: 'draft', hi: 'ड्राफ्ट', hinglish: 'draft', gu: 'ડ્રાફ્ટ', mr: 'मसुदा', mwr: 'ड्राफ्ट' },
+  invoiceNo: { en: 'Invoice No', hi: 'इनवॉइस नंबर', hinglish: 'Invoice No', gu: 'ઇન્વોઇસ નંબર', mr: 'इनव्हॉइस क्रमांक', mwr: 'इनवॉइस नंबर' },
+  client: { en: 'Client', hi: 'क्लाइंट', hinglish: 'Client', gu: 'ક્લાયન્ટ', mr: 'क्लायंट', mwr: 'क्लाइंट' },
+  amount: { en: 'Amount', hi: 'राशि', hinglish: 'Amount', gu: 'રકમ', mr: 'रक्कम', mwr: 'रकम' },
+  status: { en: 'Status', hi: 'स्थिति', hinglish: 'Status', gu: 'સ્થિતિ', mr: 'स्थिती', mwr: 'स्थिति' },
+  date: { en: 'Date', hi: 'तारीख', hinglish: 'Date', gu: 'તારીખ', mr: 'तारीख', mwr: 'तारीख' },
+  dueDate: { en: 'Due date', hi: 'देय तारीख', hinglish: 'Due date', gu: 'નિયત તારીખ', mr: 'देय तारीख', mwr: 'देय तारीख' },
+  otherDetails: { en: 'Other details', hi: 'अन्य विवरण', hinglish: 'Other details', gu: 'અન્ય વિગતો', mr: 'इतर तपशील', mwr: 'दूजा विवरण' },
+};
 
 const STATUS_BADGE = {
   paid: 'badge-green',
@@ -37,6 +56,7 @@ function cellText(value) {
 }
 
 export default function InvoiceViewPage() {
+  const t = useT(S);
   const [invoices, setInvoices] = useState({}); // { id: invoice }
   const [selectedId, setSelectedId] = useState(null);
 
@@ -74,21 +94,21 @@ export default function InvoiceViewPage() {
     <div data-legacy-id="page-invoice-view">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 600 }}>🧾 Invoice View</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 600 }}>🧾 {t('invoiceView')}</h2>
           <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-            {list.length} {list.length === 1 ? 'invoice' : 'invoices'}
+            {list.length} {list.length === 1 ? t('invoice') : t('invoices')}
           </div>
         </div>
         {selected && (
           <button className="btn btn-primary btn-sm" onClick={() => window.print()}>
-            🖨 Print
+            {t('print')}
           </button>
         )}
       </div>
 
       {!list.length ? (
         <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
-          No invoices yet.
+          {t('noInvoices')}
         </div>
       ) : (
         <div className="flex gap-3" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -132,16 +152,16 @@ export default function InvoiceViewPage() {
           <div className="card flex-1" style={{ minWidth: 280 }}>
             {!selected ? (
               <div style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
-                Select an invoice.
+                {t('selectInvoice')}
               </div>
             ) : (
               <div>
                 <div className="flex items-center justify-between mb-2" style={{ flexWrap: 'wrap', gap: 8 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 600 }}>
-                    {selected.invoiceNo || `Invoice #${selected.id}`}
+                    {selected.invoiceNo || `${t('invoiceWord')} #${selected.id}`}
                   </h3>
                   <span className={`badge ${STATUS_BADGE[selected.status] || 'badge-blue'}`}>
-                    {selected.status || 'draft'}
+                    {selected.status || t('draft')}
                   </span>
                 </div>
 
@@ -151,19 +171,19 @@ export default function InvoiceViewPage() {
 
                 <table className="crm-table" style={{ width: '100%' }}>
                   <tbody>
-                    <DetailRow label="Invoice No" value={selected.invoiceNo} />
-                    <DetailRow label="Client" value={selected.client} />
-                    <DetailRow label="Amount" value={money(selected.amount)} />
-                    <DetailRow label="Status" value={selected.status} />
-                    <DetailRow label="Date" value={selected.date} />
-                    <DetailRow label="Due date" value={selected.dueDate} />
+                    <DetailRow label={t('invoiceNo')} value={selected.invoiceNo} />
+                    <DetailRow label={t('client')} value={selected.client} />
+                    <DetailRow label={t('amount')} value={money(selected.amount)} />
+                    <DetailRow label={t('status')} value={selected.status} />
+                    <DetailRow label={t('date')} value={selected.date} />
+                    <DetailRow label={t('dueDate')} value={selected.dueDate} />
                   </tbody>
                 </table>
 
                 {!!extraEntries.length && (
                   <>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', margin: '16px 0 6px', textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                      Other details
+                      {t('otherDetails')}
                     </div>
                     <table className="crm-table" style={{ width: '100%' }}>
                       <tbody>

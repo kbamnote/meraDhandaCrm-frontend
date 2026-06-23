@@ -5,6 +5,26 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
+import { useT } from '../i18n/LanguageContext';
+
+const S = {
+  salesAdmin: { en: 'Sales Admin', hi: 'सेल्स एडमिन', hinglish: 'Sales Admin', gu: 'સેલ્સ એડમિન', mr: 'सेल्स अॅडमिन', mwr: 'सेल्स एडमिन' },
+  saleOne: { en: 'sale', hi: 'सेल', hinglish: 'sale', gu: 'સેલ', mr: 'विक्री', mwr: 'सेल' },
+  saleMany: { en: 'sales', hi: 'सेल', hinglish: 'sales', gu: 'સેલ', mr: 'विक्री', mwr: 'सेल' },
+  leads: { en: 'leads', hi: 'लीड', hinglish: 'leads', gu: 'લીડ', mr: 'लीड', mwr: 'लीड' },
+  totalSales: { en: 'Total Sales', hi: 'कुल सेल', hinglish: 'Total Sales', gu: 'કુલ સેલ', mr: 'एकूण विक्री', mwr: 'कुल सेल' },
+  won: { en: 'Won', hi: 'जीती', hinglish: 'Won', gu: 'જીત્યું', mr: 'जिंकले', mwr: 'जीती' },
+  open: { en: 'Open', hi: 'ओपन', hinglish: 'Open', gu: 'ઓપન', mr: 'सुरू', mwr: 'ओपन' },
+  lost: { en: 'Lost', hi: 'हारी', hinglish: 'Lost', gu: 'ગુમાવ્યું', mr: 'गमावले', mwr: 'हारी' },
+  leadsByStage: { en: 'Leads by stage', hi: 'स्टेज के अनुसार लीड', hinglish: 'Stage ke hisaab se leads', gu: 'સ્ટેજ પ્રમાણે લીડ', mr: 'टप्प्यानुसार लीड', mwr: 'स्टेज रे हिसाब सूं लीड' },
+  noLeads: { en: 'No leads yet.', hi: 'अभी तक कोई लीड नहीं।', hinglish: 'Abhi tak koi lead nahi.', gu: 'હજુ સુધી કોઈ લીડ નથી.', mr: 'अद्याप कोणतीही लीड नाही.', mwr: 'अजे तांई कोई लीड कोनी।' },
+  recentSales: { en: 'Recent sales', hi: 'हाल की सेल', hinglish: 'Recent sales', gu: 'તાજેતરની સેલ', mr: 'अलीकडील विक्री', mwr: 'हाल री सेल' },
+  noSales: { en: 'No sales yet.', hi: 'अभी तक कोई सेल नहीं।', hinglish: 'Abhi tak koi sale nahi.', gu: 'હજુ સુધી કોઈ સેલ નથી.', mr: 'अद्याप कोणतीही विक्री नाही.', mwr: 'अजे तांई कोई सेल कोनी।' },
+  client: { en: 'Client', hi: 'क्लाइंट', hinglish: 'Client', gu: 'ક્લાયન્ટ', mr: 'क्लायंट', mwr: 'क्लाइंट' },
+  product: { en: 'Product', hi: 'प्रोडक्ट', hinglish: 'Product', gu: 'પ્રોડક્ટ', mr: 'प्रोडक्ट', mwr: 'प्रोडक्ट' },
+  amount: { en: 'Amount', hi: 'राशि', hinglish: 'Amount', gu: 'રકમ', mr: 'रक्कम', mwr: 'रकम' },
+  status: { en: 'Status', hi: 'स्टेटस', hinglish: 'Status', gu: 'સ્ટેટસ', mr: 'स्थिती', mwr: 'स्टेटस' },
+};
 
 function inr(n) {
   const num = Number(n) || 0;
@@ -20,6 +40,7 @@ function statusBadgeClass(status) {
 }
 
 export default function SalesAdminPage() {
+  const t = useT(S);
   const [sales, setSales] = useState({});
   const [leads, setLeads] = useState({});
 
@@ -67,18 +88,18 @@ export default function SalesAdminPage() {
   const recent = useMemo(() => saleList.slice(-10).reverse(), [saleList]);
 
   const cards = [
-    { label: 'Total Sales', value: inr(totalSales), icon: '💰' },
-    { label: 'Won', value: counts.won, icon: '✅' },
-    { label: 'Open', value: counts.open, icon: '⏳' },
-    { label: 'Lost', value: counts.lost, icon: '❌' },
+    { label: t('totalSales'), value: inr(totalSales), icon: '💰' },
+    { label: t('won'), value: counts.won, icon: '✅' },
+    { label: t('open'), value: counts.open, icon: '⏳' },
+    { label: t('lost'), value: counts.lost, icon: '❌' },
   ];
 
   return (
     <div data-legacy-id="page-sales-admin">
       <div className="mb-4">
-        <h2 style={{ fontSize: 20, fontWeight: 600 }}>📊 Sales Admin</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 600 }}>📊 {t('salesAdmin')}</h2>
         <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-          {saleList.length} {saleList.length === 1 ? 'sale' : 'sales'} · {leadList.length} leads
+          {saleList.length} {saleList.length === 1 ? t('saleOne') : t('saleMany')} · {leadList.length} {t('leads')}
         </div>
       </div>
 
@@ -93,9 +114,9 @@ export default function SalesAdminPage() {
       </div>
 
       <div className="card mb-4">
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Leads by stage</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>{t('leadsByStage')}</div>
         {!leadsByStage.length ? (
-          <div style={{ color: 'var(--text3)', fontSize: 13 }}>No leads yet.</div>
+          <div style={{ color: 'var(--text3)', fontSize: 13 }}>{t('noLeads')}</div>
         ) : (
           <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
             {leadsByStage.map((s) => (
@@ -107,20 +128,20 @@ export default function SalesAdminPage() {
         )}
       </div>
 
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Recent sales</div>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{t('recentSales')}</div>
       <div className="card" style={{ padding: 0, overflow: 'auto' }}>
         {!recent.length ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
-            No sales yet.
+            {t('noSales')}
           </div>
         ) : (
           <table className="crm-table">
             <thead>
               <tr>
-                <th>Client</th>
-                <th>Product</th>
-                <th>Amount</th>
-                <th>Status</th>
+                <th>{t('client')}</th>
+                <th>{t('product')}</th>
+                <th>{t('amount')}</th>
+                <th>{t('status')}</th>
               </tr>
             </thead>
             <tbody>
