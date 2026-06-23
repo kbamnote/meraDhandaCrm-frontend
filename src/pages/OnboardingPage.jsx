@@ -105,7 +105,7 @@ export default function OnboardingPage() {
           <div className="form-group" key={q.key}>
             <label>{t('q_' + q.key)}</label>
             <select className="input" value={ans[q.key]} onChange={(e) => set(q.key, e.target.value)}>
-              {q.options.map((o) => <option key={o} value={o}>{optionLabel(o)}</option>)}
+              {(q.options || ['Yes', 'No']).map((o) => <option key={o} value={o}>{optionLabel(o)}</option>)}
             </select>
             {q.module && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{t('h_' + q.key)}</div>}
           </div>
