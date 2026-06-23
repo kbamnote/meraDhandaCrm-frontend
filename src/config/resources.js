@@ -1,7 +1,8 @@
 /**
  * Resource configs for the data-driven ResourcePage.
  *
- * Keyed by ROUTE PATH (matches App.jsx). Each config drives one CRUD page:
+ * Keyed by ROUTE PATH (matches the route paths in App.jsx). Each config drives
+ * one CRUD page:
  *   collection  — Mongo collection / legacy mpw/<collection> path
  *   fields[]    — { key, label, type, required?, table?, options?, default? }
  *                 type: text | textarea | number | date | tel | email | select
@@ -51,7 +52,7 @@ export const RESOURCES = {
     ],
   },
 
-  clients: {
+  'client-ledger': {
     collection: 'clients', title: '📒 Clients', plural: 'Clients', singular: 'Client',
     legacyId: 'page-client-ledger', writeRoles: ADMIN_SALES,
     fields: [
@@ -65,7 +66,7 @@ export const RESOURCES = {
     ],
   },
 
-  leads: {
+  'leads-crm': {
     collection: 'leads', title: '📞 Leads CRM', plural: 'Leads', singular: 'Lead',
     legacyId: 'page-leads-crm', writeRoles: ADMIN_SALES,
     fields: [
@@ -92,7 +93,7 @@ export const RESOURCES = {
     ],
   },
 
-  machineHistory: {
+  'machine-history': {
     collection: 'machineHistory', title: '🕐 Machine History', plural: 'Entries', singular: 'Entry',
     legacyId: 'page-machine-history', writeRoles: ADMIN,
     fields: [
@@ -103,7 +104,7 @@ export const RESOURCES = {
     ],
   },
 
-  departments: {
+  'dept-mgmt': {
     collection: 'departments', title: '🏢 Departments', plural: 'Departments', singular: 'Department',
     legacyId: 'page-dept-mgmt', writeRoles: ADMIN_HR,
     fields: [
@@ -113,7 +114,7 @@ export const RESOURCES = {
     ],
   },
 
-  enquiries: {
+  enquiry: {
     collection: 'enquiries', title: '❓ Enquiries', plural: 'Enquiries', singular: 'Enquiry',
     legacyId: 'page-enquiry', writeRoles: ADMIN_SALES,
     fields: [
@@ -127,7 +128,7 @@ export const RESOURCES = {
     ],
   },
 
-  samples: {
+  'sample-dm': {
     collection: 'samples', title: '📦 Sample DM', plural: 'Samples', singular: 'Sample',
     legacyId: 'page-sample-dm', writeRoles: ADMIN_SALES,
     fields: [
@@ -140,7 +141,7 @@ export const RESOURCES = {
     ],
   },
 
-  bulkOrders: {
+  'bulk-orders': {
     collection: 'bulkOrders', title: '📑 Bulk Orders', plural: 'Bulk Orders', singular: 'Order',
     legacyId: 'page-bulk-orders', writeRoles: ADMIN_SALES,
     fields: [
@@ -178,7 +179,7 @@ export const RESOURCES = {
     ],
   },
 
-  jobs: {
+  jobsetter: {
     collection: 'jobs', title: '🛠 Job Setter', plural: 'Jobs', singular: 'Job',
     legacyId: 'page-jobsetter', writeRoles: ADMIN_DESIGNER,
     fields: [
@@ -233,7 +234,7 @@ export const RESOURCES = {
     ],
   },
 
-  sales: {
+  'sales-panel': {
     collection: 'sales', title: '💼 Sales', plural: 'Sales', singular: 'Sale',
     legacyId: 'page-sales-panel', writeRoles: ADMIN_SALES,
     fields: [
@@ -247,7 +248,7 @@ export const RESOURCES = {
     ],
   },
 
-  invoices: {
+  accounting: {
     collection: 'invoices', title: '💰 Accounting — Invoices', plural: 'Invoices', singular: 'Invoice',
     legacyId: 'page-accounting', writeRoles: ADMIN_SALES,
     fields: [
@@ -261,7 +262,7 @@ export const RESOURCES = {
     ],
   },
 
-  leaves: {
+  'hr-leaves': {
     collection: 'leaves', title: '🏖 Leaves', plural: 'Leaves', singular: 'Leave',
     legacyId: 'page-hr-leaves', writeRoles: ADMIN_HR,
     fields: [
@@ -276,7 +277,7 @@ export const RESOURCES = {
     ],
   },
 
-  payroll: {
+  'hr-payroll': {
     collection: 'payroll', title: '💵 Payroll', plural: 'Slips', singular: 'Slip',
     legacyId: 'page-hr-payroll', writeRoles: ADMIN_HR,
     fields: [

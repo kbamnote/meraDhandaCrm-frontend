@@ -55,7 +55,7 @@ const CUSTOM_PAGES = {
 };
 
 // Routes that reuse another route's resource config.
-const RESOURCE_ALIASES = { 'manage-depts': 'departments' };
+const RESOURCE_ALIASES = { 'manage-depts': 'dept-mgmt' };
 
 import './components/common/toast';
 import './styles/global.css';
