@@ -1,13 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
-import { ProtectedRoute } from './components/common/Guards';
+import { ProtectedRoute, RequireOnboarded } from './components/common/Guards';
 import PageStub from './components/common/PageStub';
 import ResourcePage from './components/common/ResourcePage';
 import { RESOURCES } from './config/resources';
 
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import OnboardingPage from './pages/OnboardingPage';
 import AdminPage from './pages/AdminPage';
 import TasksPage from './pages/TasksPage';
 import BillingPage from './pages/BillingPage';
@@ -128,8 +129,9 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
 
-          <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route element={<ProtectedRoute><RequireOnboarded><AppLayout /></RequireOnboarded></ProtectedRoute>}>
             <Route index element={<Navigate to="/admin" replace />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/tasks" element={<TasksPage />} />

@@ -28,3 +28,13 @@ export function ProtectedRoute({ children, roles }) {
   }
   return children;
 }
+
+// New trial companies must finish onboarding before using the app. Existing
+// paid (pro) companies and already-onboarded tenants pass straight through.
+export function RequireOnboarded({ children }) {
+  const { tenant, loading } = useAuth();
+  if (loading) return <Loading />;
+  const needsOnboarding = tenant && tenant.plan === 'trial' && !(tenant.settings && tenant.settings.onboarded);
+  if (needsOnboarding) return <Navigate to="/onboarding" replace />;
+  return children;
+}

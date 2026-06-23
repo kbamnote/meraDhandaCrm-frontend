@@ -92,13 +92,30 @@ const SECTIONS = [
   },
 ];
 
+// Which onboarding module each sidebar route belongs to. Routes not listed here
+// are "core" and always shown. A module is hidden only if the tenant explicitly
+// turned it off during onboarding (settings.modules[key] === false).
+const MODULE_OF = {
+  '/designers': 'designers', '/designer': 'designers', '/designers-view': 'designers', '/jobsetter': 'designers',
+  '/machines': 'machines', '/machine-history': 'machines',
+  '/qc': 'qcDispatch', '/dispatch': 'qcDispatch',
+  '/hr-dashboard': 'hr', '/hr-staff': 'hr', '/hr-leaves': 'hr', '/hr-payroll': 'hr',
+  '/attendance': 'hr', '/productivity': 'hr', '/my-leaves': 'hr', '/my-attendance': 'hr',
+  '/my-salary': 'hr', '/dept-mgmt': 'hr', '/manage-depts': 'hr',
+  '/bulk-orders': 'bulk', '/enquiry': 'bulk', '/sample-dm': 'bulk',
+};
+
 export default function Sidebar({ open, onClose }) {
   const { profile, tenant, isPlatformAdmin, signOut } = useAuth();
   const role = profile?.role;
   const custom = profile?.customRole;
+  const modules = tenant?.settings?.modules || null;
 
   const canSee = (item) => {
     if (item.platform) return isPlatformAdmin;
+    // Hide a link only if its module was explicitly disabled in onboarding.
+    const mod = MODULE_OF[item.to];
+    if (mod && modules && modules[mod] === false) return false;
     if (!item.roles) return true;
     return item.roles.includes(role) || item.roles.includes(custom);
   };

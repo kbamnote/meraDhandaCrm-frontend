@@ -8,12 +8,34 @@ import { tenantApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../components/common/toast';
 
+const MODULE_LABELS = {
+  designers: 'Design team (Designers, Job Setter)',
+  machines: 'Machines & maintenance',
+  qcDispatch: 'Quality control & dispatch',
+  hr: 'HR (attendance, leaves, payroll)',
+  bulk: 'Bulk / B2B orders (Enquiries, Samples)',
+};
+
 export default function BillingPage() {
   const { tenant, hasRole, refreshTenant, setTenant } = useAuth();
   const t = tenant || {};
   const canManage = hasRole('owner', 'admin', 'superadmin');
   const [name, setName] = useState(t.name || '');
   const [busy, setBusy] = useState(false);
+  const [modules, setModules] = useState(() => ({ ...(t.settings && t.settings.modules) }));
+  const [modBusy, setModBusy] = useState(false);
+
+  const saveModules = async () => {
+    setModBusy(true);
+    try {
+      const res = await tenantApi.update({ settings: { ...(t.settings || {}), modules } });
+      setTenant({ ...t, ...res.tenant });
+      refreshTenant();
+      showToast('Modules updated', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed', 'error');
+    } finally { setModBusy(false); }
+  };
 
   const onTrial = t.plan === 'trial';
   const expired = t.expired;
@@ -81,6 +103,30 @@ export default function BillingPage() {
           </div>
           <button className="btn btn-primary btn-sm" onClick={saveName} disabled={busy}>
             {busy ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      )}
+
+      {canManage && (
+        <div className="card" style={{ marginTop: 16, maxWidth: 460 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>
+            Modules
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+            Turn parts of the CRM on or off. Disabled modules are hidden from the sidebar.
+          </div>
+          {Object.keys(MODULE_LABELS).map((key) => (
+            <label key={key} className="flex items-center gap-2" style={{ padding: '6px 0', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={modules[key] !== false}
+                onChange={(e) => setModules((m) => ({ ...m, [key]: e.target.checked }))}
+              />
+              <span style={{ fontSize: 13 }}>{MODULE_LABELS[key]}</span>
+            </label>
+          ))}
+          <button className="btn btn-primary btn-sm mt-2" onClick={saveModules} disabled={modBusy}>
+            {modBusy ? 'Saving…' : 'Save modules'}
           </button>
         </div>
       )}
