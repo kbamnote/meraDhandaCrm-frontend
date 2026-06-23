@@ -126,7 +126,12 @@ export default function Sidebar({ open, onClose }) {
     <>
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="sidebar-logo" style={{ display: 'block' }}>
-          <div>🏭 {tenant?.name || 'MeraDhanda CRM'}</div>
+          <div style={{ background: '#fff', borderRadius: 8, padding: '6px 10px', display: 'inline-block', marginBottom: 8 }}>
+            <img src="/logo.png" alt="MeraDhanda" style={{ height: 24, display: 'block' }} />
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--sidebar-text-active)' }}>
+            {tenant?.name || 'MeraDhanda CRM'}
+          </div>
           {onTrial && (
             <a href="/billing" style={{ display: 'block', marginTop: 6, fontSize: 11, fontWeight: 500,
               color: tenant.expired ? '#FCA5A5' : '#FCD34D' }}>

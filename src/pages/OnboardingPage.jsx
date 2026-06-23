@@ -77,7 +77,7 @@ export default function OnboardingPage() {
     <div className="center-screen" style={{ background: 'var(--bg)', padding: 16 }}>
       <div className="card" style={{ maxWidth: 560, width: '100%', maxHeight: '92vh', overflow: 'auto' }}>
         <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 30 }}>🏭</div>
+          <img src="/logo.png" alt="MeraDhanda" style={{ height: 38, marginBottom: 10, display: 'block' }} />
           <h2 style={{ marginTop: 6 }}>Set up your CRM</h2>
           <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: 4 }}>
             A few quick questions so we show you only what you need. You can change these any time in Settings.

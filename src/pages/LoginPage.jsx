@@ -35,10 +35,9 @@ export default function LoginPage() {
   return (
     <div className="center-screen" style={{ background: 'var(--bg)' }}>
       <div className="card" style={{ maxWidth: 380, width: '92%' }}>
-        <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <div style={{ fontSize: 36 }}>🖨</div>
-          <h2 style={{ marginTop: 6 }}>MeraDhanda CRM</h2>
-          <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: 4 }}>Sign in to your account</p>
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <img src="/logo.png" alt="MeraDhanda" style={{ height: 46, margin: '0 auto 10px', display: 'block' }} />
+          <p style={{ color: 'var(--text2)', fontSize: 13 }}>Sign in to your account</p>
         </div>
 
         <form onSubmit={submit}>

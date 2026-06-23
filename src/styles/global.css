@@ -5,24 +5,26 @@
    ────────────────────────────────────────────────────────────────────── */
 
 :root{
-  --bg:#F0F7F4;--surface:#FFFFFF;--surface2:#E6F2EC;--surface3:#E8E7E0;
-  --border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.14);
-  --text:#1A1916;--text2:#4A5568;--text3:#718096;
-  --blue:#1A56DB;--blue-light:#EBF2FF;--blue-dark:#1241A8;
-  --green:#0B7B3E;--green-light:#E8F7EE;
+  /* MeraDhanda brand — Rust + Deep Teal on warm cream (matches meradhanda.in) */
+  --bg:#FBF6F1;--surface:#FFFFFF;--surface2:#F4E4DF;--surface3:#ECDFD1;
+  --border:rgba(43,27,18,0.10);--border2:rgba(43,27,18,0.18);
+  --text:#2B1B12;--text2:#7A6453;--text3:#9A8472;
+  --blue:#C05621;--blue-light:#FBE7DA;--blue-dark:#A8471A;
+  --green:#0F766E;--green-light:#D7EEEA;
   --amber:#92520C;--amber-light:#FEF3E2;
   --red:#B91C1C;--red-light:#FEE2E2;
   --purple:#6D28D9;--purple-light:#EDE9FE;
-  --teal:#0F766E;--teal-light:#CCFBF1;
-  --coral:#9A3412;--coral-light:#FFEDD5;
-  --radius:8px;--radius-lg:12px;--radius-xl:16px;
-  --shadow:0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md:0 4px 6px rgba(0,0,0,0.07),0 2px 4px rgba(0,0,0,0.05);
+  --teal:#0F766E;--teal-light:#D7EEEA;
+  --coral:#C05621;--coral-light:#FBE7DA;
+  --radius:10px;--radius-lg:14px;--radius-xl:18px;
+  --shadow:0 1px 3px rgba(43,27,18,0.08);
+  --shadow-md:0 4px 12px rgba(43,27,18,0.08),0 2px 4px rgba(43,27,18,0.05);
   --sidebar-w:240px;
-  --font:'DM Sans',sans-serif;
-  --mono:'DM Mono',monospace;
-  --sidebar-bg:#1B3A2A;--sidebar-text:#C8DDD3;--sidebar-text-active:#FFFFFF;
-  --sidebar-active:#2D5A3D;--sidebar-hover:#243F2F;
+  --font:'Inter',system-ui,sans-serif;
+  --font-display:'Manrope','Inter',sans-serif;
+  --mono:'ui-monospace',SFMono-Regular,Menlo,monospace;
+  --sidebar-bg:#0B575D;--sidebar-text:#A7D3CE;--sidebar-text-active:#FFFFFF;
+  --sidebar-active:#0F766E;--sidebar-hover:#0D6760;
 }
 
 /* ── 10 dashboard themes (user-switchable via Settings) ── */
@@ -38,8 +40,10 @@ body.theme-corporate{--bg:#F9FAFB;--surface:#FFFFFF;--surface2:#F3F4F6;--sidebar
 body.theme-coffee{--bg:#FAF7F2;--surface:#FFFFFF;--surface2:#F0E6D7;--sidebar-bg:#44403C;--sidebar-text:#D4C4A8;--sidebar-active:#57534E;--sidebar-hover:#4B4642;--blue:#78350F;--blue-light:#FEF3C7;--blue-dark:#44403C;}
 
 *{box-sizing:border-box;margin:0;padding:0;}
-html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;}
+html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
 a{color:inherit;text-decoration:none;}
+h1,h2,h3,h4,.sidebar-logo{font-family:var(--font-display);letter-spacing:-0.01em;}
+.btn-primary:hover{background:var(--blue-dark);}
 
 /* ── Layout ── */
 .crm-layout{display:flex;min-height:100vh;}

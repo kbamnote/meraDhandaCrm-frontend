@@ -43,10 +43,10 @@ export default function SignupPage() {
     <div className="center-screen" style={{ background: 'var(--bg)' }}>
       <div className="card" style={{ maxWidth: 420, width: '92%' }}>
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <div style={{ fontSize: 36 }}>🏭</div>
-          <h2 style={{ marginTop: 6 }}>Start with MeraDhanda CRM</h2>
+          <img src="/logo.png" alt="MeraDhanda" style={{ height: 44, margin: '0 auto 10px', display: 'block' }} />
+          <h2 style={{ marginTop: 6 }}>Start your free trial</h2>
           <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: 4 }}>
-            Production &amp; manufacturing CRM · 30-day free trial · no card required
+            Production &amp; manufacturing CRM · 30 days free · no card required
           </p>
         </div>
 
