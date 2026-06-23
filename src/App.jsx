@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { LanguageProvider } from './i18n/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import { ProtectedRoute, RequireOnboarded } from './components/common/Guards';
@@ -124,6 +125,7 @@ const STUB_ROUTES = [
 
 export default function App() {
   return (
+    <LanguageProvider>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -159,5 +161,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </LanguageProvider>
   );
 }

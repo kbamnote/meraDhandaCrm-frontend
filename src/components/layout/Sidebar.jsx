@@ -1,5 +1,17 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useT } from '../../i18n/LanguageContext';
+
+const SECTION_S = {
+  Workspace: { en: 'Workspace', hi: 'वर्कस्पेस', hinglish: 'Workspace', gu: 'વર્કસ્પેસ', mr: 'वर्कस्पेस', mwr: 'वर्कस्पेस' },
+  'Designers & Production': { en: 'Designers & Production', hi: 'डिज़ाइन और प्रोडक्शन', hinglish: 'Design & Production', gu: 'ડિઝાઇન અને પ્રોડક્શન', mr: 'डिझाइन व प्रोडक्शन', mwr: 'डिज़ाइन अर प्रोडक्शन' },
+  'Sales & Leads': { en: 'Sales & Leads', hi: 'सेल्स और लीड्स', hinglish: 'Sales & Leads', gu: 'સેલ્સ અને લીડ્સ', mr: 'सेल्स व लीड्स', mwr: 'सेल्स अर लीड्स' },
+  Accounting: { en: 'Accounting', hi: 'अकाउंटिंग', hinglish: 'Accounting', gu: 'એકાઉન્ટિંગ', mr: 'अकाउंटिंग', mwr: 'अकाउंटिंग' },
+  HR: { en: 'HR', hi: 'एचआर', hinglish: 'HR', gu: 'એચઆર', mr: 'एचआर', mwr: 'एचआर' },
+  Customer: { en: 'Customer', hi: 'ग्राहक', hinglish: 'Customer', gu: 'ગ્રાહક', mr: 'ग्राहक', mwr: 'ग्राहक' },
+  'Admin / Settings': { en: 'Admin / Settings', hi: 'एडमिन / सेटिंग्स', hinglish: 'Admin / Settings', gu: 'એડમિન / સેટિંગ્સ', mr: 'अॅडमिन / सेटिंग्ज', mwr: 'एडमिन / सेटिंग्स' },
+  'Sign out': { en: 'Sign out', hi: 'साइन आउट', hinglish: 'Sign out', gu: 'સાઇન આઉટ', mr: 'साइन आउट', mwr: 'साइन आउट' },
+};
 
 /**
  * Sidebar — every entry corresponds to one legacy `<div class="page" id="page-*">`.
@@ -107,6 +119,7 @@ const MODULE_OF = {
 
 export default function Sidebar({ open, onClose }) {
   const { profile, tenant, isPlatformAdmin, signOut } = useAuth();
+  const t = useT(SECTION_S);
   const role = profile?.role;
   const custom = profile?.customRole;
   const modules = tenant?.settings?.modules || null;
@@ -142,7 +155,7 @@ export default function Sidebar({ open, onClose }) {
         <nav>
           {SECTIONS.map(sec => (
             <div key={sec.title}>
-              <div className="sidebar-section-title">{sec.title}</div>
+              <div className="sidebar-section-title">{t(sec.title)}</div>
               {sec.items.filter(canSee).map(item => (
                 <NavLink
                   key={item.to}
@@ -163,7 +176,7 @@ export default function Sidebar({ open, onClose }) {
             <span style={{ fontSize: 10, opacity: .7 }}>{role || 'no role'} {custom ? `• ${custom}` : ''}</span>
           </div>
           <button className="btn btn-ghost btn-sm w-full" onClick={signOut} style={{ color: 'rgba(255,255,255,.85)' }}>
-            Sign out
+            {t('Sign out')}
           </button>
         </div>
       </aside>
