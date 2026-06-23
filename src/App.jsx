@@ -7,8 +7,11 @@ import ResourcePage from './components/common/ResourcePage';
 import { RESOURCES } from './config/resources';
 
 import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
 import AdminPage from './pages/AdminPage';
 import TasksPage from './pages/TasksPage';
+import BillingPage from './pages/BillingPage';
+import PlatformConsolePage from './pages/PlatformConsolePage';
 
 import MySalaryPage from './pages/MySalaryPage';
 import MyLeavesPage from './pages/MyLeavesPage';
@@ -124,11 +127,14 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
 
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route index element={<Navigate to="/admin" replace />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/billing" element={<BillingPage />} />
+            <Route path="/platform" element={<PlatformConsolePage />} />
 
             {STUB_ROUTES.map(([path, title, legacyId, dbPath]) => {
               const Comp = CUSTOM_PAGES[path];

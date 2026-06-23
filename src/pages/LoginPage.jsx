@@ -24,8 +24,8 @@ export default function LoginPage() {
     }
     setBusy(true);
     try {
-      const { token, profile } = await authApi.login(email.trim(), password);
-      login(token, profile);
+      const { token, profile, tenant } = await authApi.login(email.trim(), password);
+      login(token, profile, tenant);
       nav('/admin', { replace: true });
     } catch (err) {
       showToast(err.response?.data?.error || 'Login failed', 'error');
@@ -37,7 +37,7 @@ export default function LoginPage() {
       <div className="card" style={{ maxWidth: 380, width: '92%' }}>
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
           <div style={{ fontSize: 36 }}>🖨</div>
-          <h2 style={{ marginTop: 6 }}>MrPrint World CRM</h2>
+          <h2 style={{ marginTop: 6 }}>MeraDhanda CRM</h2>
           <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: 4 }}>Sign in to your account</p>
         </div>
 
@@ -72,8 +72,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 14, textAlign: 'center' }}>
-          No account? Ask an admin to create one for you.
+        <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 16, textAlign: 'center' }}>
+          New company?{' '}
+          <a href="/signup" style={{ color: 'var(--blue)', fontWeight: 600 }}>Start your 30-day free trial</a>
         </div>
       </div>
     </div>

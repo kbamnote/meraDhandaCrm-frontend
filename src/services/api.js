@@ -42,11 +42,25 @@ export const dbApi = {
 };
 
 export const authApi = {
+  signup:     (body)            => api.post('/auth/signup', body).then(r => r.data),
   login:      (email, password) => api.post('/auth/login', { email, password }).then(r => r.data),
   me:         ()                => api.get('/auth/me').then(r => r.data),
   createUser: (body)            => api.post('/auth/users', body).then(r => r.data),
   setRole:    (uid, b)          => api.patch(`/auth/users/${uid}/role`, b).then(r => r.data),
   updateUser: (uid, b)          => api.patch(`/auth/users/${uid}`, b).then(r => r.data),
+};
+
+// The caller's own company (plan / trial status / branding).
+export const tenantApi = {
+  get:    ()     => api.get('/tenant').then(r => r.data),
+  update: (body) => api.patch('/tenant', body).then(r => r.data),
+};
+
+// Platform super-admin — manage ALL tenants (gated server-side to platformAdmin).
+export const platformApi = {
+  stats:        ()         => api.get('/platform/stats').then(r => r.data),
+  tenants:      ()         => api.get('/platform/tenants').then(r => r.data),
+  updateTenant: (id, body) => api.patch(`/platform/tenants/${id}`, body).then(r => r.data),
 };
 
 export const meApi = {

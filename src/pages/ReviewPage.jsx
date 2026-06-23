@@ -65,7 +65,7 @@ export default function ReviewPage() {
         <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
           <div className="form-group" style={{ flex: 1, minWidth: 220 }}>
             <label>Business *</label>
-            <input className="input" value={business} onChange={(e) => setBusiness(e.target.value)} placeholder="MrPrint World" />
+            <input className="input" value={business} onChange={(e) => setBusiness(e.target.value)} placeholder="MeraDhanda" />
           </div>
           <div className="form-group" style={{ flex: 1, minWidth: 220 }}>
             <label>Product *</label>

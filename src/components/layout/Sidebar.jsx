@@ -85,25 +85,38 @@ const SECTIONS = [
       { to: '/broadcast',        label: '📣 Broadcast',       legacy: 'page-broadcast',   roles: ['admin','superadmin','owner'] },
       { to: '/superadmin',       label: '👑 Super Admin',     legacy: 'page-superadmin',  roles: ['superadmin'] },
       { to: '/company-settings', label: '⚙️  Company',         legacy: 'page-company-settings', roles: ['admin','superadmin','owner'] },
+      { to: '/billing',          label: '💳 Billing & Plan',  legacy: 'page-billing',     roles: ['admin','superadmin','owner'] },
       { to: '/profile',          label: '👤 My Profile',      legacy: 'page-profile' },
+      { to: '/platform',         label: '👑 Platform Console', legacy: 'page-platform',   platform: true },
     ],
   },
 ];
 
 export default function Sidebar({ open, onClose }) {
-  const { profile, signOut } = useAuth();
+  const { profile, tenant, isPlatformAdmin, signOut } = useAuth();
   const role = profile?.role;
   const custom = profile?.customRole;
 
   const canSee = (item) => {
+    if (item.platform) return isPlatformAdmin;
     if (!item.roles) return true;
     return item.roles.includes(role) || item.roles.includes(custom);
   };
 
+  const onTrial = tenant && tenant.plan === 'trial';
+
   return (
     <>
       <aside className={`sidebar ${open ? 'open' : ''}`}>
-        <div className="sidebar-logo">🖨 MrPrint World</div>
+        <div className="sidebar-logo" style={{ display: 'block' }}>
+          <div>🏭 {tenant?.name || 'MeraDhanda CRM'}</div>
+          {onTrial && (
+            <a href="/billing" style={{ display: 'block', marginTop: 6, fontSize: 11, fontWeight: 500,
+              color: tenant.expired ? '#FCA5A5' : '#FCD34D' }}>
+              {tenant.expired ? '⛔ Trial ended — upgrade' : `⏳ Trial · ${tenant.trialDaysLeft ?? 0} days left`}
+            </a>
+          )}
+        </div>
         <nav>
           {SECTIONS.map(sec => (
             <div key={sec.title}>

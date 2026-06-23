@@ -14,7 +14,7 @@ export function Loading({ label = 'Loading…' }) {
 
 export function ProtectedRoute({ children, roles }) {
   const { user, profile, loading, hasRole } = useAuth();
-  if (loading) return <Loading label="Connecting to MrPrint World..." />;
+  if (loading) return <Loading label="Connecting to MeraDhanda..." />;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !hasRole(...roles)) {
     return (
