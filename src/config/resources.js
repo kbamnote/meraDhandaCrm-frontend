@@ -321,7 +321,7 @@ export const RESOURCES = {
     legacyId: 'page-hr-staff', readOnly: true,
     fields: [
       { key: 'name', label: 'Name', type: 'text', table: true },
-      { key: 'phone', label: 'Phone', type: 'tel', table: true },
+      { key: 'email', label: 'Email', type: 'email', table: true },
       { key: 'role', label: 'Role', type: 'text', table: true },
       { key: 'customRole', label: 'Custom Role', type: 'text', table: true },
       { key: 'department', label: 'Department', type: 'text', table: true },

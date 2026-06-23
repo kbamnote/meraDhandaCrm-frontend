@@ -42,11 +42,11 @@ export const dbApi = {
 };
 
 export const authApi = {
-  requestOtp: (phone)            => api.post('/auth/request-otp', { phone }).then(r => r.data),
-  verifyOtp:  (phone, code, name)=> api.post('/auth/verify-otp', { phone, code, name }).then(r => r.data),
-  me:         ()                 => api.get('/auth/me').then(r => r.data),
-  bootstrap:  (body = {})        => api.post('/auth/bootstrap', body).then(r => r.data),
-  setRole:    (uid, b)           => api.patch(`/auth/users/${uid}/role`, b).then(r => r.data),
+  login:      (email, password) => api.post('/auth/login', { email, password }).then(r => r.data),
+  me:         ()                => api.get('/auth/me').then(r => r.data),
+  createUser: (body)            => api.post('/auth/users', body).then(r => r.data),
+  setRole:    (uid, b)          => api.patch(`/auth/users/${uid}/role`, b).then(r => r.data),
+  updateUser: (uid, b)          => api.patch(`/auth/users/${uid}`, b).then(r => r.data),
 };
 
 export const meApi = {

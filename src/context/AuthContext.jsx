@@ -27,11 +27,11 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
-  // Called by LoginPage after a successful verify-otp.
+  // Called by LoginPage after a successful login.
   const login = (token, prof) => {
     setToken(token);
     setProfile(prof);
-    setUser({ uid: prof?.id, phone: prof?.phone });
+    setUser({ uid: prof?.id, email: prof?.email });
     authSocket(token);
   };
 

@@ -34,7 +34,7 @@ export default function ProfilePage() {
             Details
           </div>
           <Row label="Name" value={p.name || '—'} />
-          <Row label="Phone" value={p.phone || '—'} />
+          <Row label="Email" value={p.email || '—'} />
           <Row
             label="Role"
             value={p.role ? <span className="badge badge-blue">{p.role}</span> : '—'}

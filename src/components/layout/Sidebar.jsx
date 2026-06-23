@@ -124,7 +124,7 @@ export default function Sidebar({ open, onClose }) {
         </nav>
         <div style={{ marginTop: 'auto', padding: 16, borderTop: '1px solid rgba(255,255,255,.06)' }}>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,.55)', marginBottom: 8 }}>
-            {profile?.name || profile?.phone || 'Loading…'} <br/>
+            {profile?.name || profile?.email || 'Loading…'} <br/>
             <span style={{ fontSize: 10, opacity: .7 }}>{role || 'no role'} {custom ? `• ${custom}` : ''}</span>
           </div>
           <button className="btn btn-ghost btn-sm w-full" onClick={signOut} style={{ color: 'rgba(255,255,255,.85)' }}>
