@@ -16,11 +16,60 @@ import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
 import { dbApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
 
 const PRIORITY_ORDER = { most_urgent: 0, urgent: 1, normal: 2 };
 const PRIORITY_LABEL = { most_urgent: '🔴 MOST URGENT', urgent: '⚡ Urgent', normal: '' };
 const PRIORITY_BG    = { most_urgent: '#DC2626', urgent: '#F59E0B', normal: '' };
+
+const S = {
+  taskManager: { en: 'Task Manager', hi: 'टास्क मैनेजर', hinglish: 'Task Manager', gu: 'ટાસ્ક મેનેજર', mr: 'टास्क मॅनेजर', mwr: 'टास्क मैनेजर' },
+  active: { en: 'active', hi: 'एक्टिव', hinglish: 'active', gu: 'એક્ટિવ', mr: 'सक्रिय', mwr: 'एक्टिव' },
+  overdue: { en: 'overdue', hi: 'ओवरड्यू', hinglish: 'overdue', gu: 'ઓવરડ્યૂ', mr: 'मुदत संपली', mwr: 'ओवरड्यू' },
+  done: { en: 'done', hi: 'पूरा', hinglish: 'done', gu: 'પૂર્ણ', mr: 'पूर्ण', mwr: 'पूरो' },
+  newTask: { en: '+ New Task', hi: '+ नया टास्क', hinglish: '+ Naya Task', gu: '+ નવો ટાસ્ક', mr: '+ नवीन टास्क', mwr: '+ नयो टास्क' },
+  searchTasks: { en: '🔍 Search tasks...', hi: '🔍 टास्क खोजें...', hinglish: '🔍 Task search karein...', gu: '🔍 ટાસ્ક શોધો...', mr: '🔍 टास्क शोधा...', mwr: '🔍 टास्क ढूंढो...' },
+  noTasks: { en: 'No tasks yet.', hi: 'अभी तक कोई टास्क नहीं।', hinglish: 'Abhi tak koi task nahi.', gu: 'હજુ સુધી કોઈ ટાસ્ક નથી.', mr: 'अद्याप कोणतेही टास्क नाहीत.', mwr: 'अजे तांई कोई टास्क कोनी।' },
+  activeLabel: { en: 'Active', hi: 'एक्टिव', hinglish: 'Active', gu: 'એક્ટિવ', mr: 'सक्रिय', mwr: 'एक्टिव' },
+  doneLabel: { en: 'Done', hi: 'पूरे', hinglish: 'Done', gu: 'પૂર્ણ', mr: 'पूर्ण', mwr: 'पूरा' },
+  taskMarkedDone: { en: 'Task marked done', hi: 'टास्क पूरा हो गया', hinglish: 'Task done ho gaya', gu: 'ટાસ્ક પૂર્ણ થયો', mr: 'टास्क पूर्ण झाले', mwr: 'टास्क पूरो हो ग्यो' },
+  failed: { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua', gu: 'નિષ્ફળ', mr: 'अयशस्वी', mwr: 'कोनी हुयो' },
+  confirmDeletePrefix: { en: 'Delete task', hi: 'क्या टास्क', hinglish: 'Kya task', gu: 'ટાસ્ક', mr: 'टास्क', mwr: 'टास्क' },
+  confirmDeleteSuffix: { en: '?', hi: 'डिलीट करें?', hinglish: 'delete karein?', gu: 'ડિલીટ કરવો?', mr: 'डिलीट करायचे?', mwr: 'डिलीट करां?' },
+  taskDeleted: { en: 'Task deleted', hi: 'टास्क डिलीट हो गया', hinglish: 'Task delete ho gaya', gu: 'ટાસ્ક ડિલીટ થયો', mr: 'टास्क डिलीट झाले', mwr: 'टास्क डिलीट हो ग्यो' },
+  overdueBadge: { en: 'OVERDUE', hi: 'ओवरड्यू', hinglish: 'OVERDUE', gu: 'ઓવરડ્યૂ', mr: 'मुदत संपली', mwr: 'ओवरड्यू' },
+  dueIn: { en: 'Due in', hi: 'बाकी', hinglish: 'Due in', gu: 'બાકી', mr: 'उरले', mwr: 'बाकी' },
+  doneBadge: { en: 'Done', hi: 'पूरा', hinglish: 'Done', gu: 'પૂર્ણ', mr: 'पूर्ण', mwr: 'पूरो' },
+  noDeadline: { en: 'No deadline', hi: 'कोई डेडलाइन नहीं', hinglish: 'Koi deadline nahi', gu: 'કોઈ ડેડલાઇન નથી', mr: 'डेडलाइन नाही', mwr: 'कोई डेडलाइन कोनी' },
+  by: { en: 'By:', hi: 'द्वारा:', hinglish: 'By:', gu: 'દ્વારા:', mr: 'द्वारा:', mwr: 'द्वारा:' },
+  role: { en: 'Role:', hi: 'रोल:', hinglish: 'Role:', gu: 'રોલ:', mr: 'भूमिका:', mwr: 'रोल:' },
+  markDone: { en: 'Mark Done', hi: 'पूरा करें', hinglish: 'Mark Done', gu: 'પૂર્ણ કરો', mr: 'पूर्ण करा', mwr: 'पूरो करो' },
+  delete: { en: 'Delete', hi: 'डिलीट करें', hinglish: 'Delete karein', gu: 'ડિલીટ કરો', mr: 'डिलीट करा', mwr: 'डिलीट करो' },
+  titleRequired: { en: 'Title required', hi: 'टाइटल ज़रूरी है', hinglish: 'Title zaroori hai', gu: 'ટાઇટલ જરૂરી છે', mr: 'शीर्षक आवश्यक', mwr: 'टाइटल जरूरी है' },
+  pickAssignee: { en: 'Pick an assignee', hi: 'किसी को चुनें', hinglish: 'Kisi ko chunein', gu: 'કોઈને પસંદ કરો', mr: 'नियुक्त व्यक्ती निवडा', mwr: 'किणी ने चुणो' },
+  pickRole: { en: 'Pick a role', hi: 'रोल चुनें', hinglish: 'Role chunein', gu: 'રોલ પસંદ કરો', mr: 'भूमिका निवडा', mwr: 'रोल चुणो' },
+  taskCreated: { en: 'Task created', hi: 'टास्क बन गया', hinglish: 'Task ban gaya', gu: 'ટાસ્ક બન્યો', mr: 'टास्क तयार झाले', mwr: 'टास्क बण ग्यो' },
+  createFailed: { en: 'Failed to create task', hi: 'टास्क नहीं बना', hinglish: 'Task nahi bana', gu: 'ટાસ્ક બનાવવામાં નિષ્ફળ', mr: 'टास्क तयार करता आले नाही', mwr: 'टास्क कोनी बण्यो' },
+  title: { en: 'Title', hi: 'टाइटल', hinglish: 'Title', gu: 'ટાઇટલ', mr: 'शीर्षक', mwr: 'टाइटल' },
+  description: { en: 'Description', hi: 'विवरण', hinglish: 'Description', gu: 'વર્ણન', mr: 'वर्णन', mwr: 'विवरण' },
+  priority: { en: 'Priority', hi: 'प्राथमिकता', hinglish: 'Priority', gu: 'પ્રાયોરિટી', mr: 'प्राधान्य', mwr: 'प्राथमिकता' },
+  normal: { en: 'Normal', hi: 'सामान्य', hinglish: 'Normal', gu: 'સામાન્ય', mr: 'सामान्य', mwr: 'सामान्य' },
+  urgent: { en: '⚡ Urgent', hi: '⚡ अर्जेंट', hinglish: '⚡ Urgent', gu: '⚡ અર્જન્ટ', mr: '⚡ तातडीचे', mwr: '⚡ अर्जेंट' },
+  mostUrgent: { en: '🔴 Most Urgent', hi: '🔴 सबसे अर्जेंट', hinglish: '🔴 Most Urgent', gu: '🔴 સૌથી અર્જન્ટ', mr: '🔴 सर्वात तातडीचे', mwr: '🔴 सबसूं अर्जेंट' },
+  jobRef: { en: 'Job ref', hi: 'जॉब रेफ', hinglish: 'Job ref', gu: 'જોબ રેફ', mr: 'जॉब रेफ', mwr: 'जॉब रेफ' },
+  deadlineDate: { en: 'Deadline date', hi: 'डेडलाइन तारीख', hinglish: 'Deadline date', gu: 'ડેડલાઇન તારીખ', mr: 'डेडलाइन तारीख', mwr: 'डेडलाइन तारीख' },
+  time: { en: 'Time', hi: 'समय', hinglish: 'Time', gu: 'સમય', mr: 'वेळ', mwr: 'टैम' },
+  assignTo: { en: 'Assign to', hi: 'किसे सौंपें', hinglish: 'Kise assign karein', gu: 'કોને સોંપો', mr: 'कोणाला द्या', mwr: 'किणने सौंपो' },
+  specificUser: { en: 'Specific user', hi: 'किसी यूज़र को', hinglish: 'Specific user', gu: 'ચોક્કસ યૂઝર', mr: 'विशिष्ट युझर', mwr: 'खास यूज़र' },
+  roleBtn: { en: 'Role (custom roles supported)', hi: 'रोल (कस्टम रोल भी)', hinglish: 'Role (custom roles supported)', gu: 'રોલ (કસ્ટમ રોલ સપોર્ટેડ)', mr: 'भूमिका (कस्टम भूमिका समर्थित)', mwr: 'रोल (कस्टम रोल भी)' },
+  chooseRole: { en: '-- choose role --', hi: '-- रोल चुनें --', hinglish: '-- role chunein --', gu: '-- રોલ પસંદ કરો --', mr: '-- भूमिका निवडा --', mwr: '-- रोल चुणो --' },
+  tip: { en: 'Tip: role-based assignment notifies every user with that role or customRole.', hi: 'टिप: रोल-आधारित असाइनमेंट उस रोल या customRole वाले हर यूज़र को सूचना भेजता है।', hinglish: 'Tip: role-based assignment us role ya customRole wale har user ko notify karta hai.', gu: 'ટિપ: રોલ-આધારિત અસાઇનમેન્ટ તે રોલ અથવા customRole ધરાવતા દરેક યૂઝરને નોટિફાય કરે છે.', mr: 'टिप: भूमिका-आधारित नियुक्ती त्या भूमिकेच्या किंवा customRole असलेल्या प्रत्येक युझरला सूचित करते.', mwr: 'टिप: रोल-आधारित असाइनमेंट उण रोल या customRole वाला हर यूज़र ने सूचना भेजे है।' },
+  saving: { en: 'Saving…', hi: 'सेव हो रहा है…', hinglish: 'Save ho raha hai…', gu: 'સેવ થઈ રહ્યું છે…', mr: 'सेव होत आहे…', mwr: 'सेव हो रियो है…' },
+  createTask: { en: 'Create task', hi: 'टास्क बनाएं', hinglish: 'Task banayein', gu: 'ટાસ્ક બનાવો', mr: 'टास्क तयार करा', mwr: 'टास्क बणावो' },
+  cancel: { en: 'Cancel', hi: 'रद्द करें', hinglish: 'Cancel karein', gu: 'રદ કરો', mr: 'रद्द करा', mwr: 'रद्द करो' },
+  chooseOpt: { en: '-- choose --', hi: '-- चुनें --', hinglish: '-- chunein --', gu: '-- પસંદ કરો --', mr: '-- निवडा --', mwr: '-- चुणो --' },
+};
 
 function getDeadlineMs(t) {
   try {
@@ -32,6 +81,7 @@ function getDeadlineMs(t) {
 
 export default function TasksPage() {
   const { profile } = useAuth();
+  const t = useT(S);
   const [tasks, setTasks] = useState({});      // { id: task }
   const [users, setUsers] = useState({});      // { uid: user }
   const [search, setSearch] = useState('');
@@ -83,53 +133,53 @@ export default function TasksPage() {
     ),
   ];
 
-  const completeTask = async (t) => {
+  const completeTask = async (task) => {
     try {
-      await dbApi.update('tasks', t.id, { status: 'done', completedTs: Date.now() });
-      showToast('Task marked done', 'success');
-    } catch (e) { showToast(e.response?.data?.error || 'Failed', 'error'); }
+      await dbApi.update('tasks', task.id, { status: 'done', completedTs: Date.now() });
+      showToast(t('taskMarkedDone'), 'success');
+    } catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
   };
 
-  const removeTask = async (t) => {
-    if (!confirm(`Delete task "${t.title}"?`)) return;
+  const removeTask = async (task) => {
+    if (!confirm(`${t('confirmDeletePrefix')} "${task.title}" ${t('confirmDeleteSuffix')}`)) return;
     try {
-      await dbApi.remove('tasks', t.id);
-      showToast('Task deleted', 'success');
-    } catch (e) { showToast(e.response?.data?.error || 'Failed', 'error'); }
+      await dbApi.remove('tasks', task.id);
+      showToast(t('taskDeleted'), 'success');
+    } catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 600 }}>📋 Task Manager</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 600 }}>📋 {t('taskManager')}</h2>
           <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-            {active.length} active · {overdue.length} overdue · {done.length} done
+            {active.length} {t('active')} · {overdue.length} {t('overdue')} · {done.length} {t('done')}
           </div>
         </div>
         {canSeeAll && (
           <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>
-            + New Task
+            {t('newTask')}
           </button>
         )}
       </div>
 
       <input
         className="input mb-4"
-        placeholder="🔍 Search tasks..."
+        placeholder={t('searchTasks')}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
 
       {!filtered.length && (
         <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
-          No tasks yet.
+          {t('noTasks')}
         </div>
       )}
 
       {!!sortedActive.length && (
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', margin: '8px 0', textTransform: 'uppercase', letterSpacing: '.05em' }}>
-          Active ({sortedActive.length})
+          {t('activeLabel')} ({sortedActive.length})
         </div>
       )}
       {sortedActive.map(t => (
@@ -138,7 +188,7 @@ export default function TasksPage() {
 
       {!!done.length && (
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', margin: '16px 0 8px', textTransform: 'uppercase', letterSpacing: '.05em' }}>
-          Done ({done.length})
+          {t('doneLabel')} ({done.length})
         </div>
       )}
       {done.map(t => (
@@ -153,6 +203,7 @@ export default function TasksPage() {
 }
 
 function TaskCard({ t, now, onComplete, onDelete, canManage }) {
+  const tr = useT(S);
   const dlMs = getDeadlineMs(t);
   const isOverdue = dlMs && dlMs < now && t.status !== 'done';
   const isDueSoon = dlMs && dlMs - now < 3600000 && dlMs > now;
@@ -180,26 +231,26 @@ function TaskCard({ t, now, onComplete, onDelete, canManage }) {
               {PRIORITY_LABEL[t.priority]}
             </span>
           )}
-          {isOverdue && <span className="badge badge-red">⚠️ OVERDUE</span>}
-          {isDueSoon && <span className="badge badge-amber">⏰ Due in {minutesLeft}m</span>}
-          {t.status === 'done' && <span className="badge badge-green">✓ Done</span>}
+          {isOverdue && <span className="badge badge-red">⚠️ {tr('overdueBadge')}</span>}
+          {isDueSoon && <span className="badge badge-amber">⏰ {tr('dueIn')} {minutesLeft}m</span>}
+          {t.status === 'done' && <span className="badge badge-green">✓ {tr('doneBadge')}</span>}
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>
         <span>👤 <b style={{ color: 'var(--text2)' }}>{t.assignedToName || t.assignedTo}</b></span>
-        <span>📅 <b style={{ color: isOverdue ? 'var(--red)' : 'var(--text2)' }}>{dl || 'No deadline'}</b></span>
+        <span>📅 <b style={{ color: isOverdue ? 'var(--red)' : 'var(--text2)' }}>{dl || tr('noDeadline')}</b></span>
         {t.jobRef && <span>🔗 {t.jobRef}</span>}
-        <span>By: {t.createdByName || t.createdBy}</span>
-        {t.assignedRole && <span className="badge badge-blue">Role: {t.assignedRole}</span>}
+        <span>{tr('by')} {t.createdByName || t.createdBy}</span>
+        {t.assignedRole && <span className="badge badge-blue">{tr('role')} {t.assignedRole}</span>}
       </div>
 
       <div className="flex gap-2">
         {t.status !== 'done' && onComplete && (
-          <button className="btn btn-success btn-xs" onClick={() => onComplete(t)}>Mark Done</button>
+          <button className="btn btn-success btn-xs" onClick={() => onComplete(t)}>{tr('markDone')}</button>
         )}
         {canManage && (
-          <button className="btn btn-danger btn-xs" onClick={() => onDelete(t)}>Delete</button>
+          <button className="btn btn-danger btn-xs" onClick={() => onDelete(t)}>{tr('delete')}</button>
         )}
       </div>
     </div>
@@ -207,6 +258,7 @@ function TaskCard({ t, now, onComplete, onDelete, canManage }) {
 }
 
 function NewTaskModal({ users, onClose, createdBy }) {
+  const t = useT(S);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('normal');
@@ -232,11 +284,11 @@ function NewTaskModal({ users, onClose, createdBy }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return showToast('Title required', 'error');
+    if (!title.trim()) return showToast(t('titleRequired'), 'error');
 
     let assignedToFinal = null, assignedToName = null, assignedRoleFinal = null;
     if (assignMode === 'user') {
-      if (!assignedTo) return showToast('Pick an assignee', 'error');
+      if (!assignedTo) return showToast(t('pickAssignee'), 'error');
       const u = users[assignedTo];
       assignedToFinal = assignedTo;
       assignedToName = u?.name || u?.phone || assignedTo;

@@ -11,6 +11,56 @@ const SECTION_S = {
   Customer: { en: 'Customer', hi: 'ग्राहक', hinglish: 'Customer', gu: 'ગ્રાહક', mr: 'ग्राहक', mwr: 'ग्राहक' },
   'Admin / Settings': { en: 'Admin / Settings', hi: 'एडमिन / सेटिंग्स', hinglish: 'Admin / Settings', gu: 'એડમિન / સેટિંગ્સ', mr: 'अॅडमिन / सेटिंग्ज', mwr: 'एडमिन / सेटिंग्स' },
   'Sign out': { en: 'Sign out', hi: 'साइन आउट', hinglish: 'Sign out', gu: 'સાઇન આઉટ', mr: 'साइन आउट', mwr: 'साइन आउट' },
+
+  // Navigation item labels — keyed by the exact English label string (emoji included).
+  '🏠 Admin Dashboard':    { en: '🏠 Admin Dashboard',    hi: '🏠 एडमिन डैशबोर्ड',    hinglish: '🏠 Admin Dashboard',    gu: '🏠 એડમિન ડેશબોર્ડ',     mr: '🏠 अॅडमिन डॅशबोर्ड',     mwr: '🏠 एडमिन डैशबोर्ड' },
+  '✅ Tasks':              { en: '✅ Tasks',              hi: '✅ काम',               hinglish: '✅ Tasks',              gu: '✅ કાર્યો',             mr: '✅ कामे',               mwr: '✅ काम' },
+  '📊 Analytics':          { en: '📊 Analytics',          hi: '📊 एनालिटिक्स',         hinglish: '📊 Analytics',          gu: '📊 એનાલિટિક્સ',          mr: '📊 अॅनालिटिक्स',         mwr: '📊 एनालिटिक्स' },
+  '🎨 Designers':          { en: '🎨 Designers',          hi: '🎨 डिज़ाइनर',           hinglish: '🎨 Designers',          gu: '🎨 ડિઝાઇનર',            mr: '🎨 डिझाइनर',            mwr: '🎨 डिज़ाइनर' },
+  '🖌  My Designer Panel':  { en: '🖌  My Designer Panel',  hi: '🖌  मेरा डिज़ाइनर पैनल',  hinglish: '🖌  My Designer Panel',  gu: '🖌  મારું ડિઝાઇનર પેનલ',  mr: '🖌  माझे डिझाइनर पॅनल',   mwr: '🖌  म्हारो डिज़ाइनर पैनल' },
+  '👀 Designers View':     { en: '👀 Designers View',     hi: '👀 डिज़ाइनर व्यू',        hinglish: '👀 Designers View',     gu: '👀 ડિઝાઇનર વ્યૂ',         mr: '👀 डिझाइनर व्ह्यू',        mwr: '👀 डिज़ाइनर व्यू' },
+  '🛠  Job Setter':         { en: '🛠  Job Setter',         hi: '🛠  जॉब सेटर',            hinglish: '🛠  Job Setter',         gu: '🛠  જોબ સેટર',            mr: '🛠  जॉब सेटर',            mwr: '🛠  जॉब सेटर' },
+  '📥 Assign Production':  { en: '📥 Assign Production',  hi: '📥 प्रोडक्शन सौंपें',     hinglish: '📥 Assign Production',  gu: '📥 પ્રોડક્શન સોંપો',      mr: '📥 प्रोडक्शन नेमा',       mwr: '📥 प्रोडक्शन सौंपो' },
+  '🏭 Production':         { en: '🏭 Production',         hi: '🏭 प्रोडक्शन',           hinglish: '🏭 Production',         gu: '🏭 પ્રોડક્શન',           mr: '🏭 प्रोडक्शन',           mwr: '🏭 प्रोडक्शन' },
+  '📋 Prod Steps':         { en: '📋 Prod Steps',         hi: '📋 प्रोडक्शन स्टेप्स',    hinglish: '📋 Prod Steps',         gu: '📋 પ્રોડક્શન સ્ટેપ્સ',    mr: '📋 प्रोडक्शन स्टेप्स',    mwr: '📋 प्रोडक्शन स्टेप्स' },
+  '🔍 QC':                 { en: '🔍 QC',                 hi: '🔍 QC',                 hinglish: '🔍 QC',                 gu: '🔍 QC',                 mr: '🔍 QC',                 mwr: '🔍 QC' },
+  '🚚 Dispatch':           { en: '🚚 Dispatch',           hi: '🚚 डिस्पैच',             hinglish: '🚚 Dispatch',           gu: '🚚 ડિસ્પેચ',             mr: '🚚 डिस्पॅच',             mwr: '🚚 डिस्पैच' },
+  '⚙️  Machines':          { en: '⚙️  Machines',          hi: '⚙️  मशीनें',             hinglish: '⚙️  Machines',          gu: '⚙️  મશીનો',              mr: '⚙️  मशीन',               mwr: '⚙️  मशीनां' },
+  '🕐 Machine History':    { en: '🕐 Machine History',    hi: '🕐 मशीन हिस्ट्री',        hinglish: '🕐 Machine History',    gu: '🕐 મશીન હિસ્ટ્રી',        mr: '🕐 मशीन हिस्ट्री',        mwr: '🕐 मशीन हिस्ट्री' },
+  '📞 Leads CRM':          { en: '📞 Leads CRM',          hi: '📞 लीड्स CRM',           hinglish: '📞 Leads CRM',          gu: '📞 લીડ્સ CRM',           mr: '📞 लीड्स CRM',           mwr: '📞 लीड्स CRM' },
+  '💼 Sales Panel':        { en: '💼 Sales Panel',        hi: '💼 सेल्स पैनल',          hinglish: '💼 Sales Panel',        gu: '💼 સેલ્સ પેનલ',          mr: '💼 सेल्स पॅनल',          mwr: '💼 सेल्स पैनल' },
+  '👔 Sales Admin':        { en: '👔 Sales Admin',        hi: '👔 सेल्स एडमिन',         hinglish: '👔 Sales Admin',        gu: '👔 સેલ્સ એડમિન',         mr: '👔 सेल्स अॅडमिन',         mwr: '👔 सेल्स एडमिन' },
+  '❓ Enquiry':            { en: '❓ Enquiry',            hi: '❓ पूछताछ',              hinglish: '❓ Enquiry',            gu: '❓ પૂછપરછ',              mr: '❓ चौकशी',               mwr: '❓ पूछताछ' },
+  '📦 Sample DM':          { en: '📦 Sample DM',          hi: '📦 सैंपल DM',            hinglish: '📦 Sample DM',          gu: '📦 સેમ્પલ DM',           mr: '📦 सॅंपल DM',            mwr: '📦 सैंपल DM' },
+  '📑 Bulk Orders':        { en: '📑 Bulk Orders',        hi: '📑 बल्क ऑर्डर',          hinglish: '📑 Bulk Orders',        gu: '📑 બલ્ક ઓર્ડર',          mr: '📑 बल्क ऑर्डर',          mwr: '📑 बल्क ऑर्डर' },
+  '🛍  Products':          { en: '🛍  Products',          hi: '🛍  प्रोडक्ट्स',          hinglish: '🛍  Products',          gu: '🛍  પ્રોડક્ટ્સ',          mr: '🛍  प्रोडक्ट्स',          mwr: '🛍  प्रोडक्ट्स' },
+  '📦 Stock':              { en: '📦 Stock',              hi: '📦 स्टॉक',               hinglish: '📦 Stock',              gu: '📦 સ્ટોક',               mr: '📦 स्टॉक',               mwr: '📦 स्टॉक' },
+  '🏪 Vendors':            { en: '🏪 Vendors',            hi: '🏪 वेंडर',               hinglish: '🏪 Vendors',            gu: '🏪 વેન્ડર',              mr: '🏪 व्हेंडर',             mwr: '🏪 वेंडर' },
+  '💰 Accounting':         { en: '💰 Accounting',         hi: '💰 अकाउंटिंग',           hinglish: '💰 Accounting',         gu: '💰 એકાઉન્ટિંગ',          mr: '💰 अकाउंटिंग',           mwr: '💰 अकाउंटिंग' },
+  '🧾 Invoice':            { en: '🧾 Invoice',            hi: '🧾 इनवॉइस',              hinglish: '🧾 Invoice',            gu: '🧾 ઇન્વોઇસ',             mr: '🧾 इनव्हॉइस',            mwr: '🧾 इनवॉइस' },
+  '📒 Client Ledger':      { en: '📒 Client Ledger',      hi: '📒 क्लाइंट लेजर',         hinglish: '📒 Client Ledger',      gu: '📒 ક્લાયન્ટ લેજર',        mr: '📒 क्लायंट लेजर',         mwr: '📒 क्लाइंट लेजर' },
+  '👥 HR Dashboard':       { en: '👥 HR Dashboard',       hi: '👥 HR डैशबोर्ड',          hinglish: '👥 HR Dashboard',       gu: '👥 HR ડેશબોર્ડ',          mr: '👥 HR डॅशबोर्ड',          mwr: '👥 HR डैशबोर्ड' },
+  '🧑‍💼 Staff':            { en: '🧑‍💼 Staff',            hi: '🧑‍💼 स्टाफ',             hinglish: '🧑‍💼 Staff',            gu: '🧑‍💼 સ્ટાફ',             mr: '🧑‍💼 कर्मचारी',          mwr: '🧑‍💼 स्टाफ' },
+  '🏖  Leaves':            { en: '🏖  Leaves',            hi: '🏖  छुट्टियां',           hinglish: '🏖  Leaves',            gu: '🏖  રજાઓ',               mr: '🏖  रजा',                mwr: '🏖  छुट्टियां' },
+  '💵 Payroll':            { en: '💵 Payroll',            hi: '💵 पेरोल',               hinglish: '💵 Payroll',            gu: '💵 પેરોલ',               mr: '💵 पेरोल',               mwr: '💵 पेरोल' },
+  '🕒 Attendance':         { en: '🕒 Attendance',         hi: '🕒 हाजिरी',              hinglish: '🕒 Attendance',         gu: '🕒 હાજરી',               mr: '🕒 हजेरी',               mwr: '🕒 हाजरी' },
+  '⚡ Productivity':       { en: '⚡ Productivity',       hi: '⚡ प्रोडक्टिविटी',        hinglish: '⚡ Productivity',       gu: '⚡ પ્રોડક્ટિવિટી',        mr: '⚡ प्रोडक्टिव्हिटी',       mwr: '⚡ प्रोडक्टिविटी' },
+  '🌴 My Leaves':          { en: '🌴 My Leaves',          hi: '🌴 मेरी छुट्टियां',       hinglish: '🌴 My Leaves',          gu: '🌴 મારી રજાઓ',           mr: '🌴 माझ्या रजा',          mwr: '🌴 म्हारी छुट्टियां' },
+  '⏱  My Attendance':      { en: '⏱  My Attendance',      hi: '⏱  मेरी हाजिरी',          hinglish: '⏱  My Attendance',      gu: '⏱  મારી હાજરી',          mr: '⏱  माझी हजेरी',          mwr: '⏱  म्हारी हाजरी' },
+  '💸 My Salary':          { en: '💸 My Salary',          hi: '💸 मेरी सैलरी',          hinglish: '💸 My Salary',          gu: '💸 મારો પગાર',           mr: '💸 माझा पगार',           mwr: '💸 म्हारी सैलरी' },
+  '🏢 Depts':              { en: '🏢 Depts',              hi: '🏢 विभाग',               hinglish: '🏢 Depts',              gu: '🏢 વિભાગો',              mr: '🏢 विभाग',               mwr: '🏢 विभाग' },
+  '🗂  Manage Depts':      { en: '🗂  Manage Depts',      hi: '🗂  विभाग प्रबंधन',       hinglish: '🗂  Manage Depts',      gu: '🗂  વિભાગ સંચાલન',        mr: '🗂  विभाग व्यवस्थापन',     mwr: '🗂  विभाग प्रबंधन' },
+  '🙂 Customer':           { en: '🙂 Customer',           hi: '🙂 ग्राहक',              hinglish: '🙂 Customer',           gu: '🙂 ગ્રાહક',              mr: '🙂 ग्राहक',              mwr: '🙂 ग्राहक' },
+  '⭐ Review':             { en: '⭐ Review',             hi: '⭐ रिव्यू',              hinglish: '⭐ Review',             gu: '⭐ રિવ્યૂ',              mr: '⭐ रिव्ह्यू',            mwr: '⭐ रिव्यू' },
+  '📄 Job Detail':         { en: '📄 Job Detail',         hi: '📄 जॉब डिटेल',           hinglish: '📄 Job Detail',         gu: '📄 જોબ ડિટેલ',           mr: '📄 जॉब डिटेल',           mwr: '📄 जॉब डिटेल' },
+  '🔐 Permissions':        { en: '🔐 Permissions',        hi: '🔐 अनुमतियां',           hinglish: '🔐 Permissions',        gu: '🔐 પરવાનગીઓ',            mr: '🔐 परवानग्या',           mwr: '🔐 अनुमतियां' },
+  '🌳 Hierarchy':          { en: '🌳 Hierarchy',          hi: '🌳 पदानुक्रम',           hinglish: '🌳 Hierarchy',          gu: '🌳 પદક્રમ',              mr: '🌳 पदानुक्रम',           mwr: '🌳 पदानुक्रम' },
+  '📣 Broadcast':          { en: '📣 Broadcast',          hi: '📣 ब्रॉडकास्ट',          hinglish: '📣 Broadcast',          gu: '📣 બ્રોડકાસ્ટ',          mr: '📣 ब्रॉडकास्ट',          mwr: '📣 ब्रॉडकास्ट' },
+  '👑 Super Admin':        { en: '👑 Super Admin',        hi: '👑 सुपर एडमिन',          hinglish: '👑 Super Admin',        gu: '👑 સુપર એડમિન',          mr: '👑 सुपर अॅडमिन',         mwr: '👑 सुपर एडमिन' },
+  '⚙️  Company':           { en: '⚙️  Company',           hi: '⚙️  कंपनी',              hinglish: '⚙️  Company',           gu: '⚙️  કંપની',              mr: '⚙️  कंपनी',              mwr: '⚙️  कंपनी' },
+  '💳 Billing & Plan':     { en: '💳 Billing & Plan',     hi: '💳 बिलिंग और प्लान',      hinglish: '💳 Billing & Plan',     gu: '💳 બિલિંગ અને પ્લાન',     mr: '💳 बिलिंग व प्लॅन',        mwr: '💳 बिलिंग अर प्लान' },
+  '👤 My Profile':         { en: '👤 My Profile',         hi: '👤 मेरी प्रोफाइल',        hinglish: '👤 My Profile',         gu: '👤 મારી પ્રોફાઇલ',        mr: '👤 माझी प्रोफाइल',        mwr: '👤 म्हारी प्रोफाइल' },
+  '👑 Platform Console':   { en: '👑 Platform Console',   hi: '👑 प्लेटफॉर्म कंसोल',     hinglish: '👑 Platform Console',   gu: '👑 પ્લેટફોર્મ કન્સોલ',    mr: '👑 प्लॅटफॉर्म कन्सोल',     mwr: '👑 प्लेटफॉर्म कंसोल' },
 };
 
 /**
@@ -164,7 +214,7 @@ export default function Sidebar({ open, onClose }) {
                   data-legacy={item.legacy}
                   className={({ isActive }) => isActive ? 'active' : ''}
                 >
-                  {item.label}
+                  {t(item.label)}
                 </NavLink>
               ))}
             </div>
