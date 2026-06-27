@@ -12,6 +12,8 @@ import SignupPage from './pages/SignupPage';
 import OnboardingPage from './pages/OnboardingPage';
 import AdminPage from './pages/AdminPage';
 import TasksPage from './pages/TasksPage';
+import ChatPage from './pages/ChatPage';
+import JobCardsPage from './pages/JobCardsPage';
 import BillingPage from './pages/BillingPage';
 import PlatformConsolePage from './pages/PlatformConsolePage';
 
@@ -21,6 +23,8 @@ import MyAttendancePage from './pages/MyAttendancePage';
 import ProfilePage from './pages/ProfilePage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import HrDashboardPage from './pages/HrDashboardPage';
+import HrLeavesPage from './pages/HrLeavesPage';
+import HrPayrollPage from './pages/HrPayrollPage';
 import ProductivityPage from './pages/ProductivityPage';
 import CustDashboardPage from './pages/CustDashboardPage';
 import PermissionsPage from './pages/PermissionsPage';
@@ -31,9 +35,18 @@ import ReviewPage from './pages/ReviewPage';
 import CompanySettingsPage from './pages/CompanySettingsPage';
 import SuperAdminPage from './pages/SuperAdminPage';
 import DesignersViewPage from './pages/DesignersViewPage';
+import DesignerPanelPage from './pages/DesignerPanelPage';
+import DesignersPage from './pages/DesignersPage';
+import ProductionPage from './pages/ProductionPage';
+import QCPage from './pages/QCPage';
+import DispatchPage from './pages/DispatchPage';
+import AccountingPage from './pages/AccountingPage';
+import StockPage from './pages/StockPage';
+import BroadcastPage from './pages/BroadcastPage';
 import AssignProdPage from './pages/AssignProdPage';
 import ProdStepsPage from './pages/ProdStepsPage';
 import SalesAdminPage from './pages/SalesAdminPage';
+import SalesPage from './pages/SalesPage';
 
 // Explicit page components for routes that have a finished React component.
 // Preferred over the ResourcePage/PageStub fallback in the route table below.
@@ -44,6 +57,8 @@ const CUSTOM_PAGES = {
   'profile': ProfilePage,
   'analytics': AnalyticsPage,
   'hr-dashboard': HrDashboardPage,
+  'hr-leaves': HrLeavesPage,
+  'hr-payroll': HrPayrollPage,
   'productivity': ProductivityPage,
   'cust-dashboard': CustDashboardPage,
   'permissions': PermissionsPage,
@@ -54,9 +69,18 @@ const CUSTOM_PAGES = {
   'company-settings': CompanySettingsPage,
   'superadmin': SuperAdminPage,
   'designers-view': DesignersViewPage,
+  'designer': DesignerPanelPage,
+  'designers': DesignersPage,
+  'production': ProductionPage,
+  'qc': QCPage,
+  'dispatch': DispatchPage,
+  'accounting': AccountingPage,
+  'stock': StockPage,
+  'broadcast': BroadcastPage,
   'assign-prod': AssignProdPage,
   'prod-steps': ProdStepsPage,
   'sales-admin': SalesAdminPage,
+  'sales-panel': SalesPage,
 };
 
 // Routes that reuse another route's resource config.
@@ -97,6 +121,8 @@ const STUB_ROUTES = [
 
   ['accounting',      '💰 Accounting',        'page-accounting',      'mpw/invoices'],
   ['invoice-view',    '🧾 Invoice',           'page-invoice-view',    'mpw/invoices'],
+  ['expenses',        '🧾 Expenses',          'page-expenses',        'mpw/expenses'],
+  ['purchase-orders', '📦 Purchase Orders',   'page-purchase-orders', 'mpw/purchaseOrders'],
   ['client-ledger',   '📒 Client Ledger',     'page-client-ledger',   'mpw/clients'],
 
   ['hr-dashboard',    '👥 HR Dashboard',      'page-hr-dashboard',    'mpw/users'],
@@ -137,6 +163,8 @@ export default function App() {
             <Route index element={<Navigate to="/admin" replace />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/job-cards" element={<JobCardsPage />} />
+            <Route path="/chat" element={<ChatPage />} />
             <Route path="/billing" element={<BillingPage />} />
             <Route path="/platform" element={<PlatformConsolePage />} />
 

@@ -6,7 +6,7 @@
  * dbApi.set('companySettings', 'main', {...}). Read-only roles see a notice.
  */
 import { useEffect, useState } from 'react';
-import { dbApi } from '../services/api';
+import { dbApi, tenantApi, uploadApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
@@ -31,8 +31,82 @@ const S = {
   loadFailed: { en: 'Failed to load settings', hi: 'सेटिंग्स लोड नहीं हुईं', hinglish: 'Settings load nahi hui', gu: 'સેટિંગ્સ લોડ નિષ્ફળ', mr: 'सेटिंग्ज लोड अयशस्वी', mwr: 'सेटिंग्स लोड कोनी हुई' },
 };
 
+const THEMES = [
+  { key: 'default', name: 'Rust', color: '#C05621' }, { key: 'forest', name: 'Forest', color: '#0B7B3E' },
+  { key: 'royal', name: 'Royal', color: '#2563EB' }, { key: 'sunset', name: 'Sunset', color: '#EA580C' },
+  { key: 'purple', name: 'Purple', color: '#7C3AED' }, { key: 'crimson', name: 'Crimson', color: '#DC2626' },
+  { key: 'ocean', name: 'Ocean', color: '#14B8A6' }, { key: 'midnight', name: 'Midnight', color: '#3B82F6' },
+  { key: 'rose', name: 'Rose', color: '#DB2777' }, { key: 'corporate', name: 'Corporate', color: '#4B5563' },
+  { key: 'coffee', name: 'Coffee', color: '#78350F' },
+];
+
+function BrandingSection({ canEdit, tenant, refreshTenant }) {
+  const cur = (tenant && tenant.settings && tenant.settings.branding) || {};
+  const [b, setB] = useState({ theme: cur.theme || 'default', primaryColor: cur.primaryColor || '#C05621', fontSize: cur.fontSize || 14, logo: cur.logo || '' });
+  const [custom, setCustom] = useState(!!cur.primaryColor);
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setB((s) => ({ ...s, [k]: v }));
+
+  const uploadLogo = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    try { const r = await uploadApi.upload(file); set('logo', r.url); showToast('Logo uploaded — Save to apply', 'success'); }
+    catch (err) { showToast(err.response?.data?.error || 'Upload failed', 'error'); }
+    finally { setBusy(false); }
+  };
+  const save = async () => {
+    setBusy(true);
+    try {
+      await tenantApi.update({ settings: { branding: { theme: b.theme, primaryColor: custom ? b.primaryColor : null, fontSize: Number(b.fontSize) || 14, logo: b.logo || null } } });
+      await refreshTenant();
+      showToast('Branding saved', 'success');
+    } catch (e) { showToast(e.response?.data?.error || 'Failed', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="card mb-4" style={{ maxWidth: 560 }}>
+      <h3 style={{ marginBottom: 12 }}>🎨 Branding</h3>
+      <div className="form-group">
+        <label>Logo</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {b.logo && <img src={b.logo} alt="logo" style={{ height: 36, maxWidth: 130, objectFit: 'contain', background: '#fff', borderRadius: 6, padding: 4, border: '1px solid var(--border)' }} />}
+          {canEdit && <><input id="logoUp" type="file" accept="image/*" onChange={uploadLogo} style={{ display: 'none' }} />
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => document.getElementById('logoUp').click()} disabled={busy}>Upload logo</button></>}
+          {b.logo && canEdit && <button type="button" className="btn btn-ghost btn-xs" onClick={() => set('logo', '')}>Remove</button>}
+        </div>
+      </div>
+      <div className="form-group">
+        <label>Theme</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {THEMES.map((th) => (
+            <button key={th.key} type="button" disabled={!canEdit} onClick={() => set('theme', th.key)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, border: b.theme === th.key ? `2px solid ${th.color}` : '1px solid var(--border)', background: 'var(--surface)', cursor: canEdit ? 'pointer' : 'default', fontSize: 13 }}>
+              <span style={{ width: 14, height: 14, borderRadius: '50%', background: th.color }} /> {th.name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <div className="form-group" style={{ flex: 1 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={custom} onChange={(e) => setCustom(e.target.checked)} disabled={!canEdit} /> Custom accent
+          </label>
+          {custom && <input className="input" type="color" value={b.primaryColor} onChange={(e) => set('primaryColor', e.target.value)} disabled={!canEdit} style={{ height: 40, padding: 4 }} />}
+        </div>
+        <div className="form-group" style={{ flex: 1 }}>
+          <label>Font size: {b.fontSize}px</label>
+          <input type="range" min="12" max="18" value={b.fontSize} onChange={(e) => set('fontSize', e.target.value)} disabled={!canEdit} style={{ width: '100%' }} />
+        </div>
+      </div>
+      {canEdit && <button type="button" className="btn btn-primary" onClick={save} disabled={busy}>{busy ? '…' : 'Save branding'}</button>}
+    </div>
+  );
+}
+
 export default function CompanySettingsPage() {
-  const { hasRole } = useAuth();
+  const { hasRole, tenant, refreshTenant } = useAuth();
   const t = useT(S);
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
@@ -101,6 +175,8 @@ export default function CompanySettingsPage() {
           </div>
         </div>
       )}
+
+      <BrandingSection canEdit={canEdit} tenant={tenant} refreshTenant={refreshTenant} />
 
       <form className="card" onSubmit={save} style={{ maxWidth: 560 }}>
         <div className="form-group">

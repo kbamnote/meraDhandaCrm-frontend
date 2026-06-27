@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
 import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { useT } from '../i18n/LanguageContext';
+import { useT, useLang } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
 
 const S = {
@@ -47,7 +47,38 @@ const S = {
   createTeammate: { en: 'Create teammate', hi: 'टीममेट बनाएं', hinglish: 'Teammate banayein', gu: 'ટીમમેટ બનાવો', mr: 'टीममेट तयार करा', mwr: 'टीममेट बणावो' },
   cancel: { en: 'Cancel', hi: 'रद्द करें', hinglish: 'Cancel karein', gu: 'રદ કરો', mr: 'रद्द करा', mwr: 'रद्द करो' },
   shareHint: { en: 'Share the email + password with them. They sign in at the login page.', hi: 'उन्हें ईमेल + पासवर्ड दें। वे लॉगिन पेज पर साइन इन करेंगे।', hinglish: 'Unhe email + password dein. Wo login page par sign in karenge.', gu: 'તેમને ઈમેલ + પાસવર્ડ આપો. તેઓ લોગિન પેજ પર સાઇન ઇન કરશે.', mr: 'त्यांना ईमेल + पासवर्ड द्या. ते लॉगिन पेजवर साइन इन करतील.', mwr: 'उणने ईमेल + पासवर्ड दो। वे लॉगिन पेज पर साइन इन करसी।' },
+
+  thAccess: { en: 'Access', hi: 'एक्सेस', hinglish: 'Access', gu: 'એક્સેસ', mr: 'अॅक्सेस', mwr: 'एक्सेस' },
+  manageAccess: { en: '🔧 Access', hi: '🔧 एक्सेस', hinglish: '🔧 Access', gu: '🔧 એક્સેસ', mr: '🔧 अॅक्सेस', mwr: '🔧 एक्सेस' },
+  accessFor: { en: 'Module access', hi: 'मॉड्यूल एक्सेस', hinglish: 'Module access', gu: 'મોડ્યુલ એક્સેસ', mr: 'मॉड्यूल अॅक्सेस', mwr: 'मॉड्यूल एक्सेस' },
+  canEditCol: { en: 'Can edit', hi: 'एडिट कर सकते हैं', hinglish: 'Edit kar sakte hain', gu: 'એડિટ કરી શકે', mr: 'एडिट करू शकतो', mwr: 'एडिट कर सके' },
+  accessSaved: { en: 'Access updated', hi: 'एक्सेस अपडेट हो गया', hinglish: 'Access update ho gaya', gu: 'એક્સેસ અપડેટ થયો', mr: 'अॅक्सेस अपडेट झाला', mwr: 'एक्सेस अपडेट हो ग्यो' },
+  selectAll: { en: 'Select all', hi: 'सब चुनें', hinglish: 'Sab select karein', gu: 'બધા પસંદ કરો', mr: 'सर्व निवडा', mwr: 'सगळा चुणो' },
+  clearAll: { en: 'Clear all', hi: 'सब हटाएं', hinglish: 'Sab clear karein', gu: 'બધા સાફ કરો', mr: 'सर्व साफ करा', mwr: 'सगळा हटावो' },
+  close: { en: 'Close', hi: 'बंद करें', hinglish: 'Close karein', gu: 'બંધ કરો', mr: 'बंद करा', mwr: 'बंद करो' },
+  accessHint: { en: 'Controls what this teammate can create or edit. Everyone can view. Admins & owners always have full access regardless of these toggles.', hi: 'यह तय करता है कि यह टीममेट क्या बना/एडिट कर सकता है। देख सब सकते हैं। एडमिन और ओनर के पास हमेशा पूरा एक्सेस रहता है।', hinglish: 'Yeh decide karta hai ki yeh teammate kya create/edit kar sakta hai. Dekh sab sakte hain. Admin & owner ke paas hamesha full access hota hai.', gu: 'આ ટીમમેટ શું બનાવી/એડિટ કરી શકે તે નક્કી કરે છે. બધા જોઈ શકે છે. એડમિન અને ઓનર પાસે હંમેશા સંપૂર્ણ એક્સેસ હોય છે.', mr: 'हा टीममेट काय तयार/एडिट करू शकतो हे ठरवते. सर्व पाहू शकतात. अॅडमिन व ओनरकडे नेहमी पूर्ण अॅक्सेस असतो.', mwr: 'यो टीममेट कांई बणा/एडिट कर सके वो तय करै। देख सगळा सके। एडमिन अर ओनर कनै हमेसा पूरो एक्सेस रैवे।' },
 };
+
+// Friendly module labels mapped to the enforced "<collection>.write" capability
+// keys. Sensitive collections (users, payroll, companySettings…) are intentionally
+// NOT here — they stay admin/owner-only and the backend rejects granting them.
+const MODULES = [
+  { key: 'jobs', label: { en: 'Job cards', hi: 'जॉब कार्ड', hinglish: 'Job cards' } },
+  { key: 'production', label: { en: 'Production', hi: 'प्रोडक्शन', hinglish: 'Production' } },
+  { key: 'qc', label: { en: 'Quality check', hi: 'QC', hinglish: 'Quality check' } },
+  { key: 'dispatch', label: { en: 'Dispatch', hi: 'डिस्पैच', hinglish: 'Dispatch' } },
+  { key: 'designers', label: { en: 'Designer panel', hi: 'डिज़ाइनर', hinglish: 'Designer panel' } },
+  { key: 'clients', label: { en: 'Customers', hi: 'ग्राहक', hinglish: 'Customers' } },
+  { key: 'leads', label: { en: 'Leads / Sales', hi: 'लीड्स / सेल्स', hinglish: 'Leads / Sales' } },
+  { key: 'invoices', label: { en: 'Invoices & Accounting', hi: 'इनवॉइस', hinglish: 'Invoices' } },
+  { key: 'expenses', label: { en: 'Expenses', hi: 'खर्चे', hinglish: 'Expenses' } },
+  { key: 'stock', label: { en: 'Stock', hi: 'स्टॉक', hinglish: 'Stock' } },
+  { key: 'products', label: { en: 'Products', hi: 'प्रोडक्ट्स', hinglish: 'Products' } },
+  { key: 'vendors', label: { en: 'Vendors', hi: 'वेंडर', hinglish: 'Vendors' } },
+  { key: 'machines', label: { en: 'Machines', hi: 'मशीनें', hinglish: 'Machines' } },
+  { key: 'tasks', label: { en: 'Tasks', hi: 'टास्क', hinglish: 'Tasks' } },
+  { key: 'attendance', label: { en: 'Attendance', hi: 'अटेंडेंस', hinglish: 'Attendance' } },
+];
 
 const BUILTIN_ROLES = [
   'pending', 'staff', 'designer', 'jobsetter', 'sales', 'hr',
@@ -129,6 +160,7 @@ export default function PermissionsPage() {
                 <th>{t('thCurrentRole')}</th>
                 <th>{t('thCustomRole')}</th>
                 {canEdit && <th style={{ minWidth: 320 }}>{t('thChangeRole')}</th>}
+                {canEdit && <th>{t('thAccess')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -149,6 +181,7 @@ function RoleRow({ u, canEdit, t }) {
   const [role, setRole] = useState(u.role || 'pending');
   const [customRole, setCustomRole] = useState(u.customRole || '');
   const [busy, setBusy] = useState(false);
+  const [showAccess, setShowAccess] = useState(false);
 
   const badgeClass = ROLE_BADGE[u.role] || 'badge-blue';
 
@@ -183,7 +216,89 @@ function RoleRow({ u, canEdit, t }) {
           </div>
         </td>
       )}
+      {canEdit && (
+        <td>
+          <button className="btn btn-ghost btn-xs" onClick={() => setShowAccess(true)}>
+            {t('manageAccess')}
+          </button>
+          {showAccess && <PermissionsModal u={u} t={t} onClose={() => setShowAccess(false)} />}
+        </td>
+      )}
     </tr>
+  );
+}
+
+function PermissionsModal({ u, t, onClose }) {
+  const { lang } = useLang();
+  const [perms, setPerms] = useState(() => {
+    const p = u.permissions || {};
+    const init = {};
+    for (const m of MODULES) init[m.key] = !!p[`${m.key}.write`];
+    return init;
+  });
+  const [busy, setBusy] = useState(false);
+
+  const adminLike = ['admin', 'superadmin', 'owner'].includes(u.role);
+  const toggle = (k) => setPerms((p) => ({ ...p, [k]: !p[k] }));
+  const setAll = (val) => setPerms(Object.fromEntries(MODULES.map((m) => [m.key, val])));
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const permissions = {};
+      for (const m of MODULES) permissions[`${m.key}.write`] = !!perms[m.key];
+      await authApi.setRole(u.id, { permissions });
+      showToast(t('accessSaved'), 'success');
+      onClose();
+    } catch (err) {
+      showToast(err.response?.data?.error || t('failed'), 'error');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div className="card" style={{ maxWidth: 460, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <h3 style={{ marginBottom: 4 }}>{t('accessFor')}</h3>
+        <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 10 }}>
+          {u.name || u.email} · <span className="badge badge-blue">{u.role || 'pending'}</span>
+        </div>
+
+        {adminLike && (
+          <div style={{ fontSize: 12, color: 'var(--amber)', background: 'var(--surface2)', borderRadius: 8, padding: '8px 10px', marginBottom: 10 }}>
+            {u.role} already has full access — these toggles only matter for non-admin roles.
+          </div>
+        )}
+
+        <div className="flex gap-2 mb-2">
+          <button className="btn btn-ghost btn-xs" onClick={() => setAll(true)}>{t('selectAll')}</button>
+          <button className="btn btn-ghost btn-xs" onClick={() => setAll(false)}>{t('clearAll')}</button>
+        </div>
+
+        <div style={{ overflow: 'auto', flex: 1, border: '1px solid var(--border)', borderRadius: 8 }}>
+          {MODULES.map((m, i) => (
+            <label
+              key={m.key}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', cursor: 'pointer', borderTop: i ? '1px solid var(--border)' : 'none' }}
+            >
+              <span style={{ color: 'var(--text)' }}>{m.label[lang] ?? m.label.en}</span>
+              <span className="flex gap-2 items-center" style={{ fontSize: 12, color: 'var(--text3)' }}>
+                {t('canEditCol')}
+                <input type="checkbox" checked={!!perms[m.key]} onChange={() => toggle(m.key)} style={{ width: 18, height: 18 }} />
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div style={{ fontSize: 11, color: 'var(--text3)', margin: '10px 0' }}>{t('accessHint')}</div>
+
+        <div className="flex gap-2">
+          <button className="btn btn-primary flex-1" onClick={save} disabled={busy}>
+            {busy ? t('saving') : t('save')}
+          </button>
+          <button className="btn btn-ghost" onClick={onClose}>{t('close')}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

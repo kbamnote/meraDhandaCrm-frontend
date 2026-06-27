@@ -14,7 +14,9 @@ const SECTION_S = {
 
   // Navigation item labels — keyed by the exact English label string (emoji included).
   '🏠 Admin Dashboard':    { en: '🏠 Admin Dashboard',    hi: '🏠 एडमिन डैशबोर्ड',    hinglish: '🏠 Admin Dashboard',    gu: '🏠 એડમિન ડેશબોર્ડ',     mr: '🏠 अॅडमिन डॅशबोर्ड',     mwr: '🏠 एडमिन डैशबोर्ड' },
+  '📋 Job Cards':          { en: '📋 Job Cards',          hi: '📋 जॉब कार्ड',          hinglish: '📋 Job Cards',          gu: '📋 જોબ કાર્ડ',          mr: '📋 जॉब कार्ड',          mwr: '📋 जॉब कार्ड' },
   '✅ Tasks':              { en: '✅ Tasks',              hi: '✅ काम',               hinglish: '✅ Tasks',              gu: '✅ કાર્યો',             mr: '✅ कामे',               mwr: '✅ काम' },
+  '💬 Chat':               { en: '💬 Chat',               hi: '💬 चैट',                hinglish: '💬 Chat',               gu: '💬 ચેટ',                mr: '💬 चॅट',                mwr: '💬 चैट' },
   '📊 Analytics':          { en: '📊 Analytics',          hi: '📊 एनालिटिक्स',         hinglish: '📊 Analytics',          gu: '📊 એનાલિટિક્સ',          mr: '📊 अॅनालिटिक्स',         mwr: '📊 एनालिटिक्स' },
   '🎨 Designers':          { en: '🎨 Designers',          hi: '🎨 डिज़ाइनर',           hinglish: '🎨 Designers',          gu: '🎨 ડિઝાઇનર',            mr: '🎨 डिझाइनर',            mwr: '🎨 डिज़ाइनर' },
   '🖌  My Designer Panel':  { en: '🖌  My Designer Panel',  hi: '🖌  मेरा डिज़ाइनर पैनल',  hinglish: '🖌  My Designer Panel',  gu: '🖌  મારું ડિઝાઇનર પેનલ',  mr: '🖌  माझे डिझाइनर पॅनल',   mwr: '🖌  म्हारो डिज़ाइनर पैनल' },
@@ -38,6 +40,8 @@ const SECTION_S = {
   '🏪 Vendors':            { en: '🏪 Vendors',            hi: '🏪 वेंडर',               hinglish: '🏪 Vendors',            gu: '🏪 વેન્ડર',              mr: '🏪 व्हेंडर',             mwr: '🏪 वेंडर' },
   '💰 Accounting':         { en: '💰 Accounting',         hi: '💰 अकाउंटिंग',           hinglish: '💰 Accounting',         gu: '💰 એકાઉન્ટિંગ',          mr: '💰 अकाउंटिंग',           mwr: '💰 अकाउंटिंग' },
   '🧾 Invoice':            { en: '🧾 Invoice',            hi: '🧾 इनवॉइस',              hinglish: '🧾 Invoice',            gu: '🧾 ઇન્વોઇસ',             mr: '🧾 इनव्हॉइस',            mwr: '🧾 इनवॉइस' },
+  '🧾 Expenses':           { en: '🧾 Expenses',           hi: '🧾 खर्च',                hinglish: '🧾 Expenses',           gu: '🧾 ખર્ચ',                mr: '🧾 खर्च',                mwr: '🧾 खर्च' },
+  '📦 Purchase Orders':    { en: '📦 Purchase Orders',    hi: '📦 परचेज़ ऑर्डर',         hinglish: '📦 Purchase Orders',    gu: '📦 પરચેઝ ઓર્ડર',         mr: '📦 परचेस ऑर्डर',         mwr: '📦 परचेज़ ऑर्डर' },
   '📒 Client Ledger':      { en: '📒 Client Ledger',      hi: '📒 क्लाइंट लेजर',         hinglish: '📒 Client Ledger',      gu: '📒 ક્લાયન્ટ લેજર',        mr: '📒 क्लायंट लेजर',         mwr: '📒 क्लाइंट लेजर' },
   '👥 HR Dashboard':       { en: '👥 HR Dashboard',       hi: '👥 HR डैशबोर्ड',          hinglish: '👥 HR Dashboard',       gu: '👥 HR ડેશબોર્ડ',          mr: '👥 HR डॅशबोर्ड',          mwr: '👥 HR डैशबोर्ड' },
   '🧑‍💼 Staff':            { en: '🧑‍💼 Staff',            hi: '🧑‍💼 स्टाफ',             hinglish: '🧑‍💼 Staff',            gu: '🧑‍💼 સ્ટાફ',             mr: '🧑‍💼 कर्मचारी',          mwr: '🧑‍💼 स्टाफ' },
@@ -73,7 +77,9 @@ const SECTIONS = [
     title: 'Workspace',
     items: [
       { to: '/admin',         label: '🏠 Admin Dashboard',    legacy: 'page-admin' },
+      { to: '/job-cards',     label: '📋 Job Cards',          legacy: 'page-job-cards' },
       { to: '/tasks',         label: '✅ Tasks',              legacy: 'page-tasks' },
+      { to: '/chat',          label: '💬 Chat',               legacy: 'page-chat' },
       { to: '/analytics',     label: '📊 Analytics',          legacy: 'page-analytics' },
     ],
   },
@@ -112,6 +118,8 @@ const SECTIONS = [
     items: [
       { to: '/accounting',     label: '💰 Accounting',        legacy: 'page-accounting' },
       { to: '/invoice-view',   label: '🧾 Invoice',           legacy: 'page-invoice-view' },
+      { to: '/expenses',       label: '🧾 Expenses',          legacy: 'page-expenses' },
+      { to: '/purchase-orders', label: '📦 Purchase Orders',  legacy: 'page-purchase-orders' },
       { to: '/client-ledger',  label: '📒 Client Ledger',     legacy: 'page-client-ledger' },
     ],
   },
@@ -190,7 +198,7 @@ export default function Sidebar({ open, onClose }) {
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="sidebar-logo" style={{ display: 'block' }}>
           <div style={{ background: '#fff', borderRadius: 8, padding: '6px 10px', display: 'inline-block', marginBottom: 8 }}>
-            <img src="/logo.png" alt="MeraDhanda" style={{ height: 24, display: 'block' }} />
+            <img src={tenant?.settings?.branding?.logo || '/logo.png'} alt="Logo" style={{ height: 24, display: 'block', maxWidth: 120, objectFit: 'contain' }} />
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--sidebar-text-active)' }}>
             {tenant?.name || 'MeraDhanda CRM'}

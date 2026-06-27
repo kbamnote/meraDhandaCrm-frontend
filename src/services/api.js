@@ -68,6 +68,15 @@ export const meApi = {
   leaves:       () => api.get('/me/leaves').then(r => r.data),
   attendance:   () => api.get('/me/attendance').then(r => r.data),
   requestLeave: (body) => api.post('/me/leaves', body).then(r => r.data),
+  punch:        (body) => api.post('/me/attendance/punch', body).then(r => r.data),
+};
+
+// HR admin — leave decisions, payroll compute/generate, productivity (admin/hr).
+export const hrApi = {
+  leaveDecision:   (id, body) => api.post(`/hr/leaves/${id}/decision`, body).then(r => r.data),
+  payrollCompute:  (month)    => api.get('/hr/payroll/compute', { params: { month } }).then(r => r.data),
+  payrollGenerate: (month)    => api.post('/hr/payroll/generate', { month }).then(r => r.data),
+  productivity:    (params)   => api.get('/hr/productivity', { params }).then(r => r.data),
 };
 
 export const paymentApi = {
@@ -82,6 +91,66 @@ export const uploadApi = {
     return api.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       .then(r => r.data);
   },
+};
+
+// Order workflow engine — job cards + 7-stage pipeline (FY job numbering server-side).
+export const ordersApi = {
+  nextNumber:  ()           => api.get('/orders/next-number').then(r => r.data),
+  create:      (body)       => api.post('/orders', body).then(r => r.data),
+  transition:  (id, body)   => api.post(`/orders/${id}/transition`, body).then(r => r.data),
+  departments: ()           => api.get('/orders/departments').then(r => r.data),
+  assignProduction: (id, b) => api.post(`/orders/${id}/production`, b).then(r => r.data),
+  markStep:    (id, body)   => api.post(`/orders/${id}/step`, body).then(r => r.data),
+  deptComplete:(id, body)   => api.post(`/orders/${id}/dept-complete`, body).then(r => r.data),
+  designerClaim:    (id)    => api.post(`/orders/${id}/designer/claim`).then(r => r.data),
+  designerReject:   (id)    => api.post(`/orders/${id}/designer/reject`).then(r => r.data),
+  designerReady:    (id)    => api.post(`/orders/${id}/designer/ready`).then(r => r.data),
+  designerApproval: (id)    => api.post(`/orders/${id}/designer/client-approval`).then(r => r.data),
+  designerLeave:    (onLeave) => api.post('/orders/designer/leave', { onLeave }).then(r => r.data),
+  designerManage:   (uid, b)  => api.post(`/orders/designer/${uid}/manage`, b).then(r => r.data),
+  qc:          (id, body)   => api.post(`/orders/${id}/qc`, body).then(r => r.data),
+  dispatch:    (id, body)   => api.post(`/orders/${id}/dispatch`, body).then(r => r.data),
+};
+
+// Billing & Accounting — GST/proforma invoices, payments, ledger, P&L, GST report.
+export const accountingApi = {
+  invoiceNumber: (type)     => api.get('/accounting/invoice-number', { params: { type } }).then(r => r.data),
+  createInvoice: (body)     => api.post('/accounting/invoice', body).then(r => r.data),
+  recordPayment: (id, body) => api.post(`/accounting/invoice/${id}/payment`, body).then(r => r.data),
+  ledger:        ()         => api.get('/accounting/ledger').then(r => r.data),
+  pnl:           (params)   => api.get('/accounting/pnl', { params }).then(r => r.data),
+  gstReport:     (params)   => api.get('/accounting/gst-report', { params }).then(r => r.data),
+};
+
+// Sales / Leads CRM — assign, outcome, Excel import, targets, leaderboard, reports.
+export const salesApi = {
+  assignLead:  (id, body) => api.post(`/sales/leads/${id}/assign`, body).then(r => r.data),
+  setOutcome:  (id, body) => api.post(`/sales/leads/${id}/outcome`, body).then(r => r.data),
+  importLeads: (file)     => { const fd = new FormData(); fd.append('file', file); return api.post('/sales/leads/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
+  setTarget:   (body)     => api.post('/sales/targets', body).then(r => r.data),
+  targets:     (month)    => api.get('/sales/targets', { params: { month } }).then(r => r.data),
+  leaderboard: (params)   => api.get('/sales/leaderboard', { params }).then(r => r.data),
+  report:      (params)   => api.get('/sales/report', { params }).then(r => r.data),
+};
+
+// Stock — material in/out movements that adjust an item's running quantity.
+export const stockApi = {
+  move:      (body)   => api.post('/stock/move', body).then(r => r.data),
+  movements: (itemId) => api.get('/stock/movements', { params: itemId ? { itemId } : {} }).then(r => r.data),
+};
+
+// Customer messaging — templates, broadcast, outbox (send is stubbed server-side).
+export const messagingApi = {
+  templates:    ()           => api.get('/messaging/templates').then(r => r.data),
+  saveTemplate: (key, body)  => api.put(`/messaging/templates/${key}`, { body }).then(r => r.data),
+  broadcast:    (body)       => api.post('/messaging/broadcast', body).then(r => r.data),
+  outbox:       (status)     => api.get('/messaging/outbox', { params: status ? { status } : {} }).then(r => r.data),
+  sendPending:  ()           => api.post('/messaging/send-pending').then(r => r.data),
+};
+
+// Analytics — consolidated business overview (KPIs, jobs-by-stage, revenue series).
+export const analyticsApi = {
+  overview: (params) => api.get('/analytics/overview', { params }).then(r => r.data),
 };
 
 export const chatApi = {
