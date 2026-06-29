@@ -105,6 +105,85 @@ function BrandingSection({ canEdit, tenant, refreshTenant }) {
   );
 }
 
+function GeofenceSection({ canEdit, tenant, refreshTenant }) {
+  const cur = (tenant && tenant.settings && tenant.settings.attendanceGeofence) || {};
+  const [g, setG] = useState({
+    enabled: !!cur.enabled,
+    lat: cur.lat != null ? String(cur.lat) : '',
+    lng: cur.lng != null ? String(cur.lng) : '',
+    radius: cur.radius || 50,
+    label: cur.label || '',
+  });
+  const [busy, setBusy] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const set = (k, v) => setG((s) => ({ ...s, [k]: v }));
+
+  const useCurrent = () => {
+    if (!navigator.geolocation) return showToast('Geolocation not supported in this browser', 'error');
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { set('lat', pos.coords.latitude.toFixed(6)); set('lng', pos.coords.longitude.toFixed(6)); setLocating(false); showToast('Location captured — Save to apply', 'success'); },
+      (err) => { setLocating(false); showToast(err.message || 'Could not get location', 'error'); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  const save = async () => {
+    const lat = Number(g.lat); const lng = Number(g.lng);
+    if (g.enabled && (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0))) {
+      return showToast('Set the office location first (lat/lng)', 'error');
+    }
+    setBusy(true);
+    try {
+      await tenantApi.update({ settings: { attendanceGeofence: {
+        enabled: !!g.enabled,
+        lat: Number.isFinite(lat) ? lat : null,
+        lng: Number.isFinite(lng) ? lng : null,
+        radius: Number(g.radius) || 50,
+        label: g.label.trim() || null,
+      } } });
+      await refreshTenant();
+      showToast('Attendance geofence saved', 'success');
+    } catch (e) { showToast(e.response?.data?.error || 'Failed', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="card mb-4" style={{ maxWidth: 560 }}>
+      <h3 style={{ marginBottom: 4 }}>📍 Attendance geofence</h3>
+      <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>
+        When enabled, staff can only punch in/out from the mobile app within this radius of the office (a small GPS-accuracy tolerance is added). Stand at your shop and tap “Use my current location”.
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <input type="checkbox" checked={g.enabled} onChange={(e) => set('enabled', e.target.checked)} disabled={!canEdit} />
+        Enable geofenced attendance
+      </label>
+      <div className="form-group">
+        <label>Office location</label>
+        <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+          <input className="input" style={{ maxWidth: 160 }} placeholder="Latitude" value={g.lat} onChange={(e) => set('lat', e.target.value)} disabled={!canEdit} />
+          <input className="input" style={{ maxWidth: 160 }} placeholder="Longitude" value={g.lng} onChange={(e) => set('lng', e.target.value)} disabled={!canEdit} />
+          {canEdit && <button type="button" className="btn btn-ghost btn-sm" onClick={useCurrent} disabled={locating}>{locating ? 'Locating…' : '📍 Use my current location'}</button>}
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <div className="form-group" style={{ flex: 1 }}>
+          <label>Radius (metres)</label>
+          <input className="input" type="number" min="20" value={g.radius} onChange={(e) => set('radius', e.target.value)} disabled={!canEdit} />
+        </div>
+        <div className="form-group" style={{ flex: 1 }}>
+          <label>Label (optional)</label>
+          <input className="input" placeholder="Main shop" value={g.label} onChange={(e) => set('label', e.target.value)} disabled={!canEdit} />
+        </div>
+      </div>
+      {g.lat && g.lng ? (
+        <a href={`https://www.google.com/maps?q=${g.lat},${g.lng}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--blue)' }}>View on map ↗</a>
+      ) : null}
+      {canEdit && <div style={{ marginTop: 12 }}><button type="button" className="btn btn-primary" onClick={save} disabled={busy}>{busy ? '…' : 'Save geofence'}</button></div>}
+    </div>
+  );
+}
+
 export default function CompanySettingsPage() {
   const { hasRole, tenant, refreshTenant } = useAuth();
   const t = useT(S);
@@ -177,6 +256,7 @@ export default function CompanySettingsPage() {
       )}
 
       <BrandingSection canEdit={canEdit} tenant={tenant} refreshTenant={refreshTenant} />
+      <GeofenceSection canEdit={canEdit} tenant={tenant} refreshTenant={refreshTenant} />
 
       <form className="card" onSubmit={save} style={{ maxWidth: 560 }}>
         <div className="form-group">

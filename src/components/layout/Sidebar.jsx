@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
+import { PERM_OF, canViewModule } from '../../config/access';
 
 const SECTION_S = {
   Workspace: { en: 'Workspace', hi: 'वर्कस्पेस', hinglish: 'Workspace', gu: 'વર્કસ્પેસ', mr: 'वर्कस्पेस', mwr: 'वर्कस्पेस' },
@@ -13,7 +14,7 @@ const SECTION_S = {
   'Sign out': { en: 'Sign out', hi: 'साइन आउट', hinglish: 'Sign out', gu: 'સાઇન આઉટ', mr: 'साइन आउट', mwr: 'साइन आउट' },
 
   // Navigation item labels — keyed by the exact English label string (emoji included).
-  '🏠 Admin Dashboard':    { en: '🏠 Admin Dashboard',    hi: '🏠 एडमिन डैशबोर्ड',    hinglish: '🏠 Admin Dashboard',    gu: '🏠 એડમિન ડેશબોર્ડ',     mr: '🏠 अॅडमिन डॅशबोर्ड',     mwr: '🏠 एडमिन डैशबोर्ड' },
+  '🏠 Dashboard':          { en: '🏠 Dashboard',          hi: '🏠 डैशबोर्ड',           hinglish: '🏠 Dashboard',          gu: '🏠 ડેશબોર્ડ',            mr: '🏠 डॅशबोर्ड',            mwr: '🏠 डैशबोर्ड' },
   '📋 Job Cards':          { en: '📋 Job Cards',          hi: '📋 जॉब कार्ड',          hinglish: '📋 Job Cards',          gu: '📋 જોબ કાર્ડ',          mr: '📋 जॉब कार्ड',          mwr: '📋 जॉब कार्ड' },
   '✅ Tasks':              { en: '✅ Tasks',              hi: '✅ काम',               hinglish: '✅ Tasks',              gu: '✅ કાર્યો',             mr: '✅ कामे',               mwr: '✅ काम' },
   '💬 Chat':               { en: '💬 Chat',               hi: '💬 चैट',                hinglish: '💬 Chat',               gu: '💬 ચેટ',                mr: '💬 चॅट',                mwr: '💬 चैट' },
@@ -47,6 +48,7 @@ const SECTION_S = {
   '🧑‍💼 Staff':            { en: '🧑‍💼 Staff',            hi: '🧑‍💼 स्टाफ',             hinglish: '🧑‍💼 Staff',            gu: '🧑‍💼 સ્ટાફ',             mr: '🧑‍💼 कर्मचारी',          mwr: '🧑‍💼 स्टाफ' },
   '🏖  Leaves':            { en: '🏖  Leaves',            hi: '🏖  छुट्टियां',           hinglish: '🏖  Leaves',            gu: '🏖  રજાઓ',               mr: '🏖  रजा',                mwr: '🏖  छुट्टियां' },
   '💵 Payroll':            { en: '💵 Payroll',            hi: '💵 पेरोल',               hinglish: '💵 Payroll',            gu: '💵 પેરોલ',               mr: '💵 पेरोल',               mwr: '💵 पेरोल' },
+  '🕒 Team Attendance':    { en: '🕒 Team Attendance',    hi: '🕒 टीम हाज़िरी',          hinglish: '🕒 Team Attendance',    gu: '🕒 ટીમ હાજરી',            mr: '🕒 टीम हजेरी',           mwr: '🕒 टीम हाजरी' },
   '🕒 Attendance':         { en: '🕒 Attendance',         hi: '🕒 हाजिरी',              hinglish: '🕒 Attendance',         gu: '🕒 હાજરી',               mr: '🕒 हजेरी',               mwr: '🕒 हाजरी' },
   '⚡ Productivity':       { en: '⚡ Productivity',       hi: '⚡ प्रोडक्टिविटी',        hinglish: '⚡ Productivity',       gu: '⚡ પ્રોડક્ટિવિટી',        mr: '⚡ प्रोडक्टिव्हिटी',       mwr: '⚡ प्रोडक्टिविटी' },
   '🌴 My Leaves':          { en: '🌴 My Leaves',          hi: '🌴 मेरी छुट्टियां',       hinglish: '🌴 My Leaves',          gu: '🌴 મારી રજાઓ',           mr: '🌴 माझ्या रजा',          mwr: '🌴 म्हारी छुट्टियां' },
@@ -65,6 +67,16 @@ const SECTION_S = {
   '💳 Billing & Plan':     { en: '💳 Billing & Plan',     hi: '💳 बिलिंग और प्लान',      hinglish: '💳 Billing & Plan',     gu: '💳 બિલિંગ અને પ્લાન',     mr: '💳 बिलिंग व प्लॅन',        mwr: '💳 बिलिंग अर प्लान' },
   '👤 My Profile':         { en: '👤 My Profile',         hi: '👤 मेरी प्रोफाइल',        hinglish: '👤 My Profile',         gu: '👤 મારી પ્રોફાઇલ',        mr: '👤 माझी प्रोफाइल',        mwr: '👤 म्हारी प्रोफाइल' },
   '👑 Platform Console':   { en: '👑 Platform Console',   hi: '👑 प्लेटफॉर्म कंसोल',     hinglish: '👑 Platform Console',   gu: '👑 પ્લેટફોર્મ કન્સોલ',    mr: '👑 प्लॅटफॉर्म कन्सोल',     mwr: '👑 प्लेटफॉर्म कंसोल' },
+
+  // Super Admin section (Module 14)
+  'Super Admin': { en: 'Super Admin', hi: 'सुपर एडमिन', hinglish: 'Super Admin', gu: 'સુપર એડમિન', mr: 'सुपर अॅडमिन', mwr: 'सुपर एडमिन' },
+  'Platform': { en: 'Platform', hi: 'प्लेटफ़ॉर्म', hinglish: 'Platform', gu: 'પ્લેટફોર્મ', mr: 'प्लॅटफॉर्म', mwr: 'प्लेटफॉर्म' },
+  '📢 Send Notification': { en: '📢 Send Notification', hi: '📢 नोटिफिकेशन भेजें', hinglish: '📢 Send Notification', gu: '📢 નોટિફિકેશન મોકલો', mr: '📢 नोटिफिकेशन पाठवा', mwr: '📢 नोटिफिकेशन भेजो' },
+  '📜 Audit Log':      { en: '📜 Audit Log',      hi: '📜 ऑडिट लॉग',        hinglish: '📜 Audit Log',      gu: '📜 ઓડિટ લોગ',         mr: '📜 ऑडिट लॉग',        mwr: '📜 ऑडिट लॉग' },
+  '🔑 API Keys':       { en: '🔑 API Keys',       hi: '🔑 API कीज़',         hinglish: '🔑 API Keys',       gu: '🔑 API કીઝ',          mr: '🔑 API कीज',         mwr: '🔑 API कीज़' },
+  '🪝 Webhooks':       { en: '🪝 Webhooks',       hi: '🪝 वेबहुक्स',          hinglish: '🪝 Webhooks',       gu: '🪝 વેબહૂક્સ',          mr: '🪝 वेबहूक्स',         mwr: '🪝 वेबहुक्स' },
+  '🌐 Custom Domain':  { en: '🌐 Custom Domain',  hi: '🌐 कस्टम डोमेन',       hinglish: '🌐 Custom Domain',  gu: '🌐 કસ્ટમ ડોમેન',       mr: '🌐 कस्टम डोमेन',      mwr: '🌐 कस्टम डोमेन' },
+  '🎁 Referrals':      { en: '🎁 Referrals',      hi: '🎁 रेफरल',            hinglish: '🎁 Referrals',      gu: '🎁 રેફરલ',            mr: '🎁 रेफरल',           mwr: '🎁 रेफरल' },
 };
 
 /**
@@ -76,7 +88,7 @@ const SECTIONS = [
   {
     title: 'Workspace',
     items: [
-      { to: '/admin',         label: '🏠 Admin Dashboard',    legacy: 'page-admin' },
+      { to: '/admin',         label: '🏠 Dashboard',          legacy: 'page-admin' },
       { to: '/job-cards',     label: '📋 Job Cards',          legacy: 'page-job-cards' },
       { to: '/tasks',         label: '✅ Tasks',              legacy: 'page-tasks' },
       { to: '/chat',          label: '💬 Chat',               legacy: 'page-chat' },
@@ -126,17 +138,18 @@ const SECTIONS = [
   {
     title: 'HR',
     items: [
-      { to: '/hr-dashboard',  label: '👥 HR Dashboard',      legacy: 'page-hr-dashboard' },
-      { to: '/hr-staff',      label: '🧑‍💼 Staff',             legacy: 'page-hr-staff' },
-      { to: '/hr-leaves',     label: '🏖  Leaves',           legacy: 'page-hr-leaves' },
-      { to: '/hr-payroll',    label: '💵 Payroll',           legacy: 'page-hr-payroll' },
+      { to: '/hr-dashboard',  label: '👥 HR Dashboard',      legacy: 'page-hr-dashboard', roles: ['admin','superadmin','owner','hr'] },
+      { to: '/hr-staff',      label: '🧑‍💼 Staff',             legacy: 'page-hr-staff',     roles: ['admin','superadmin','owner','hr'] },
+      { to: '/hr-leaves',     label: '🏖  Leaves',           legacy: 'page-hr-leaves',    roles: ['admin','superadmin','owner','hr'] },
+      { to: '/hr-payroll',    label: '💵 Payroll',           legacy: 'page-hr-payroll',   roles: ['admin','superadmin','owner','hr'] },
+      { to: '/hr-attendance', label: '🕒 Team Attendance',   legacy: 'page-hr-attendance', roles: ['admin','superadmin','owner','hr'] },
       { to: '/attendance',    label: '🕒 Attendance',        legacy: 'page-attendance' },
-      { to: '/productivity',  label: '⚡ Productivity',      legacy: 'page-productivity' },
+      { to: '/productivity',  label: '⚡ Productivity',      legacy: 'page-productivity', roles: ['admin','superadmin','owner','hr','manager'] },
       { to: '/my-leaves',     label: '🌴 My Leaves',         legacy: 'page-my-leaves' },
       { to: '/my-attendance', label: '⏱  My Attendance',     legacy: 'page-my-attendance' },
       { to: '/my-salary',     label: '💸 My Salary',         legacy: 'page-my-salary' },
-      { to: '/dept-mgmt',     label: '🏢 Depts',             legacy: 'page-dept-mgmt' },
-      { to: '/manage-depts',  label: '🗂  Manage Depts',     legacy: 'page-manage-depts' },
+      { to: '/dept-mgmt',     label: '🏢 Depts',             legacy: 'page-dept-mgmt',    roles: ['admin','superadmin','owner','hr','manager'] },
+      { to: '/manage-depts',  label: '🗂  Manage Depts',     legacy: 'page-manage-depts', roles: ['admin','superadmin','owner','hr','manager'] },
     ],
   },
   {
@@ -160,6 +173,30 @@ const SECTIONS = [
       { to: '/platform',         label: '👑 Platform Console', legacy: 'page-platform',   platform: true },
     ],
   },
+  {
+    title: 'Super Admin',
+    items: [
+      { to: '/audit-log',     label: '📜 Audit Log',     legacy: 'page-audit-log',     roles: ['admin','superadmin','owner'] },
+      { to: '/api-keys',      label: '🔑 API Keys',      legacy: 'page-api-keys',      roles: ['admin','superadmin','owner'] },
+      { to: '/webhooks',      label: '🪝 Webhooks',      legacy: 'page-webhooks',      roles: ['admin','superadmin','owner'] },
+      { to: '/custom-domain', label: '🌐 Custom Domain', legacy: 'page-custom-domain', roles: ['admin','superadmin','owner'] },
+      { to: '/referrals',     label: '🎁 Referrals',     legacy: 'page-referrals',     roles: ['admin','superadmin','owner'] },
+    ],
+  },
+];
+
+// Platform super-admins (MeraDhanda staff) operate the PLATFORM, not a CRM — so
+// they get a focused nav (companies console + profile), never the tenant
+// operational sections (Job Cards / Tasks / Designer / HR / …).
+const PLATFORM_SECTIONS = [
+  {
+    title: 'Platform',
+    items: [
+      { to: '/platform', label: '👑 Platform Console', legacy: 'page-platform' },
+      { to: '/platform-broadcast', label: '📢 Send Notification', legacy: 'page-platform-broadcast' },
+      { to: '/profile',  label: '👤 My Profile',       legacy: 'page-profile' },
+    ],
+  },
 ];
 
 // Which onboarding module each sidebar route belongs to. Routes not listed here
@@ -170,7 +207,7 @@ const MODULE_OF = {
   '/machines': 'machines', '/machine-history': 'machines',
   '/qc': 'qcDispatch', '/dispatch': 'qcDispatch',
   '/hr-dashboard': 'hr', '/hr-staff': 'hr', '/hr-leaves': 'hr', '/hr-payroll': 'hr',
-  '/attendance': 'hr', '/productivity': 'hr', '/my-leaves': 'hr', '/my-attendance': 'hr',
+  '/hr-attendance': 'hr', '/attendance': 'hr', '/productivity': 'hr', '/my-leaves': 'hr', '/my-attendance': 'hr',
   '/my-salary': 'hr', '/dept-mgmt': 'hr', '/manage-depts': 'hr',
   '/bulk-orders': 'bulk', '/enquiry': 'bulk', '/sample-dm': 'bulk',
 };
@@ -181,12 +218,20 @@ export default function Sidebar({ open, onClose }) {
   const role = profile?.role;
   const custom = profile?.customRole;
   const modules = tenant?.settings?.modules || null;
+  const perms = profile?.permissions || {};
+  const isAdmin = ['admin', 'superadmin', 'owner'].includes(role);
 
   const canSee = (item) => {
     if (item.platform) return isPlatformAdmin;
     // Hide a link only if its module was explicitly disabled in onboarding.
     const mod = MODULE_OF[item.to];
     if (mod && modules && modules[mod] === false) return false;
+    // Per-user section visibility (allow-list): gated sections show only if the
+    // role default or an explicit grant allows them. Admins/owners see everything.
+    if (!isAdmin) {
+      const pmod = PERM_OF[item.to];
+      if (pmod && !canViewModule(role, pmod, perms)) return false;
+    }
     if (!item.roles) return true;
     return item.roles.includes(role) || item.roles.includes(custom);
   };
@@ -211,7 +256,7 @@ export default function Sidebar({ open, onClose }) {
           )}
         </div>
         <nav>
-          {SECTIONS.map(sec => (
+          {(isPlatformAdmin ? PLATFORM_SECTIONS : SECTIONS).map(sec => (
             <div key={sec.title}>
               <div className="sidebar-section-title">{t(sec.title)}</div>
               {sec.items.filter(canSee).map(item => (

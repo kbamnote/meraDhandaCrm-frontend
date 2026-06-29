@@ -1,11 +1,15 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LanguageProvider } from './i18n/LanguageContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import { ProtectedRoute, RequireOnboarded } from './components/common/Guards';
 import PageStub from './components/common/PageStub';
 import ResourcePage from './components/common/ResourcePage';
 import { RESOURCES } from './config/resources';
+import { isSectionHidden } from './config/access';
+import RoleDashboard from './pages/RoleDashboard';
+import CompanyDetailPage from './pages/CompanyDetailPage';
+import PlatformBroadcastPage from './pages/PlatformBroadcastPage';
 
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
@@ -25,6 +29,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import HrDashboardPage from './pages/HrDashboardPage';
 import HrLeavesPage from './pages/HrLeavesPage';
 import HrPayrollPage from './pages/HrPayrollPage';
+import HrAttendancePage from './pages/HrAttendancePage';
 import ProductivityPage from './pages/ProductivityPage';
 import CustDashboardPage from './pages/CustDashboardPage';
 import PermissionsPage from './pages/PermissionsPage';
@@ -47,6 +52,11 @@ import AssignProdPage from './pages/AssignProdPage';
 import ProdStepsPage from './pages/ProdStepsPage';
 import SalesAdminPage from './pages/SalesAdminPage';
 import SalesPage from './pages/SalesPage';
+import AuditLogPage from './pages/AuditLogPage';
+import ApiKeysPage from './pages/ApiKeysPage';
+import WebhooksPage from './pages/WebhooksPage';
+import CustomDomainPage from './pages/CustomDomainPage';
+import ReferralsPage from './pages/ReferralsPage';
 
 // Explicit page components for routes that have a finished React component.
 // Preferred over the ResourcePage/PageStub fallback in the route table below.
@@ -59,6 +69,7 @@ const CUSTOM_PAGES = {
   'hr-dashboard': HrDashboardPage,
   'hr-leaves': HrLeavesPage,
   'hr-payroll': HrPayrollPage,
+  'hr-attendance': HrAttendancePage,
   'productivity': ProductivityPage,
   'cust-dashboard': CustDashboardPage,
   'permissions': PermissionsPage,
@@ -81,6 +92,11 @@ const CUSTOM_PAGES = {
   'prod-steps': ProdStepsPage,
   'sales-admin': SalesAdminPage,
   'sales-panel': SalesPage,
+  'audit-log': AuditLogPage,
+  'api-keys': ApiKeysPage,
+  'webhooks': WebhooksPage,
+  'custom-domain': CustomDomainPage,
+  'referrals': ReferralsPage,
 };
 
 // Routes that reuse another route's resource config.
@@ -129,6 +145,7 @@ const STUB_ROUTES = [
   ['hr-staff',        '🧑‍💼 Staff',            'page-hr-staff',        'mpw/users'],
   ['hr-leaves',       '🏖  Leaves',           'page-hr-leaves',       'mpw/leaves'],
   ['hr-payroll',      '💵 Payroll',           'page-hr-payroll',      'mpw/payroll'],
+  ['hr-attendance',   '🕒 Team Attendance',   'page-hr-attendance',   null],
   ['attendance',      '🕒 Attendance',        'page-attendance',      'mpw/attendance'],
   ['productivity',    '⚡ Productivity',      'page-productivity',    'mpw/attendance'],
   ['my-leaves',       '🌴 My Leaves',         'page-my-leaves',       'mpw/leaves'],
@@ -147,7 +164,32 @@ const STUB_ROUTES = [
   ['broadcast',       '📣 Broadcast',         'page-broadcast',       'mpw/tenantNotifications'],
   ['superadmin',      '👑 Super Admin',       'page-superadmin',      null],
   ['company-settings','⚙️  Company Settings', 'page-company-settings','mpw/companySettings'],
+
+  ['audit-log',       '📜 Audit Log',         'page-audit-log',       null],
+  ['api-keys',        '🔑 API Keys',          'page-api-keys',        null],
+  ['webhooks',        '🪝 Webhooks',          'page-webhooks',        null],
+  ['custom-domain',   '🌐 Custom Domain',     'page-custom-domain',   null],
+  ['referrals',       '🎁 Referrals',         'page-referrals',       null],
 ];
+
+function AccessDenied() {
+  return (
+    <div className="card" style={{ maxWidth: 480, margin: '40px auto', textAlign: 'center' }}>
+      <div style={{ fontSize: 32, marginBottom: 8 }}>🔒</div>
+      <h3 style={{ marginBottom: 6 }}>No access</h3>
+      <div style={{ color: 'var(--text2)', fontSize: 14 }}>
+        You don’t have permission to view this section. Ask an admin if you need access.
+      </div>
+    </div>
+  );
+}
+
+// Blocks a route when the section is hidden for this teammate (deep-link safe),
+// independent of which collection the page reads. Admins/owners bypass.
+function SectionGuard({ path, children }) {
+  const { profile } = useAuth();
+  return isSectionHidden(path, profile) ? <AccessDenied /> : children;
+}
 
 export default function App() {
   return (
@@ -161,12 +203,14 @@ export default function App() {
 
           <Route element={<ProtectedRoute><RequireOnboarded><AppLayout /></RequireOnboarded></ProtectedRoute>}>
             <Route index element={<Navigate to="/admin" replace />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/job-cards" element={<JobCardsPage />} />
+            <Route path="/admin" element={<RoleDashboard />} />
+            <Route path="/tasks" element={<SectionGuard path="/tasks"><TasksPage /></SectionGuard>} />
+            <Route path="/job-cards" element={<SectionGuard path="/job-cards"><JobCardsPage /></SectionGuard>} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/billing" element={<BillingPage />} />
             <Route path="/platform" element={<PlatformConsolePage />} />
+            <Route path="/company/:id" element={<CompanyDetailPage />} />
+            <Route path="/platform-broadcast" element={<PlatformBroadcastPage />} />
 
             {STUB_ROUTES.map(([path, title, legacyId, dbPath]) => {
               const Comp = CUSTOM_PAGES[path];
@@ -175,11 +219,15 @@ export default function App() {
                 <Route
                   key={path}
                   path={`/${path}`}
-                  element={Comp
-                    ? <Comp />
-                    : cfg
-                      ? <ResourcePage config={cfg} />
-                      : <PageStub title={title} legacyId={legacyId} dbPath={dbPath} />}
+                  element={(
+                    <SectionGuard path={`/${path}`}>
+                      {Comp
+                        ? <Comp />
+                        : cfg
+                          ? <ResourcePage config={cfg} />
+                          : <PageStub title={title} legacyId={legacyId} dbPath={dbPath} />}
+                    </SectionGuard>
+                  )}
                 />
               );
             })}

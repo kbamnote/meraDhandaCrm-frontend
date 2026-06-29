@@ -61,22 +61,31 @@ export const platformApi = {
   stats:        ()         => api.get('/platform/stats').then(r => r.data),
   tenants:      ()         => api.get('/platform/tenants').then(r => r.data),
   updateTenant: (id, body) => api.patch(`/platform/tenants/${id}`, body).then(r => r.data),
+  createTenant: (body)     => api.post('/platform/tenants', body).then(r => r.data),
+  tenantDetail: (id)       => api.get(`/platform/tenants/${id}/detail`).then(r => r.data),
+  broadcast:    (body)     => api.post('/platform/broadcast', body).then(r => r.data),
 };
 
 export const meApi = {
   payroll:      () => api.get('/me/payroll').then(r => r.data),
   leaves:       () => api.get('/me/leaves').then(r => r.data),
   attendance:   () => api.get('/me/attendance').then(r => r.data),
+  tasks:        () => api.get('/me/tasks').then(r => r.data),
   requestLeave: (body) => api.post('/me/leaves', body).then(r => r.data),
   punch:        (body) => api.post('/me/attendance/punch', body).then(r => r.data),
+  notifications:        ()     => api.get('/me/notifications').then(r => r.data),
+  readNotification:     (id)   => api.post(`/me/notifications/${id}/read`).then(r => r.data),
+  readAllNotifications: ()     => api.post('/me/notifications/read-all').then(r => r.data),
+  registerPush:         (token) => api.post('/me/push-token', { token, platform: 'android' }).then(r => r.data),
 };
 
-// HR admin — leave decisions, payroll compute/generate, productivity (admin/hr).
+// HR admin — leave decisions, payroll compute/generate, productivity, team attendance (admin/hr).
 export const hrApi = {
   leaveDecision:   (id, body) => api.post(`/hr/leaves/${id}/decision`, body).then(r => r.data),
   payrollCompute:  (month)    => api.get('/hr/payroll/compute', { params: { month } }).then(r => r.data),
   payrollGenerate: (month)    => api.post('/hr/payroll/generate', { month }).then(r => r.data),
   productivity:    (params)   => api.get('/hr/productivity', { params }).then(r => r.data),
+  attendance:      (date)     => api.get('/hr/attendance', { params: date ? { date } : {} }).then(r => r.data),
 };
 
 export const paymentApi = {
@@ -96,6 +105,8 @@ export const uploadApi = {
 // Order workflow engine — job cards + 7-stage pipeline (FY job numbering server-side).
 export const ordersApi = {
   nextNumber:  ()           => api.get('/orders/next-number').then(r => r.data),
+  searchClients: (q)        => api.get('/orders/clients/search', { params: { q } }).then(r => r.data),
+  lookups:     ()           => api.get('/orders/lookups').then(r => r.data),
   create:      (body)       => api.post('/orders', body).then(r => r.data),
   transition:  (id, body)   => api.post(`/orders/${id}/transition`, body).then(r => r.data),
   departments: ()           => api.get('/orders/departments').then(r => r.data),
@@ -159,6 +170,43 @@ export const chatApi = {
   groups:      ()         => api.get('/chat/groups').then(r => r.data),
   createGroup: (body)     => api.post('/chat/groups', body).then(r => r.data),
   updateGroup: (id, body) => api.patch(`/chat/groups/${id}`, body).then(r => r.data),
+};
+
+// ── Module 14 — Super Admin ─────────────────────────────────────────────────
+// Audit trail (read-only viewer).
+export const auditApi = {
+  list: (params) => api.get('/audit', { params }).then(r => r.data),
+};
+
+// API keys for the external /api/v1 surface. The plaintext key is returned ONCE.
+export const apiKeysApi = {
+  list:   ()        => api.get('/apikeys').then(r => r.data),
+  create: (body)    => api.post('/apikeys', body).then(r => r.data),
+  revoke: (id)      => api.delete(`/apikeys/${id}`).then(r => r.data),
+};
+
+// Outbound webhooks + delivery logs (signing secret returned ONCE on create).
+export const webhooksApi = {
+  list:   ()        => api.get('/webhooks').then(r => r.data),
+  create: (body)    => api.post('/webhooks', body).then(r => r.data),
+  update: (id, b)   => api.patch(`/webhooks/${id}`, b).then(r => r.data),
+  remove: (id)      => api.delete(`/webhooks/${id}`).then(r => r.data),
+  test:   (id)      => api.post(`/webhooks/${id}/test`).then(r => r.data),
+  logs:   (params)  => api.get('/webhooks/logs', { params }).then(r => r.data),
+};
+
+// Custom domain — store config + DNS TXT ownership verification.
+export const domainApi = {
+  get:    ()        => api.get('/domain').then(r => r.data),
+  set:    (body)    => api.post('/domain', body).then(r => r.data),
+  verify: ()        => api.post('/domain/verify').then(r => r.data),
+  remove: ()        => api.delete('/domain').then(r => r.data),
+};
+
+// Referrals — your share code + the businesses you referred.
+export const referralsApi = {
+  code: () => api.get('/referrals/code').then(r => r.data),
+  list: () => api.get('/referrals').then(r => r.data),
 };
 
 export default api;
