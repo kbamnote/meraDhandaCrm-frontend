@@ -20,9 +20,25 @@ export function DashHeader({ title, subtitle }) {
   );
 }
 
-export function Kpi({ label, value, sub, color, icon }) {
+// `onClick` is optional — pass it to make the tile a shortcut to the page that
+// backs the number. Without it the card renders exactly as before.
+export function Kpi({ label, value, sub, color, icon, onClick }) {
+  const clickable = typeof onClick === 'function';
   return (
-    <div className="card" style={{ padding: 16 }}>
+    <div
+      className="card"
+      style={{
+        padding: 16,
+        cursor: clickable ? 'pointer' : 'default',
+        transition: 'transform .12s ease, box-shadow .12s ease',
+      }}
+      onClick={onClick}
+      onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onMouseEnter={clickable ? (e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,.10)'; } : undefined}
+      onMouseLeave={clickable ? (e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; } : undefined}
+    >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
         {icon ? <span style={{ fontSize: 16 }}>{icon}</span> : null}
         <div style={{ fontSize: 24, fontWeight: 800, color: color || 'var(--text)', lineHeight: 1.1 }}>{value}</div>

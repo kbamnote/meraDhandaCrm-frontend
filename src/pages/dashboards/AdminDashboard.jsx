@@ -5,6 +5,7 @@
  * Uses only the shared dependency-free primitives from DashboardCharts.
  */
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { analyticsApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -20,6 +21,7 @@ const STAGE_LABELS = {
 
 export default function AdminDashboard() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
 
   useEffect(() => {
@@ -56,15 +58,14 @@ export default function AdminDashboard() {
 
       <PipelineTiles />
 
+      {/* Money only — the job counts live in the pipeline strip above, so
+          repeating Jobs/Delivered/Leads/Conversion here was noise. Each tile
+          opens the ledger it summarises. */}
       <KpiGrid>
-        <Kpi label="Revenue" value={inr(k.revenue || 0)} color="var(--blue)" icon="💰" />
-        <Kpi label="Collected" value={inr(k.collected || 0)} color="var(--green)" />
-        <Kpi label="Outstanding" value={inr(k.outstanding || 0)} color="var(--amber)" />
-        <Kpi label="Profit" value={inr(k.profit || 0)} color={(Number(k.profit) || 0) >= 0 ? 'var(--green)' : 'var(--red)'} />
-        <Kpi label="Jobs" value={k.jobsTotal || 0} />
-        <Kpi label="Delivered" value={k.delivered || 0} color="var(--green)" />
-        <Kpi label="Leads" value={k.leads || 0} />
-        <Kpi label="Conversion" value={`${k.conversion || 0}%`} />
+        <Kpi label="Revenue" value={inr(k.revenue || 0)} color="var(--blue)" icon="💰" onClick={() => navigate('/accounting')} />
+        <Kpi label="Collected" value={inr(k.collected || 0)} color="var(--green)" onClick={() => navigate('/accounting')} />
+        <Kpi label="Outstanding" value={inr(k.outstanding || 0)} color="var(--amber)" onClick={() => navigate('/client-ledger')} />
+        <Kpi label="Profit" value={inr(k.profit || 0)} color={(Number(k.profit) || 0) >= 0 ? 'var(--green)' : 'var(--red)'} onClick={() => navigate('/accounting')} />
       </KpiGrid>
 
       <Section title="Revenue — last 12 months">
