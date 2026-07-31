@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   DashHeader, Kpi, KpiGrid, Section, BarList, ColumnChart, QuickLinks, inr,
 } from '../../components/common/DashboardCharts';
+import PipelineTiles from '../../components/common/PipelineTiles';
 
 const STAGE_LABELS = {
   enquiry: 'Enquiry', designer: 'Designer', jobsetter: 'Jobsetter',
@@ -52,6 +53,8 @@ export default function AdminDashboard() {
         title="Business Overview"
         subtitle={`Welcome${profile?.name ? `, ${profile.name}` : ''}`}
       />
+
+      <PipelineTiles />
 
       <KpiGrid>
         <Kpi label="Revenue" value={inr(k.revenue || 0)} color="var(--blue)" icon="💰" />

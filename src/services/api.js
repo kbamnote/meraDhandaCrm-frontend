@@ -273,6 +273,8 @@ export const messagingApi = {
 // Analytics — consolidated business overview (KPIs, jobs-by-stage, revenue series).
 export const analyticsApi = {
   overview: (params) => api.get('/analytics/overview', { params }).then(r => r.data),
+  // Live job-pipeline tile strip (stage counts + approval + online staff).
+  pipeline: () => api.get('/analytics/pipeline').then(r => r.data),
 };
 
 export const chatApi = {
