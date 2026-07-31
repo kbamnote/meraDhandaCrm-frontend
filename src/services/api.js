@@ -31,6 +31,65 @@ api.interceptors.response.use(
   }
 );
 
+// ── Runaway-request safety net ────────────────────────────────────────────────
+// A screen with an unstable useCallback dep (e.g. `t` from useT(), which is a
+// fresh ref every render) re-fires its effect on every render and can hammer one
+// endpoint hundreds of times a minute. That took the API down once already, so
+// the client enforces two guarantees no single screen can bypass:
+//
+//   1. COALESCE — identical GETs already in flight share one network request.
+//   2. CIRCUIT-BREAK — if the same GET repeats absurdly often in a short window,
+//      stop calling the network for a cooldown and replay the last response.
+//
+// Correct code never reaches either path, and nothing is cached between normal
+// calls, so this cannot serve stale data during ordinary use. The breaker logs
+// loudly so the underlying render loop still gets found and fixed.
+const LOOP_WINDOW_MS = 2000;   // how far back we count repeats
+const LOOP_MAX_CALLS = 12;     // repeats of ONE endpoint in that window = a loop
+const LOOP_COOLDOWN_MS = 5000; // how long to stop hitting the network after that
+
+const inFlight = new Map();
+const callTimes = new Map();
+const lastOk = new Map();
+const cooldownUntil = new Map();
+
+const rawGet = api.get.bind(api);
+
+api.get = (url, config) => {
+  const key = url + (config?.params ? '?' + JSON.stringify(config.params) : '');
+  const now = Date.now();
+
+  // Breaker is open → replay the last good response instead of the network.
+  const until = cooldownUntil.get(key) || 0;
+  if (now < until && lastOk.has(key)) return Promise.resolve(lastOk.get(key));
+  if (now >= until && until) cooldownUntil.delete(key);
+
+  // Coalesce concurrent duplicates onto the single request already running.
+  if (inFlight.has(key)) return inFlight.get(key);
+
+  const times = (callTimes.get(key) || []).filter((ts) => now - ts < LOOP_WINDOW_MS);
+  times.push(now);
+  callTimes.set(key, times);
+
+  if (times.length > LOOP_MAX_CALLS) {
+    cooldownUntil.set(key, now + LOOP_COOLDOWN_MS);
+    callTimes.set(key, []);
+    console.error(
+      `[api] Request loop detected on GET ${key} — ${times.length} calls in ` +
+      `${LOOP_WINDOW_MS}ms. Pausing ${LOOP_COOLDOWN_MS}ms. A component is ` +
+      're-fetching every render; check its useEffect/useCallback deps.'
+    );
+    if (lastOk.has(key)) return Promise.resolve(lastOk.get(key));
+  }
+
+  const p = rawGet(url, config)
+    .then((res) => { lastOk.set(key, res); return res; })
+    .finally(() => { inFlight.delete(key); });
+
+  inFlight.set(key, p);
+  return p;
+};
+
 // Mirrors the legacy "Firebase paths" used throughout the app.
 export const dbApi = {
   list:   (col)         => api.get(`/db/${col}`).then(r => r.data),
@@ -109,18 +168,32 @@ export const ordersApi = {
   lookups:     ()           => api.get('/orders/lookups').then(r => r.data),
   create:      (body)       => api.post('/orders', body).then(r => r.data),
   transition:  (id, body)   => api.post(`/orders/${id}/transition`, body).then(r => r.data),
+  reschedule:  (id, body)   => api.post(`/orders/${id}/reschedule`, body).then(r => r.data),
   departments: ()           => api.get('/orders/departments').then(r => r.data),
   assignProduction: (id, b) => api.post(`/orders/${id}/production`, b).then(r => r.data),
   markStep:    (id, body)   => api.post(`/orders/${id}/step`, body).then(r => r.data),
   deptComplete:(id, body)   => api.post(`/orders/${id}/dept-complete`, body).then(r => r.data),
+  stockItems:  ()           => api.get('/orders/stock-items').then(r => r.data),
   designerClaim:    (id)    => api.post(`/orders/${id}/designer/claim`).then(r => r.data),
   designerReject:   (id)    => api.post(`/orders/${id}/designer/reject`).then(r => r.data),
   designerReady:    (id)    => api.post(`/orders/${id}/designer/ready`).then(r => r.data),
   designerApproval: (id)    => api.post(`/orders/${id}/designer/client-approval`).then(r => r.data),
+  designerWait:     (id, reason) => api.post(`/orders/${id}/designer/wait`, { reason }).then(r => r.data),
+  designerHold:     (id)    => api.post(`/orders/${id}/designer/hold`).then(r => r.data),
+  designerFeed:     ()      => api.get('/orders/designer/feed').then(r => r.data),
   designerLeave:    (onLeave) => api.post('/orders/designer/leave', { onLeave }).then(r => r.data),
   designerManage:   (uid, b)  => api.post(`/orders/designer/${uid}/manage`, b).then(r => r.data),
   qc:          (id, body)   => api.post(`/orders/${id}/qc`, body).then(r => r.data),
   dispatch:    (id, body)   => api.post(`/orders/${id}/dispatch`, body).then(r => r.data),
+};
+
+// Production types — the tiles in the "Select Production Type" grid (Assign-Production
+// flow). Admin/owner-only on the server; auto-seeds the built-in 12 on first list().
+export const productionTypesApi = {
+  list:   ()         => api.get('/orders/production-types').then(r => r.data),
+  create: (body)     => api.post('/orders/production-types', body).then(r => r.data),
+  update: (id, body) => api.patch(`/orders/production-types/${id}`, body).then(r => r.data),
+  remove: (id)       => api.delete(`/orders/production-types/${id}`).then(r => r.data),
 };
 
 // Billing & Accounting — GST/proforma invoices, payments, ledger, P&L, GST report.
@@ -157,6 +230,7 @@ export const messagingApi = {
   broadcast:    (body)       => api.post('/messaging/broadcast', body).then(r => r.data),
   outbox:       (status)     => api.get('/messaging/outbox', { params: status ? { status } : {} }).then(r => r.data),
   sendPending:  ()           => api.post('/messaging/send-pending').then(r => r.data),
+  markSent:     (id)         => api.post(`/messaging/${id}/sent`).then(r => r.data),
 };
 
 // Analytics — consolidated business overview (KPIs, jobs-by-stage, revenue series).

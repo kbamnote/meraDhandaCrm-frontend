@@ -92,7 +92,10 @@ export default function PlatformConsolePage() {
     } catch (err) {
       showToast(err.response?.data?.error || t('failedToLoad'), 'error');
     } finally { setLoading(false); }
-  }, [t]);
+    // `t` is a fresh ref every render; depending on it makes `load` unstable and
+    // the effect below re-fires every render → infinite re-fetch loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 

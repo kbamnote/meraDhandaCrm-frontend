@@ -57,7 +57,11 @@ export default function HrAttendancePage() {
       showToast(err.response?.data?.error || t('failed'), 'error');
       setRows([]);
     } finally { setLoading(false); }
-  }, [t]);
+    // `t` from useT() is a fresh ref every render; depending on it makes `load`
+    // unstable so the effect below re-fires every render → infinite re-fetch
+    // loop (spinner never clears). Keep `load` stable with [] deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => { load(date); }, [date, load]);
 
