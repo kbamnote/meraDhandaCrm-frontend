@@ -38,31 +38,54 @@ api.interceptors.response.use(
 // the client enforces two guarantees no single screen can bypass:
 //
 //   1. COALESCE — identical GETs already in flight share one network request.
-//   2. CIRCUIT-BREAK — if the same GET repeats absurdly often in a short window,
-//      stop calling the network for a cooldown and replay the last response.
+//   2. GATE — if one GET repeats absurdly often, or the server answers 429, the
+//      endpoint is gated: NO network call is made until the backoff expires, and
+//      every caller in that period shares one deferred promise that performs a
+//      single real request when it lifts. Backoff escalates 5s → 60s while the
+//      loop persists and resets on the first healthy response.
 //
-// Correct code never reaches either path, and nothing is cached between normal
-// calls, so this cannot serve stale data during ordinary use. The breaker logs
-// loudly so the underlying render loop still gets found and fixed.
-const LOOP_WINDOW_MS = 2000;   // how far back we count repeats
-const LOOP_MAX_CALLS = 12;     // repeats of ONE endpoint in that window = a loop
-const LOOP_COOLDOWN_MS = 5000; // how long to stop hitting the network after that
+// The gate must never depend on having a cached success: the failure this was
+// written for is a page looping while the server is already returning 429, so
+// there is no good response to replay. Suppression is therefore unconditional.
+// Correct code never reaches either path and nothing is cached between normal
+// calls, so this cannot serve stale data during ordinary use.
+const LOOP_WINDOW_MS = 2000;    // how far back we count repeats
+const LOOP_MAX_CALLS = 12;      // repeats of ONE endpoint in that window = a loop
+const BACKOFF_MIN_MS = 5000;
+const BACKOFF_MAX_MS = 60000;
 
 const inFlight = new Map();
 const callTimes = new Map();
-const lastOk = new Map();
-const cooldownUntil = new Map();
+const backoffMs = new Map();
+const gates = new Map();
 
 const rawGet = api.get.bind(api);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Suppress this endpoint for `waitMs`. Everyone who asks meanwhile gets the same
+// promise, which performs exactly ONE real request once the gate lifts.
+function openGate(key, waitMs, url, config, why) {
+  const promise = sleep(waitMs).then(() => {
+    gates.delete(key);
+    callTimes.set(key, []);
+    return api.get(url, config);
+  });
+  gates.set(key, { until: Date.now() + waitMs, promise });
+  backoffMs.set(key, Math.min((backoffMs.get(key) || BACKOFF_MIN_MS) * 2, BACKOFF_MAX_MS));
+  console.error(
+    `[api] ${why} on GET ${key} — no requests for ${waitMs}ms. A component is ` +
+    're-fetching every render; check its useEffect/useCallback deps.'
+  );
+  return promise;
+}
 
 api.get = (url, config) => {
   const key = url + (config?.params ? '?' + JSON.stringify(config.params) : '');
   const now = Date.now();
 
-  // Breaker is open → replay the last good response instead of the network.
-  const until = cooldownUntil.get(key) || 0;
-  if (now < until && lastOk.has(key)) return Promise.resolve(lastOk.get(key));
-  if (now >= until && until) cooldownUntil.delete(key);
+  // Gate open → share the deferred retry. No network call at all.
+  const gate = gates.get(key);
+  if (gate && now < gate.until) return gate.promise;
 
   // Coalesce concurrent duplicates onto the single request already running.
   if (inFlight.has(key)) return inFlight.get(key);
@@ -72,19 +95,30 @@ api.get = (url, config) => {
   callTimes.set(key, times);
 
   if (times.length > LOOP_MAX_CALLS) {
-    cooldownUntil.set(key, now + LOOP_COOLDOWN_MS);
-    callTimes.set(key, []);
-    console.error(
-      `[api] Request loop detected on GET ${key} — ${times.length} calls in ` +
-      `${LOOP_WINDOW_MS}ms. Pausing ${LOOP_COOLDOWN_MS}ms. A component is ` +
-      're-fetching every render; check its useEffect/useCallback deps.'
-    );
-    if (lastOk.has(key)) return Promise.resolve(lastOk.get(key));
+    return openGate(key, backoffMs.get(key) || BACKOFF_MIN_MS, url, config, 'Request loop detected');
   }
 
   const p = rawGet(url, config)
-    .then((res) => { lastOk.set(key, res); return res; })
-    .finally(() => { inFlight.delete(key); });
+    .then((res) => { backoffMs.delete(key); return res; })
+    .catch((err) => {
+      // The server is shedding load — stop hitting it and honour its reset hint.
+      // Resolving via the gate (instead of rejecting) also stops the caller's
+      // error handler from re-rendering and immediately re-firing the loop.
+      if (err?.response?.status === 429) {
+        // Release the in-flight slot FIRST. The gate's retry calls api.get()
+        // again, and if this chain were still registered that retry would be
+        // handed its own promise and wait on itself forever.
+        if (inFlight.get(key) === p) inFlight.delete(key);
+        const reset = Number(err.response.headers?.['ratelimit-reset']);
+        const waitMs = Number.isFinite(reset) && reset > 0
+          ? Math.min(reset * 1000, BACKOFF_MAX_MS)
+          : (backoffMs.get(key) || BACKOFF_MIN_MS);
+        return openGate(key, waitMs, url, config, 'Server rate-limited (429)');
+      }
+      throw err;
+    })
+    // Only clear our own entry — a later request may already own the slot.
+    .finally(() => { if (inFlight.get(key) === p) inFlight.delete(key); });
 
   inFlight.set(key, p);
   return p;
