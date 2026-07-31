@@ -9,6 +9,7 @@ import { ref, onValue, db } from '../services/realtime';
 import { ordersApi } from '../services/api';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
+import CompleteAndSendModal from '../components/common/CompleteAndSendModal';
 
 const S = {
   title:     { en: '🏭 Production', hi: '🏭 प्रोडक्शन', hinglish: '🏭 Production', gu: '🏭 પ્રોડક્શન', mr: '🏭 प्रोडक्शन', mwr: '🏭 प्रोडक्शन' },
@@ -127,9 +128,7 @@ function StepModal({ job, dept, t, onClose }) {
   const plan = Array.isArray(job.plan) ? job.plan : [];
   const planStep = plan[idx];
   const isLast = idx === plan.length - 1;
-  const [material, setMaterial] = useState(job.material || '');
-  const [wastage, setWastage] = useState(job.wastage || '');
-  const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);   // CompleteAndSendModal open
 
   const prog = job.stepProgress || {};
   const stepState = (sid) => prog[`${idx}:${sid}`] || null;
@@ -139,16 +138,6 @@ function StepModal({ job, dept, t, onClose }) {
   const act = async (stepId, action) => {
     try { await ordersApi.markStep(job.id, { stepId, action }); }
     catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
-  };
-
-  const complete = async () => {
-    setBusy(true);
-    try {
-      await ordersApi.deptComplete(job.id, isLast ? { material: material || null, wastage: wastage || null } : {});
-      showToast(isLast ? 'Sent to QC' : 'Department complete', 'success');
-      onClose();
-    } catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
-    finally { setBusy(false); }
   };
 
   const hold = async () => {
@@ -189,27 +178,23 @@ function StepModal({ job, dept, t, onClose }) {
           );
         })}
 
-        {isLast && (
-          <div className="flex gap-2 mt-2" style={{ marginTop: 14 }}>
-            <div className="form-group" style={{ flex: 1 }}>
-              <label>{t('material')}</label>
-              <input className="input" value={material} onChange={(e) => setMaterial(e.target.value)} />
-            </div>
-            <div className="form-group" style={{ flex: 1 }}>
-              <label>{t('wastage')}</label>
-              <input className="input" value={wastage} onChange={(e) => setWastage(e.target.value)} />
-            </div>
-          </div>
-        )}
-
         <div className="flex gap-2 mt-2" style={{ marginTop: 12 }}>
-          <button className="btn btn-primary flex-1" onClick={complete} disabled={busy || !allRequiredDone}>
+          <button className="btn btn-primary flex-1" onClick={() => setSending(true)} disabled={!allRequiredDone}>
             {isLast ? t('sendQc') : t('nextDept')}
           </button>
           <button className="btn btn-sm" onClick={hold} style={{ background: 'var(--amber)', color: '#fff' }}>{t('hold')}</button>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>{t('close')}</button>
         </div>
       </div>
+
+      {sending && (
+        <CompleteAndSendModal
+          job={job}
+          currentDept={planStep}
+          onClose={() => setSending(false)}
+          onDone={onClose}
+        />
+      )}
     </div>
   );
 }

@@ -16,6 +16,8 @@ const SECTION_S = {
   // Navigation item labels — keyed by the exact English label string (emoji included).
   '🏠 Dashboard':          { en: '🏠 Dashboard',          hi: '🏠 डैशबोर्ड',           hinglish: '🏠 Dashboard',          gu: '🏠 ડેશબોર્ડ',            mr: '🏠 डॅशबोर्ड',            mwr: '🏠 डैशबोर्ड' },
   '📋 Job Cards':          { en: '📋 Job Cards',          hi: '📋 जॉब कार्ड',          hinglish: '📋 Job Cards',          gu: '📋 જોબ કાર્ડ',          mr: '📋 जॉब कार्ड',          mwr: '📋 जॉब कार्ड' },
+  '✅ Completed':          { en: '✅ Completed',          hi: '✅ पूर्ण',              hinglish: '✅ Completed',          gu: '✅ પૂર્ણ',              mr: '✅ पूर्ण',              mwr: '✅ पूरो' },
+  '⏸ Hold Jobs':          { en: '⏸ Hold Jobs',          hi: '⏸ होल्ड जॉब',          hinglish: '⏸ Hold Jobs',          gu: '⏸ હોલ્ડ જોબ',          mr: '⏸ होल्ड जॉब',          mwr: '⏸ होल्ड जॉब' },
   '✅ Tasks':              { en: '✅ Tasks',              hi: '✅ काम',               hinglish: '✅ Tasks',              gu: '✅ કાર્યો',             mr: '✅ कामे',               mwr: '✅ काम' },
   '💬 Chat':               { en: '💬 Chat',               hi: '💬 चैट',                hinglish: '💬 Chat',               gu: '💬 ચેટ',                mr: '💬 चॅट',                mwr: '💬 चैट' },
   '📊 Analytics':          { en: '📊 Analytics',          hi: '📊 एनालिटिक्स',         hinglish: '📊 Analytics',          gu: '📊 એનાલિટિક્સ',          mr: '📊 अॅनालिटिक्स',         mwr: '📊 एनालिटिक्स' },
@@ -57,9 +59,11 @@ const SECTION_S = {
   '🏢 Depts':              { en: '🏢 Depts',              hi: '🏢 विभाग',               hinglish: '🏢 Depts',              gu: '🏢 વિભાગો',              mr: '🏢 विभाग',               mwr: '🏢 विभाग' },
   '🗂  Manage Depts':      { en: '🗂  Manage Depts',      hi: '🗂  विभाग प्रबंधन',       hinglish: '🗂  Manage Depts',      gu: '🗂  વિભાગ સંચાલન',        mr: '🗂  विभाग व्यवस्थापन',     mwr: '🗂  विभाग प्रबंधन' },
   '🙂 Customer':           { en: '🙂 Customer',           hi: '🙂 ग्राहक',              hinglish: '🙂 Customer',           gu: '🙂 ગ્રાહક',              mr: '🙂 ग्राहक',              mwr: '🙂 ग्राहक' },
+  '📲 WhatsApp Outbox':    { en: '📲 WhatsApp Outbox',    hi: '📲 व्हाट्सएप आउटबॉक्स',    hinglish: '📲 WhatsApp Outbox',    gu: '📲 વોટ્સએપ આઉટબોક્સ',     mr: '📲 व्हॉट्सअॅप आउटबॉक्स',    mwr: '📲 व्हाट्सएप आउटबॉक्स' },
   '⭐ Review':             { en: '⭐ Review',             hi: '⭐ रिव्यू',              hinglish: '⭐ Review',             gu: '⭐ રિવ્યૂ',              mr: '⭐ रिव्ह्यू',            mwr: '⭐ रिव्यू' },
   '📄 Job Detail':         { en: '📄 Job Detail',         hi: '📄 जॉब डिटेल',           hinglish: '📄 Job Detail',         gu: '📄 જોબ ડિટેલ',           mr: '📄 जॉब डिटेल',           mwr: '📄 जॉब डिटेल' },
   '🔐 Permissions':        { en: '🔐 Permissions',        hi: '🔐 अनुमतियां',           hinglish: '🔐 Permissions',        gu: '🔐 પરવાનગીઓ',            mr: '🔐 परवानग्या',           mwr: '🔐 अनुमतियां' },
+  '🏭 Production Types':   { en: '🏭 Production Types',   hi: '🏭 प्रोडक्शन टाइप',       hinglish: '🏭 Production Types',   gu: '🏭 પ્રોડક્શન ટાઈપ',       mr: '🏭 प्रोडक्शन प्रकार',     mwr: '🏭 प्रोडक्शन टाइप' },
   '🌳 Hierarchy':          { en: '🌳 Hierarchy',          hi: '🌳 पदानुक्रम',           hinglish: '🌳 Hierarchy',          gu: '🌳 પદક્રમ',              mr: '🌳 पदानुक्रम',           mwr: '🌳 पदानुक्रम' },
   '📣 Broadcast':          { en: '📣 Broadcast',          hi: '📣 ब्रॉडकास्ट',          hinglish: '📣 Broadcast',          gu: '📣 બ્રોડકાસ્ટ',          mr: '📣 ब्रॉडकास्ट',          mwr: '📣 ब्रॉडकास्ट' },
   '👑 Super Admin':        { en: '👑 Super Admin',        hi: '👑 सुपर एडमिन',          hinglish: '👑 Super Admin',        gu: '👑 સુપર એડમિન',          mr: '👑 सुपर अॅडमिन',         mwr: '👑 सुपर एडमिन' },
@@ -90,6 +94,8 @@ const SECTIONS = [
     items: [
       { to: '/admin',         label: '🏠 Dashboard',          legacy: 'page-admin' },
       { to: '/job-cards',     label: '📋 Job Cards',          legacy: 'page-job-cards' },
+      { to: '/completed',     label: '✅ Completed',          legacy: 'page-completed' },
+      { to: '/hold',          label: '⏸ Hold Jobs',          legacy: 'page-hold' },
       { to: '/tasks',         label: '✅ Tasks',              legacy: 'page-tasks' },
       { to: '/chat',          label: '💬 Chat',               legacy: 'page-chat' },
       { to: '/analytics',     label: '📊 Analytics',          legacy: 'page-analytics' },
@@ -156,6 +162,7 @@ const SECTIONS = [
     title: 'Customer',
     items: [
       { to: '/cust-dashboard', label: '🙂 Customer',          legacy: 'page-cust-dashboard' },
+      { to: '/customer-outbox', label: '📲 WhatsApp Outbox',   legacy: 'page-customer-outbox' },
       { to: '/review',         label: '⭐ Review',            legacy: 'page-review' },
       { to: '/job-detail',     label: '📄 Job Detail',        legacy: 'page-job-detail' },
     ],
@@ -163,7 +170,9 @@ const SECTIONS = [
   {
     title: 'Admin / Settings',
     items: [
+      { to: '/send-notification', label: '🔔 Send Notification', legacy: 'page-send-notification', roles: ['admin','superadmin','owner'] },
       { to: '/permissions',      label: '🔐 Permissions',     legacy: 'page-permissions', roles: ['admin','superadmin','owner'] },
+      { to: '/production-types', label: '🏭 Production Types', legacy: 'page-production-types', roles: ['admin','superadmin','owner'] },
       { to: '/hierarchy',        label: '🌳 Hierarchy',       legacy: 'page-hierarchy',   roles: ['admin','superadmin','owner'] },
       { to: '/broadcast',        label: '📣 Broadcast',       legacy: 'page-broadcast',   roles: ['admin','superadmin','owner'] },
       { to: '/superadmin',       label: '👑 Super Admin',     legacy: 'page-superadmin',  roles: ['superadmin'] },
@@ -226,14 +235,17 @@ export default function Sidebar({ open, onClose }) {
     // Hide a link only if its module was explicitly disabled in onboarding.
     const mod = MODULE_OF[item.to];
     if (mod && modules && modules[mod] === false) return false;
-    // Per-user section visibility (allow-list): gated sections show only if the
-    // role default or an explicit grant allows them. Admins/owners see everything.
-    if (!isAdmin) {
-      const pmod = PERM_OF[item.to];
-      if (pmod && !canViewModule(role, pmod, perms)) return false;
-    }
-    if (!item.roles) return true;
-    return item.roles.includes(role) || item.roles.includes(custom);
+    if (isAdmin) return true; // admins/owners see everything
+    // Per-user section visibility (allow-list). Permissions are ADDITIVE to role
+    // access: an item gated by both a permission module AND a role list shows if
+    // EITHER unlocks it, so granting (e.g.) Payroll reveals it to a non-HR staff
+    // member while HR keeps its role-based access.
+    const pmod = PERM_OF[item.to];
+    const permGranted = pmod ? canViewModule(role, pmod, perms) : false;
+    const roleOk = !item.roles || item.roles.includes(role) || item.roles.includes(custom);
+    if (pmod && item.roles) return permGranted || roleOk;
+    if (pmod) return permGranted;
+    return roleOk;
   };
 
   const onTrial = tenant && tenant.plan === 'trial';

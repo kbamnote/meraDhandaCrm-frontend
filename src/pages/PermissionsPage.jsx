@@ -12,7 +12,7 @@ import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useT, useLang } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
-import { canViewModule } from '../config/access';
+import { canViewModule, PERMISSION_CATALOG } from '../config/access';
 
 const S = {
   permissionsTeam: { en: '🔐 Permissions & Team', hi: '🔐 परमिशन और टीम', hinglish: '🔐 Permissions & Team', gu: '🔐 પરમિશન અને ટીમ', mr: '🔐 परवानग्या आणि टीम', mwr: '🔐 परमिशन अर टीम' },
@@ -54,6 +54,7 @@ const S = {
   accessFor: { en: 'Module access', hi: 'मॉड्यूल एक्सेस', hinglish: 'Module access', gu: 'મોડ્યુલ એક્સેસ', mr: 'मॉड्यूल अॅक्सेस', mwr: 'मॉड्यूल एक्सेस' },
   canViewCol: { en: 'View', hi: 'देखें', hinglish: 'View', gu: 'જુઓ', mr: 'पाहा', mwr: 'देखो' },
   canEditCol: { en: 'Edit', hi: 'एडिट', hinglish: 'Edit', gu: 'એડિટ', mr: 'एडिट', mwr: 'एडिट' },
+  manageCol: { en: 'Manage', hi: 'मैनेज', hinglish: 'Manage', gu: 'મેનેજ', mr: 'व्यवस्थापन', mwr: 'मैनेज' },
   accessSaved: { en: 'Access updated', hi: 'एक्सेस अपडेट हो गया', hinglish: 'Access update ho gaya', gu: 'એક્સેસ અપડેટ થયો', mr: 'अॅक्सेस अपडेट झाला', mwr: 'एक्सेस अपडेट हो ग्यो' },
   showAll: { en: 'Show all', hi: 'सब दिखाएं', hinglish: 'Sab dikhayein', gu: 'બધા બતાવો', mr: 'सर्व दाखवा', mwr: 'सगळा दिखावो' },
   hideAll: { en: 'Hide all', hi: 'सब छुपाएं', hinglish: 'Sab chhupayein', gu: 'બધા છુપાવો', mr: 'सर्व लपवा', mwr: 'सगळा छुपावो' },
@@ -61,26 +62,43 @@ const S = {
   accessHint: { en: 'Switch a section ON so this teammate can see it; Edit also lets them create/change records (needs View). New staff start with only the basics; job roles already see their own sections. Admins & owners always have full access.', hi: 'सेक्शन ON करें ताकि यह टीममेट उसे देख सके; एडिट से रिकॉर्ड बना/बदल भी सकता है (देखें ज़रूरी)। नया स्टाफ सिर्फ़ बेसिक से शुरू होता है; जॉब रोल अपने सेक्शन पहले से देखते हैं। एडमिन/ओनर के पास हमेशा पूरा एक्सेस।', hinglish: 'Section ON karein taaki teammate use dekh sake; Edit se record bana/badal bhi sakta hai (View zaroori). Naya staff sirf basics se start hota hai; job roles apne section pehle se dekhte hain. Admin/owner ke paas hamesha full access.', gu: 'સેક્શન ON કરો જેથી આ ટીમમેટ તે જુએ; એડિટથી રેકોર્ડ બનાવી/બદલી શકે (જુઓ જરૂરી). નવો સ્ટાફ ફક્ત બેઝિકથી શરૂ થાય; જોબ રોલ પોતાના સેક્શન પહેલેથી જુએ. એડમિન/ઓનર પાસે હંમેશા સંપૂર્ણ એક્સેસ.', mr: 'सेक्शन ON करा जेणेकरून हा टीममेट तो पाहू शकेल; एडिटने रेकॉर्ड तयार/बदलू शकतो (पाहा आवश्यक). नवीन स्टाफ फक्त बेसिकने सुरू होतो; जॉब रोल त्यांचे सेक्शन आधीच पाहतात. अॅडमिन/ओनरकडे नेहमी पूर्ण अॅक्सेस.', mwr: 'सेक्शन ON करो ताकि यो टीममेट उणनै देख सकै; एडिट सूं रिकॉर्ड बणा/बदल सकै (देखो जरूरी). नयो स्टाफ सिरफ बेसिक सूं चालू होवै; जॉब रोल आपरा सेक्शन पैलां सूं देखै. एडमिन/ओनर कनै हमेसा पूरो एक्सेस.' },
 };
 
-// Friendly module labels mapped to the enforced "<collection>.write" capability
-// keys. Sensitive collections (users, payroll, companySettings…) are intentionally
-// NOT here — they stay admin/owner-only and the backend rejects granting them.
-const MODULES = [
-  { key: 'jobs', label: { en: 'Job cards', hi: 'जॉब कार्ड', hinglish: 'Job cards' } },
-  { key: 'production', label: { en: 'Production', hi: 'प्रोडक्शन', hinglish: 'Production' } },
-  { key: 'qc', label: { en: 'Quality check', hi: 'QC', hinglish: 'Quality check' } },
-  { key: 'dispatch', label: { en: 'Dispatch', hi: 'डिस्पैच', hinglish: 'Dispatch' } },
-  { key: 'designers', label: { en: 'Designer panel', hi: 'डिज़ाइनर', hinglish: 'Designer panel' } },
-  { key: 'clients', label: { en: 'Customers', hi: 'ग्राहक', hinglish: 'Customers' } },
-  { key: 'leads', label: { en: 'Leads / Sales', hi: 'लीड्स / सेल्स', hinglish: 'Leads / Sales' } },
-  { key: 'invoices', label: { en: 'Invoices & Accounting', hi: 'इनवॉइस', hinglish: 'Invoices' } },
-  { key: 'expenses', label: { en: 'Expenses', hi: 'खर्चे', hinglish: 'Expenses' } },
-  { key: 'stock', label: { en: 'Stock', hi: 'स्टॉक', hinglish: 'Stock' } },
-  { key: 'products', label: { en: 'Products', hi: 'प्रोडक्ट्स', hinglish: 'Products' } },
-  { key: 'vendors', label: { en: 'Vendors', hi: 'वेंडर', hinglish: 'Vendors' } },
-  { key: 'machines', label: { en: 'Machines', hi: 'मशीनें', hinglish: 'Machines' } },
-  { key: 'tasks', label: { en: 'Tasks', hi: 'टास्क', hinglish: 'Tasks' } },
-  { key: 'attendance', label: { en: 'Attendance', hi: 'अटेंडेंस', hinglish: 'Attendance' } },
-];
+// Group + feature labels for the grouped Permissions catalog (PERMISSION_CATALOG
+// in config/access.js). Sensitive collections (users, companySettings…) stay
+// admin/owner-only and the backend rejects granting them.
+const GROUP_LABELS = {
+  jobsProd: { en: 'Jobs & Production', hi: 'जॉब और प्रोडक्शन', hinglish: 'Jobs & Production' },
+  salesCust: { en: 'Sales & Customers', hi: 'सेल्स और ग्राहक', hinglish: 'Sales & Customers' },
+  accounting: { en: 'Accounting', hi: 'अकाउंटिंग', hinglish: 'Accounting' },
+  hr: { en: 'HR', hi: 'एचआर', hinglish: 'HR' },
+  workspace: { en: 'Workspace', hi: 'वर्कस्पेस', hinglish: 'Workspace' },
+};
+const MODULE_LABELS = {
+  jobs: { en: 'Job Cards', hi: 'जॉब कार्ड', hinglish: 'Job Cards' },
+  completed: { en: 'Completed Jobs', hi: 'पूर्ण जॉब', hinglish: 'Completed Jobs' },
+  hold: { en: 'Hold Jobs', hi: 'होल्ड जॉब', hinglish: 'Hold Jobs' },
+  jobsetter: { en: 'Job Setter', hi: 'जॉब सेटर', hinglish: 'Job Setter' },
+  analytics: { en: 'Analytics', hi: 'एनालिटिक्स', hinglish: 'Analytics' },
+  production: { en: 'Production', hi: 'प्रोडक्शन', hinglish: 'Production' },
+  qc: { en: 'Quality Check', hi: 'QC', hinglish: 'Quality Check' },
+  dispatch: { en: 'Dispatch', hi: 'डिस्पैच', hinglish: 'Dispatch' },
+  designers: { en: 'Designer Panel', hi: 'डिज़ाइनर', hinglish: 'Designer Panel' },
+  machines: { en: 'Machines', hi: 'मशीनें', hinglish: 'Machines' },
+  leads: { en: 'Leads / Sales', hi: 'लीड्स / सेल्स', hinglish: 'Leads / Sales' },
+  clients: { en: 'Customers', hi: 'ग्राहक', hinglish: 'Customers' },
+  products: { en: 'Products', hi: 'प्रोडक्ट्स', hinglish: 'Products' },
+  stock: { en: 'Stock', hi: 'स्टॉक', hinglish: 'Stock' },
+  vendors: { en: 'Vendors', hi: 'वेंडर', hinglish: 'Vendors' },
+  review: { en: 'Review Generator', hi: 'रिव्यू जनरेटर', hinglish: 'Review Generator' },
+  invoices: { en: 'Invoices & Accounting', hi: 'इनवॉइस', hinglish: 'Invoices' },
+  expenses: { en: 'Expenses & Purchases', hi: 'खर्चे', hinglish: 'Expenses' },
+  attendance: { en: 'Team Attendance', hi: 'अटेंडेंस', hinglish: 'Team Attendance' },
+  leaves: { en: 'Leave Applications', hi: 'छुट्टियां', hinglish: 'Leaves' },
+  payroll: { en: 'Payroll & Salary', hi: 'पेरोल', hinglish: 'Payroll' },
+  productivity: { en: 'Productivity', hi: 'प्रोडक्टिविटी', hinglish: 'Productivity' },
+  tasks: { en: 'Tasks', hi: 'टास्क', hinglish: 'Tasks' },
+};
+// Flat list of every feature in the catalog (used to build/save the perms object).
+const CATALOG_FEATURES = PERMISSION_CATALOG.flatMap((g) => g.features);
 
 const BUILTIN_ROLES = [
   'pending', 'staff', 'designer', 'jobsetter', 'sales', 'hr',
@@ -232,13 +250,14 @@ function RoleRow({ u, canEdit, t }) {
 
 function PermissionsModal({ u, t, onClose }) {
   const { lang } = useLang();
+  const lbl = (dict) => dict[lang] ?? dict.en;
   const [perms, setPerms] = useState(() => {
     const p = u.permissions || {};
     const init = {};
-    for (const m of MODULES) {
-      init[m.key] = {
-        view: canViewModule(u.role, m.key, p), // allow-list: role default or explicit grant
-        edit: p[`${m.key}.write`] === true,
+    for (const f of CATALOG_FEATURES) {
+      init[f.key] = {
+        view: canViewModule(u.role, f.key, p), // allow-list: role default or explicit grant
+        edit: p[`${f.key}.write`] === true,
       };
     }
     return init;
@@ -249,18 +268,20 @@ function PermissionsModal({ u, t, onClose }) {
 
   const toggleView = (k) => setPerms((p) => {
     const view = !p[k].view;
-    return { ...p, [k]: { view, edit: view ? p[k].edit : false } }; // can't edit what you can't view
+    return { ...p, [k]: { view, edit: view ? p[k].edit : false } }; // can't manage what you can't view
   });
   const toggleEdit = (k) => setPerms((p) => (p[k].view ? { ...p, [k]: { ...p[k], edit: !p[k].edit } } : p));
-  const setAllView = (view) => setPerms(Object.fromEntries(MODULES.map((m) => [m.key, { view, edit: view ? perms[m.key].edit : false }])));
+  const setAllView = (view) => setPerms((prev) => Object.fromEntries(
+    CATALOG_FEATURES.map((f) => [f.key, { view, edit: view ? prev[f.key].edit : false }])
+  ));
 
   const save = async () => {
     setBusy(true);
     try {
       const permissions = {};
-      for (const m of MODULES) {
-        permissions[`${m.key}.read`] = !!perms[m.key].view;
-        permissions[`${m.key}.write`] = !!(perms[m.key].view && perms[m.key].edit);
+      for (const f of CATALOG_FEATURES) {
+        permissions[`${f.key}.read`] = !!perms[f.key].view;
+        if (f.manage) permissions[`${f.key}.write`] = !!(perms[f.key].view && perms[f.key].edit);
       }
       await authApi.setRole(u.id, { permissions });
       showToast(t('accessSaved'), 'success');
@@ -272,7 +293,7 @@ function PermissionsModal({ u, t, onClose }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 480, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="card" style={{ maxWidth: 520, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         <h3 style={{ marginBottom: 4 }}>{t('accessFor')}</h3>
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 10 }}>
           {u.name || u.email} · <span className="badge badge-blue">{u.role || 'pending'}</span>
@@ -288,21 +309,30 @@ function PermissionsModal({ u, t, onClose }) {
           <button className="btn btn-ghost btn-xs" onClick={() => setAllView(true)}>{t('showAll')}</button>
           <button className="btn btn-ghost btn-xs" onClick={() => setAllView(false)}>{t('hideAll')}</button>
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 18, fontSize: 11, color: 'var(--text3)', paddingRight: 4 }}>
-            <span>{t('canViewCol')}</span><span>{t('canEditCol')}</span>
+            <span style={{ width: 38, textAlign: 'center' }}>{t('canViewCol')}</span>
+            <span style={{ width: 44, textAlign: 'center' }}>{t('manageCol')}</span>
           </span>
         </div>
 
         <div style={{ overflow: 'auto', flex: 1, border: '1px solid var(--border)', borderRadius: 8 }}>
-          {MODULES.map((m, i) => (
-            <div
-              key={m.key}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderTop: i ? '1px solid var(--border)' : 'none' }}
-            >
-              <span style={{ color: 'var(--text)' }}>{m.label[lang] ?? m.label.en}</span>
-              <span style={{ display: 'flex', gap: 22, alignItems: 'center', paddingRight: 6 }}>
-                <input type="checkbox" title={t('canViewCol')} checked={perms[m.key].view} onChange={() => toggleView(m.key)} style={{ width: 18, height: 18 }} />
-                <input type="checkbox" title={t('canEditCol')} checked={perms[m.key].edit} disabled={!perms[m.key].view} onChange={() => toggleEdit(m.key)} style={{ width: 18, height: 18 }} />
-              </span>
+          {PERMISSION_CATALOG.map((grp) => (
+            <div key={grp.group}>
+              <div style={{ position: 'sticky', top: 0, background: 'var(--surface2)', padding: '6px 12px', fontSize: 11, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: 'var(--text2)', borderTop: '1px solid var(--border)' }}>
+                {lbl(GROUP_LABELS[grp.group])}
+              </div>
+              {grp.features.map((f) => (
+                <div key={f.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderTop: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text)' }}>{lbl(MODULE_LABELS[f.key])}</span>
+                  <span style={{ display: 'flex', gap: 22, alignItems: 'center', paddingRight: 6 }}>
+                    <input type="checkbox" title={t('canViewCol')} checked={perms[f.key].view} onChange={() => toggleView(f.key)} style={{ width: 18, height: 18 }} />
+                    {f.manage ? (
+                      <input type="checkbox" title={t('manageCol')} checked={perms[f.key].edit} disabled={!perms[f.key].view} onChange={() => toggleEdit(f.key)} style={{ width: 18, height: 18 }} />
+                    ) : (
+                      <span style={{ width: 18, textAlign: 'center', color: 'var(--text3)' }}>—</span>
+                    )}
+                  </span>
+                </div>
+              ))}
             </div>
           ))}
         </div>

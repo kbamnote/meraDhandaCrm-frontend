@@ -5,7 +5,8 @@
  * pick up. Dependency-free charts via the shared DashboardCharts primitives.
  */
 import { useEffect, useState } from 'react';
-import { ref, onValue, db } from '../../services/realtime';
+import { socket } from '../../services/realtime';
+import { ordersApi } from '../../services/api';
 import {
   DashHeader,
   Kpi,
@@ -19,14 +20,20 @@ import { useAuth } from '../../context/AuthContext';
 export default function DesignerDashboard() {
   const { profile } = useAuth();
   const me = profile?.id;
-  const [jobs, setJobs] = useState({});
+  const [jobList, setJobList] = useState([]);
 
+  // Self-service designer feed (open pool + my jobs) — no `jobs` permission needed.
   useEffect(() => {
-    const u = onValue(ref(db, 'mpw/jobs'), (s) => setJobs(s.val() || {}));
-    return () => u();
+    const load = () => ordersApi.designerFeed().then((rows) => setJobList(Array.isArray(rows) ? rows : [])).catch(() => {});
+    load();
+    const onChange = (msg) => {
+      const base = String((msg && msg.path) || '').replace(/^mpw\//, '').split('/')[0];
+      if (base === 'jobs') load();
+    };
+    socket.on('data:change', onChange);
+    socket.on('connect', load);
+    return () => { socket.off('data:change', onChange); socket.off('connect', load); };
   }, []);
-
-  const jobList = Object.values(jobs || {}).filter(Boolean);
 
   const myJobs = jobList.filter((j) => j && j.designerId === me);
   const pool = jobList.filter(

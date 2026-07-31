@@ -147,6 +147,9 @@ export const authApi = {
 export const tenantApi = {
   get:    ()     => api.get('/tenant').then(r => r.data),
   update: (body) => api.patch('/tenant', body).then(r => r.data),
+  // Staff announcements (owner/admin). body: { title, body, forRole?, forUser? }
+  notify: (body) => api.post('/tenant/notify', body).then(r => r.data),
+  sentNotifications: () => api.get('/tenant/notify/sent').then(r => r.data),
 };
 
 // Platform super-admin — manage ALL tenants (gated server-side to platformAdmin).

@@ -199,6 +199,7 @@ export const RESOURCES = {
       { key: 'category', label: 'Category', type: 'text', table: true },
       { key: 'quantity', label: 'Quantity', type: 'number', table: true },
       { key: 'unit', label: 'Unit', type: 'text' },
+      { key: 'type', label: 'Type', type: 'select', table: true, options: ['raw', 'consumable', 'both'] },
       { key: 'reorderLevel', label: 'Reorder Level', type: 'number' },
       { key: 'location', label: 'Location', type: 'text' },
     ],
@@ -216,16 +217,48 @@ export const RESOURCES = {
   },
 
   jobsetter: {
+    // Pipeline view: jobs that finished design and are waiting for the job setter
+    // (stage 'jobsetter'). Read-only — they arrive from the designer and are
+    // advanced from Assign Production; columns use the REAL job fields.
     collection: 'jobs', title: '🛠 Job Setter', plural: 'Jobs', singular: 'Job',
-    legacyId: 'page-jobsetter', writeRoles: ADMIN_DESIGNER,
+    legacyId: 'page-jobsetter', readOnly: true,
+    filter: (j) => j && j.stage === 'jobsetter',
     fields: [
-      { key: 'title', label: 'Title', type: 'text', required: true, table: true },
-      { key: 'client', label: 'Client', type: 'text', table: true },
-      { key: 'product', label: 'Product', type: 'text', table: true },
-      { key: 'quantity', label: 'Quantity', type: 'number' },
-      { key: 'status', label: 'Status', type: 'select', table: true,
-        options: ['queued', 'design', 'production', 'qc', 'done'] },
-      { key: 'deadline', label: 'Deadline', type: 'date', table: true },
+      { key: 'jobNo', label: 'Job No', type: 'text', table: true },
+      { key: 'clientName', label: 'Client', type: 'text', table: true },
+      { key: 'clientMobile', label: 'Mobile', type: 'text', table: true },
+      { key: 'work', label: 'Work', type: 'text', table: true },
+      { key: 'designerName', label: 'Designer', type: 'text', table: true },
+      { key: 'priority', label: 'Priority', type: 'text', table: true },
+      { key: 'deliveryDate', label: 'Delivery', type: 'date', table: true },
+    ],
+  },
+
+  completed: {
+    // Completed jobs — dispatch confirmed (stage 'delivered'). Read-only view.
+    collection: 'jobs', title: '✅ Completed', plural: 'Jobs', singular: 'Job',
+    legacyId: 'page-completed', readOnly: true, detail: 'job',
+    filter: (j) => j && j.stage === 'delivered',
+    fields: [
+      { key: 'jobNo', label: 'Job No', type: 'text', table: true },
+      { key: 'clientName', label: 'Client', type: 'text', table: true },
+      { key: 'clientMobile', label: 'Mobile', type: 'text', table: true },
+      { key: 'work', label: 'Work', type: 'text', table: true },
+      { key: 'billNumber', label: 'Bill', type: 'text', table: true },
+    ],
+  },
+
+  hold: {
+    // Jobs put on hold (stage 'hold'). Read-only view.
+    collection: 'jobs', title: '⏸ Hold Jobs', plural: 'Jobs', singular: 'Job',
+    legacyId: 'page-hold', readOnly: true, detail: 'job', reschedule: true,
+    filter: (j) => j && j.stage === 'hold',
+    fields: [
+      { key: 'jobNo', label: 'Job No', type: 'text', table: true },
+      { key: 'clientName', label: 'Client', type: 'text', table: true },
+      { key: 'clientMobile', label: 'Mobile', type: 'text', table: true },
+      { key: 'work', label: 'Work', type: 'text', table: true },
+      { key: 'priority', label: 'Priority', type: 'text', table: true },
     ],
   },
 

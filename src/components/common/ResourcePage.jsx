@@ -11,13 +11,20 @@
  * page. Pages that need custom UI (Tasks, dashboards) stay hand-written.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ref, onValue, db } from '../../services/realtime';
 import { dbApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
+import RescheduleJobModal from './RescheduleJobModal';
 
 const DEFAULT_WRITE_ROLES = ['admin', 'superadmin', 'owner'];
+
+// A config with `detail: '<key>'` makes its rows open the matching full-screen
+// view page (a naturally-scrolling page for the record's full lifecycle),
+// navigated to with the record id in the query string (?id=…).
+const DETAIL_ROUTE = { job: '/job-view' };
 
 const S = {
   newPrefix: { en: '+ New', hi: '+ नया', hinglish: '+ Naya', gu: '+ નવું', mr: '+ नवीन', mwr: '+ नयो' },
@@ -25,6 +32,7 @@ const S = {
   noPrefix: { en: 'No', hi: 'कोई', hinglish: 'Koi', gu: 'કોઈ', mr: 'कोणतेही', mwr: 'कोई' },
   noSuffix: { en: 'yet.', hi: 'अभी तक नहीं।', hinglish: 'abhi tak nahi.', gu: 'હજુ સુધી નથી.', mr: 'अद्याप नाही.', mwr: 'अजे तांई कोनी।' },
   actions: { en: 'Actions', hi: 'कार्रवाई', hinglish: 'Actions', gu: 'ક્રિયાઓ', mr: 'क्रिया', mwr: 'काम' },
+  reschedule: { en: 'Reschedule', hi: 'री-शेड्यूल', hinglish: 'Reschedule', gu: 'રી-શેડ્યૂલ', mr: 'री-शेड्यूल', mwr: 'री-शेड्यूल' },
   edit: { en: 'Edit', hi: 'एडिट करें', hinglish: 'Edit karein', gu: 'એડિટ કરો', mr: 'एडिट करा', mwr: 'एडिट करो' },
   delete: { en: 'Delete', hi: 'डिलीट करें', hinglish: 'Delete karein', gu: 'ડિલીટ કરો', mr: 'डिलीट करा', mwr: 'डिलीट करो' },
   confirmDeletePrefix: { en: 'Delete this', hi: 'क्या यह', hinglish: 'Kya yeh', gu: 'આ', mr: 'हे', mwr: 'इण' },
@@ -54,15 +62,26 @@ function cellText(value) {
 export default function ResourcePage({ config }) {
   const { collection, title, legacyId, singular, fields } = config;
   const { profile, hasRole } = useAuth();
+  const navigate = useNavigate();
   const t = useT(S);
   const [records, setRecords] = useState({});
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null); // null | {} (new) | record (edit)
+  const [rescheduling, setRescheduling] = useState(null);
+
+  // A config with `detail: '<key>'` (e.g. 'job') shows a read-only "👁 View"
+  // affordance whose click navigates to a full-screen lifecycle view page.
+  const detailRoute = config.detail ? DETAIL_ROUTE[config.detail] : null;
+  const openDetail = (row) => detailRoute && navigate(`${detailRoute}?id=${row.id}`);
 
   const writeRoles = config.writeRoles || DEFAULT_WRITE_ROLES;
   const canWrite =
     !config.readOnly &&
     (hasRole(...writeRoles) || !!profile?.permissions?.[`${collection}.write`]);
+
+  // A single actions column shows when there's at least one row action: edit/
+  // delete (canWrite), the 👁 detail view (detailRoute), or 🔁 Reschedule.
+  const showActions = canWrite || detailRoute || config.reschedule;
 
   // Columns shown in the table (fields flagged `table`, else first 3).
   const columns = useMemo(() => {
@@ -82,12 +101,15 @@ export default function ResourcePage({ config }) {
   );
 
   const filtered = useMemo(() => {
+    // A config may scope the collection to a subset (e.g. the Job Setter view
+    // only wants jobs at stage 'jobsetter', not the whole jobs collection).
+    const base = typeof config.filter === 'function' ? rows.filter(config.filter) : rows;
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((rec) =>
+    if (!q) return base;
+    return base.filter((rec) =>
       fields.some((f) => cellText(rec[f.key]).toLowerCase().includes(q))
     );
-  }, [rows, search, fields]);
+  }, [rows, search, fields, config]);
 
   const remove = async (rec) => {
     if (!confirm(`${t('confirmDeletePrefix')} ${singular || t('recordSingular')} ${t('confirmDeleteSuffix')}`)) return;
@@ -132,12 +154,16 @@ export default function ResourcePage({ config }) {
             <thead>
               <tr>
                 {columns.map((c) => <th key={c.key}>{c.label}</th>)}
-                {canWrite && <th style={{ width: 120 }}>{t('actions')}</th>}
+                {showActions && <th style={{ width: 150 }}>{t('actions')}</th>}
               </tr>
             </thead>
             <tbody>
               {filtered.map((rec) => (
-                <tr key={rec.id}>
+                <tr
+                  key={rec.id}
+                  onClick={detailRoute ? () => openDetail(rec) : undefined}
+                  style={detailRoute ? { cursor: 'pointer' } : undefined}
+                >
                   {columns.map((c) => (
                     <td key={c.key}>
                       {c.type === 'select' && rec[c.key]
@@ -145,11 +171,15 @@ export default function ResourcePage({ config }) {
                         : cellText(rec[c.key])}
                     </td>
                   ))}
-                  {canWrite && (
-                    <td>
+                  {showActions && (
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-2">
-                        <button className="btn btn-ghost btn-xs" onClick={() => setEditing(rec)}>{t('edit')}</button>
-                        <button className="btn btn-danger btn-xs" onClick={() => remove(rec)}>{t('delete')}</button>
+                        {detailRoute && <button className="btn btn-ghost btn-xs" title="View details" onClick={() => openDetail(rec)}>👁</button>}
+                        {config.reschedule && <button className="btn btn-ghost btn-xs" onClick={() => setRescheduling(rec)}>🔁 {t('reschedule')}</button>}
+                        {canWrite && (<>
+                          <button className="btn btn-ghost btn-xs" onClick={() => setEditing(rec)}>{t('edit')}</button>
+                          <button className="btn btn-danger btn-xs" onClick={() => remove(rec)}>{t('delete')}</button>
+                        </>)}
                       </div>
                     </td>
                   )}
@@ -167,6 +197,8 @@ export default function ResourcePage({ config }) {
           onClose={() => setEditing(null)}
         />
       )}
+
+      {rescheduling && <RescheduleJobModal job={rescheduling} onClose={() => setRescheduling(null)} />}
     </div>
   );
 }

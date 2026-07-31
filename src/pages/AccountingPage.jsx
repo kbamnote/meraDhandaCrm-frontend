@@ -6,9 +6,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
 import { accountingApi } from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
+import CreateInvoiceFlow from '../components/common/CreateInvoiceFlow';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const inr = (n) => '₹' + (round2(n)).toLocaleString('en-IN');
@@ -36,6 +36,7 @@ const S = {
   to:       { en: 'To', hi: 'तक', hinglish: 'To', gu: 'સુધી', mr: 'पर्यंत', mwr: 'तांई' },
   refresh:  { en: 'Refresh', hi: 'रिफ्रेश', hinglish: 'Refresh', gu: 'રિફ્રેશ', mr: 'रिफ्रेश', mwr: 'रिफ्रेश' },
   failed:   { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua', gu: 'નિષ્ફળ', mr: 'अयशस्वी', mwr: 'कोनी हुयो' },
+  cancel:   { en: 'Cancel', hi: 'रद्द करें', hinglish: 'Cancel', gu: 'રદ કરો', mr: 'रद्द करा', mwr: 'रद्द करो' },
 };
 
 const STATUS_TONE = { paid: 'badge-green', partial: 'badge-amber', unpaid: 'badge-red' };
@@ -44,7 +45,7 @@ export default function AccountingPage() {
   const t = useT(S);
   const [tab, setTab] = useState('invoices');
   const [invoices, setInvoices] = useState({});
-  const [showNew, setShowNew] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => { const u = onValue(ref(db, 'mpw/invoices'), (s) => setInvoices(s.val() || {})); return () => u(); }, []);
   const invList = useMemo(() => Object.entries(invoices).map(([id, v]) => ({ ...v, id })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [invoices]);
@@ -53,7 +54,7 @@ export default function AccountingPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
-        {tab === 'invoices' && <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>{t('newInv')}</button>}
+        {tab === 'invoices' && <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>{t('newInv')}</button>}
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
@@ -75,7 +76,12 @@ export default function AccountingPage() {
       {tab === 'pnl' && <PnlTab t={t} />}
       {tab === 'gst' && <GstTab t={t} />}
 
-      {showNew && <NewInvoiceModal onClose={() => setShowNew(false)} t={t} />}
+      {showCreate && (
+        <CreateInvoiceFlow
+          onClose={() => setShowCreate(false)}
+          onCreated={() => {}}
+        />
+      )}
     </div>
   );
 }
@@ -198,87 +204,3 @@ function Row({ label, value, bold, color }) {
   );
 }
 
-const blankItem = () => ({ name: '', hsn: '', qty: '1', rate: '', taxRate: '18' });
-
-function NewInvoiceModal({ onClose, t }) {
-  const { profile } = useAuth();
-  const [type, setType] = useState('invoice');
-  const [form, setForm] = useState({ clientName: '', gstNo: '', jobNo: '', date: new Date().toISOString().slice(0, 10), interState: false });
-  const [items, setItems] = useState([blankItem()]);
-  const [preview, setPreview] = useState('');
-  const [busy, setBusy] = useState(false);
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
-  useEffect(() => { accountingApi.invoiceNumber(type).then((r) => setPreview(r.invoiceNo)).catch(() => {}); }, [type]);
-
-  const setItem = (i, k, v) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
-  const totals = useMemo(() => {
-    let st = 0; let tax = 0;
-    items.forEach((it) => { const a = (Number(it.qty) || 0) * (Number(it.rate) || 0); st += a; tax += (a * (Number(it.taxRate) || 0)) / 100; });
-    return { subtotal: round2(st), tax: round2(tax), total: round2(st + tax) };
-  }, [items]);
-
-  const submit = async () => {
-    if (!form.clientName.trim()) return showToast('Client name required', 'error');
-    if (!items.some((it) => it.name.trim() && Number(it.rate) > 0)) return showToast('Add at least one item', 'error');
-    setBusy(true);
-    try {
-      const inv = await accountingApi.createInvoice({
-        type, ...form,
-        items: items.filter((it) => it.name.trim()).map((it) => ({ name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate), taxRate: Number(it.taxRate) })),
-      });
-      showToast(`${inv.invoiceNo} created`, 'success');
-      onClose();
-    } catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
-    finally { setBusy(false); }
-  };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 640, width: '100%', maxHeight: '92vh', overflow: 'auto' }}>
-        <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
-          <h3>{t('newInv')} <span style={{ fontFamily: 'monospace', color: 'var(--blue, #C05621)', fontSize: 14 }}>{preview}</span></h3>
-          <select className="input" style={{ width: 'auto' }} value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="invoice">GST Invoice</option>
-            <option value="proforma">Proforma</option>
-          </select>
-        </div>
-
-        <div className="flex gap-2">
-          <div className="form-group" style={{ flex: 2 }}><label>Client name *</label><input className="input" value={form.clientName} onChange={(e) => set('clientName', e.target.value)} /></div>
-          <div className="form-group" style={{ flex: 1 }}><label>GST No</label><input className="input" value={form.gstNo} onChange={(e) => set('gstNo', e.target.value)} /></div>
-        </div>
-        <div className="flex gap-2">
-          <div className="form-group" style={{ flex: 1 }}><label>Date</label><input className="input" type="date" value={form.date} onChange={(e) => set('date', e.target.value)} /></div>
-          <div className="form-group" style={{ flex: 1 }}><label>Job no (optional)</label><input className="input" value={form.jobNo} onChange={(e) => set('jobNo', e.target.value)} /></div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-end', paddingBottom: 14, fontSize: 13 }}>
-            <input type="checkbox" checked={form.interState} onChange={(e) => set('interState', e.target.checked)} /> Inter-state (IGST)
-          </label>
-        </div>
-
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', margin: '8px 0 4px' }}>Items</div>
-        {items.map((it, i) => (
-          <div key={i} className="flex gap-2" style={{ marginBottom: 6, alignItems: 'center' }}>
-            <input className="input" style={{ flex: 3 }} placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
-            <input className="input" style={{ flex: 1, minWidth: 50 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
-            <input className="input" style={{ flex: 1.5, minWidth: 60 }} placeholder="Rate" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
-            <input className="input" style={{ flex: 1, minWidth: 50 }} placeholder="GST%" type="number" value={it.taxRate} onChange={(e) => setItem(i, 'taxRate', e.target.value)} />
-            <button className="btn btn-ghost btn-xs" onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))} disabled={items.length === 1}>×</button>
-          </div>
-        ))}
-        <button className="btn btn-ghost btn-sm" onClick={() => setItems((a) => [...a, blankItem()])}>+ Add item</button>
-
-        <div className="card" style={{ background: 'var(--surface2)', marginTop: 10 }}>
-          <Row label={t('taxable')} value={inr(totals.subtotal)} />
-          <Row label="GST" value={inr(totals.tax)} />
-          <Row label="Total" value={inr(totals.total)} bold />
-        </div>
-
-        <div className="flex gap-2 mt-2" style={{ marginTop: 12 }}>
-          <button className="btn btn-primary flex-1" onClick={submit} disabled={busy}>{busy ? '…' : t('newInv')}</button>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-        </div>
-      </div>
-    </div>
-  );
-}

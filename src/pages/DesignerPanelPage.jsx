@@ -6,8 +6,8 @@
  * Pass releases it back (no customer message). Claimed jobs show Client-Approval
  * (pauses the timer) and Design-Ready (→ Job Setter). On-Leave hides the pool.
  */
-import { useEffect, useMemo, useState } from 'react';
-import { ref, onValue, db } from '../services/realtime';
+import { useEffect, useState } from 'react';
+import { socket } from '../services/realtime';
 import { ordersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useT } from '../i18n/LanguageContext';
@@ -25,6 +25,17 @@ const S = {
   ready:     { en: 'Design ready →', hi: 'डिज़ाइन तैयार →', hinglish: 'Design ready →', gu: 'ડિઝાઇન તૈયાર →', mr: 'डिझाइन तयार →', mwr: 'डिज़ाइन तैयार →' },
   sendClient:{ en: 'Send to client', hi: 'क्लाइंट को भेजें', hinglish: 'Client ko bhejein', gu: 'ક્લાયન્ટને મોકલો', mr: 'क्लायंटला पाठवा', mwr: 'क्लाइंट ने भेजो' },
   awaiting:  { en: '⏸ Awaiting client approval', hi: '⏸ क्लाइंट अप्रूवल का इंतज़ार', hinglish: '⏸ Client approval ka wait', gu: '⏸ ક્લાયન્ટ મંજૂરીની રાહ', mr: '⏸ क्लायंट मंजुरीची वाट', mwr: '⏸ क्लाइंट अप्रूवल रो इंतज़ार' },
+  sendApproval:{ en: 'Send for Approval', hi: 'अप्रूवल के लिए भेजें', hinglish: 'Send for Approval', gu: 'મંજૂરી માટે મોકલો', mr: 'मंजुरीसाठी पाठवा', mwr: 'अप्रूवल खातर भेजो' },
+  waitData:  { en: 'Waiting for Client Data', hi: 'क्लाइंट डेटा का इंतज़ार', hinglish: 'Waiting for Client Data', gu: 'ક્લાયન્ટ ડેટાની રાહ', mr: 'क्लायंट डेटाची वाट', mwr: 'क्लाइंट डेटा रो इंतज़ार' },
+  complete:  { en: 'Design Complete', hi: 'डिज़ाइन पूरा', hinglish: 'Design Complete', gu: 'ડિઝાઇન પૂર્ણ', mr: 'डिझाइन पूर्ण', mwr: 'डिज़ाइन पूरो' },
+  hold:      { en: 'Hold', hi: 'होल्ड', hinglish: 'Hold', gu: 'હોલ્ડ', mr: 'होल्ड', mwr: 'होल्ड' },
+  passOthers:{ en: 'Pass to Others', hi: 'दूसरों को पास करें', hinglish: 'Pass to Others', gu: 'બીજાને પાસ કરો', mr: 'इतरांना पास करा', mwr: 'दूजां ने पास करो' },
+  badgeApproval:  { en: 'Awaiting approval', hi: 'अप्रूवल का इंतज़ार', hinglish: 'Awaiting approval', gu: 'મંજૂરીની રાહ', mr: 'मंजुरीची वाट', mwr: 'अप्रूवल रो इंतज़ार' },
+  badgeData:      { en: 'Awaiting client data', hi: 'क्लाइंट डेटा का इंतज़ार', hinglish: 'Awaiting client data', gu: 'ક્લાયન્ટ ડેટાની રાહ', mr: 'क्लायंट डेटाची वाट', mwr: 'क्लाइंट डेटा रो इंतज़ार' },
+  badgeDesigning: { en: 'Designing', hi: 'डिज़ाइनिंग', hinglish: 'Designing', gu: 'ડિઝાઇનિંગ', mr: 'डिझाइनिंग', mwr: 'डिज़ाइनिंग' },
+  urgent:    { en: 'Urgent', hi: 'अर्जेंट', hinglish: 'Urgent', gu: 'તાત્કાલિક', mr: 'तातडीचे', mwr: 'अर्जेंट' },
+  delivery:  { en: 'Delivery', hi: 'डिलीवरी', hinglish: 'Delivery', gu: 'ડિલિવરી', mr: 'डिलिव्हरी', mwr: 'डिलीवरी' },
+  received:  { en: 'Received', hi: 'प्राप्त', hinglish: 'Received', gu: 'મળ્યું', mr: 'मिळाले', mwr: 'मिल्यो' },
   onLeaveMsg:{ en: "You're on leave — jobs won't be shown. Turn off to accept work.", hi: 'आप छुट्टी पर हैं — जॉब नहीं दिखेंगे।', hinglish: 'Aap leave par hain — jobs nahi dikhenge.', gu: 'તમે રજા પર છો — જોબ બતાવાશે નહીં.', mr: 'तुम्ही रजेवर आहात — जॉब दिसणार नाहीत.', mwr: 'थे छुट्टी पर हो — जॉब कोनी दिखसी।' },
   taken:     { en: 'Job already taken', hi: 'जॉब पहले ही ले ली गई', hinglish: 'Job already taken', gu: 'જોબ પહેલેથી લેવાઈ', mr: 'जॉब आधीच घेतले', mwr: 'जॉब पैलाईं ले ली' },
   failed:    { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua', gu: 'નિષ્ફળ', mr: 'अयशस्वी', mwr: 'कोनी हुयो' },
@@ -34,16 +45,25 @@ export default function DesignerPanelPage() {
   const { profile } = useAuth();
   const t = useT(S);
   const me = profile?.id;
-  const [jobs, setJobs] = useState({});
+  const [all, setAll] = useState([]);
   const [onLeave, setOnLeave] = useState(!!profile?.onLeave);
   const [busyId, setBusyId] = useState(null);
 
+  // Self-service designer feed (open pool + my claimed jobs). A dedicated endpoint
+  // so a designer does NOT need the broad `jobs` (Job Cards) permission to see
+  // their own work. Refreshes live on any job change + on socket reconnect.
   useEffect(() => {
-    const u = onValue(ref(db, 'mpw/jobs'), (snap) => setJobs(snap.val() || {}));
-    return () => u();
+    const load = () => ordersApi.designerFeed().then((rows) => setAll(Array.isArray(rows) ? rows : [])).catch(() => {});
+    load();
+    const onChange = (msg) => {
+      const base = String((msg && msg.path) || '').replace(/^mpw\//, '').split('/')[0];
+      if (base === 'jobs') load();
+    };
+    socket.on('data:change', onChange);
+    socket.on('connect', load);
+    return () => { socket.off('data:change', onChange); socket.off('connect', load); };
   }, []);
 
-  const all = useMemo(() => Object.entries(jobs).map(([id, j]) => ({ ...j, id })), [jobs]);
   const available = all.filter((j) => j.stage === 'designer' && !j.designerId && !(j.designerRejectedBy || []).includes(me));
   const mine = all.filter((j) => j.stage === 'designer' && j.designerId === me);
 
@@ -73,19 +93,48 @@ export default function DesignerPanelPage() {
         {t('myJobs')} ({mine.length})
       </div>
       {!mine.length && <div className="card" style={{ textAlign: 'center', padding: 20, color: 'var(--text3)' }}>{t('noneMine')}</div>}
-      {mine.map((job) => (
+      {mine.map((job) => {
+        const isUrgent = job.priority === 'urgent' || job.priority === 'high';
+        const badge = job.designWait === 'approval'
+          ? { label: t('badgeApproval'), bg: 'var(--amber)', fg: '#fff' }
+          : job.designWait === 'client_data'
+            ? { label: t('badgeData'), bg: '#0EA5E9', fg: '#fff' }
+            : { label: t('badgeDesigning'), bg: 'var(--surface2)', fg: 'var(--text2)' };
+        return (
         <div key={job.id} className="card" style={{ marginBottom: 8, borderLeft: '4px solid #8B5CF6' }}>
-          <JobLine job={job} />
-          {job.designClientPending && <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 4 }}>{t('awaiting')}</div>}
-          <div className="flex gap-2" style={{ marginTop: 8 }}>
-            <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerApproval(job.id))} disabled={busyId === job.id}
-              style={{ background: job.designClientPending ? 'var(--amber)' : 'var(--surface2)', color: job.designClientPending ? '#fff' : 'var(--text2)', border: 'none' }}>
-              {job.designClientPending ? '▶ ' : '📤 '}{t('sendClient')}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{job.jobNo}</span>
+                {isUrgent && <span className="badge badge-amber">⚡ {t('urgent')}</span>}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{job.work || '—'}</div>
+              {job.clientName && <div style={{ fontSize: 12, color: 'var(--text2)' }}>{job.clientName}</div>}
+              {job.clientMobile && <div style={{ fontSize: 12, color: 'var(--text2)' }}>📞 {job.clientMobile}</div>}
+            </div>
+            <span className="badge" style={{ background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>{badge.label}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
+            {job.deliveryDate && <span>📅 {t('delivery')}: {fmt(job.deliveryDate)}</span>}
+            {job.createdAt && <span>🕒 {t('received')}: {fmt(job.createdAt)}</span>}
+          </div>
+          <div className="flex gap-2" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerWait(job.id, job.designWait === 'approval' ? null : 'approval'))} disabled={busyId === job.id}
+              style={{ background: job.designWait === 'approval' ? 'var(--amber)' : 'var(--surface2)', color: job.designWait === 'approval' ? '#fff' : 'var(--text2)', border: 'none' }}>
+              {t('sendApproval')}
             </button>
-            <button className="btn btn-success btn-sm" onClick={() => run(job.id, () => ordersApi.designerReady(job.id))} disabled={busyId === job.id}>{t('ready')}</button>
+            <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerWait(job.id, job.designWait === 'client_data' ? null : 'client_data'))} disabled={busyId === job.id}
+              style={{ background: job.designWait === 'client_data' ? '#0EA5E9' : 'var(--surface2)', color: job.designWait === 'client_data' ? '#fff' : 'var(--text2)', border: 'none' }}>
+              {t('waitData')}
+            </button>
+            <button className="btn btn-success btn-sm" onClick={() => run(job.id, () => ordersApi.designerReady(job.id))} disabled={busyId === job.id}>{t('complete')}</button>
+            <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerHold(job.id))} disabled={busyId === job.id}
+              style={{ background: 'var(--surface2)', color: 'var(--text2)', border: 'none' }}>{t('hold')}</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => run(job.id, () => ordersApi.designerReject(job.id))} disabled={busyId === job.id}>{t('passOthers')}</button>
           </div>
         </div>
-      ))}
+        );
+      })}
 
       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.05em', margin: '20px 0 8px' }}>
         {t('available')} ({onLeave ? 0 : available.length})
@@ -105,6 +154,15 @@ export default function DesignerPanelPage() {
       ))}
     </div>
   );
+}
+
+// Compact date/time formatter for delivery & received timestamps. Falls back to
+// the raw value if it isn't a parseable date.
+function fmt(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  return d.toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 function JobLine({ job }) {

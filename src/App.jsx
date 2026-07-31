@@ -36,6 +36,7 @@ import PermissionsPage from './pages/PermissionsPage';
 import HierarchyPage from './pages/HierarchyPage';
 import InvoiceViewPage from './pages/InvoiceViewPage';
 import JobDetailPage from './pages/JobDetailPage';
+import JobViewPage from './pages/JobViewPage';
 import ReviewPage from './pages/ReviewPage';
 import CompanySettingsPage from './pages/CompanySettingsPage';
 import SuperAdminPage from './pages/SuperAdminPage';
@@ -49,7 +50,9 @@ import AccountingPage from './pages/AccountingPage';
 import StockPage from './pages/StockPage';
 import BroadcastPage from './pages/BroadcastPage';
 import AssignProdPage from './pages/AssignProdPage';
+import JobSetterPage from './pages/JobSetterPage';
 import ProdStepsPage from './pages/ProdStepsPage';
+import ManageProductionTypesPage from './pages/ManageProductionTypesPage';
 import SalesAdminPage from './pages/SalesAdminPage';
 import SalesPage from './pages/SalesPage';
 import AuditLogPage from './pages/AuditLogPage';
@@ -57,6 +60,8 @@ import ApiKeysPage from './pages/ApiKeysPage';
 import WebhooksPage from './pages/WebhooksPage';
 import CustomDomainPage from './pages/CustomDomainPage';
 import ReferralsPage from './pages/ReferralsPage';
+import CustomerOutboxPage from './pages/CustomerOutboxPage';
+import SendNotificationPage from './pages/SendNotificationPage';
 
 // Explicit page components for routes that have a finished React component.
 // Preferred over the ResourcePage/PageStub fallback in the route table below.
@@ -76,6 +81,7 @@ const CUSTOM_PAGES = {
   'hierarchy': HierarchyPage,
   'invoice-view': InvoiceViewPage,
   'job-detail': JobDetailPage,
+  'job-view': JobViewPage,
   'review': ReviewPage,
   'company-settings': CompanySettingsPage,
   'superadmin': SuperAdminPage,
@@ -89,7 +95,9 @@ const CUSTOM_PAGES = {
   'stock': StockPage,
   'broadcast': BroadcastPage,
   'assign-prod': AssignProdPage,
+  'jobsetter': JobSetterPage,
   'prod-steps': ProdStepsPage,
+  'production-types': ManageProductionTypesPage,
   'sales-admin': SalesAdminPage,
   'sales-panel': SalesPage,
   'audit-log': AuditLogPage,
@@ -97,6 +105,8 @@ const CUSTOM_PAGES = {
   'webhooks': WebhooksPage,
   'custom-domain': CustomDomainPage,
   'referrals': ReferralsPage,
+  'customer-outbox': CustomerOutboxPage,
+  'send-notification': SendNotificationPage,
 };
 
 // Routes that reuse another route's resource config.
@@ -117,9 +127,12 @@ const STUB_ROUTES = [
   ['designer',        '🖌  My Designer Panel', 'page-designer',        'mpw/designers'],
   ['designers-view',  '👀 Designers View',     'page-designers-view',  'mpw/designers'],
   ['jobsetter',       '🛠  Job Setter',        'page-jobsetter',       'mpw/jobs'],
+  ['completed',       '✅ Completed',          'page-completed',       'mpw/jobs'],
+  ['hold',            '⏸ Hold Jobs',          'page-hold',            'mpw/jobs'],
   ['assign-prod',     '📥 Assign Production', 'page-assign-prod',     'mpw/production'],
   ['production',      '🏭 Production',         'page-production',      'mpw/production'],
   ['prod-steps',      '📋 Production Steps',  'page-prod-steps',      'mpw/production'],
+  ['production-types','🏭 Production Types',  'page-production-types','mpw/productionTypes'],
   ['qc',              '🔍 QC',                'page-qc',              'mpw/qc'],
   ['dispatch',        '🚚 Dispatch',          'page-dispatch',        'mpw/dispatch'],
   ['machines',        '⚙️  Machines',          'page-machines',        'mpw/machines'],
@@ -155,8 +168,10 @@ const STUB_ROUTES = [
   ['manage-depts',    '🗂  Manage Depts',     'page-manage-depts',    'mpw/departments'],
 
   ['cust-dashboard',  '🙂 Customer',          'page-cust-dashboard',  'mpw/clients'],
+  ['customer-outbox', '📲 WhatsApp Outbox',   'page-customer-outbox', 'mpw/tenantNotifications'],
   ['review',          '⭐ Review',            'page-review',          null],
   ['job-detail',      '📄 Job Detail',        'page-job-detail',      'mpw/jobs'],
+  ['job-view',        '📄 Job View',          'page-job-view',        'mpw/jobs'],
   ['profile',         '👤 My Profile',        'page-profile',         null],
 
   ['permissions',     '🔐 Permissions',       'page-permissions',     'mpw/users'],
@@ -170,6 +185,7 @@ const STUB_ROUTES = [
   ['webhooks',        '🪝 Webhooks',          'page-webhooks',        null],
   ['custom-domain',   '🌐 Custom Domain',     'page-custom-domain',   null],
   ['referrals',       '🎁 Referrals',         'page-referrals',       null],
+  ['send-notification','🔔 Send Notification','page-send-notification', null],
 ];
 
 function AccessDenied() {
