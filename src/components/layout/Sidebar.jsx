@@ -155,7 +155,9 @@ const SECTIONS = [
       { to: '/my-attendance', label: '⏱  My Attendance',     legacy: 'page-my-attendance' },
       { to: '/my-salary',     label: '💸 My Salary',         legacy: 'page-my-salary' },
       { to: '/dept-mgmt',     label: '🏢 Depts',             legacy: 'page-dept-mgmt',    roles: ['admin','superadmin','owner','hr','manager'] },
-      { to: '/manage-depts',  label: '🗂  Manage Depts',     legacy: 'page-manage-depts', roles: ['admin','superadmin','owner','hr','manager'] },
+      // '/manage-depts' is an alias of '/dept-mgmt' (see RESOURCE_ALIASES in
+      // App.jsx) — it rendered the identical Departments page, so it's no longer
+      // listed. The route still resolves for anyone holding an old link.
     ],
   },
   {
@@ -179,7 +181,9 @@ const SECTIONS = [
       { to: '/company-settings', label: '⚙️  Company',         legacy: 'page-company-settings', roles: ['admin','superadmin','owner'] },
       { to: '/billing',          label: '💳 Billing & Plan',  legacy: 'page-billing',     roles: ['admin','superadmin','owner'] },
       { to: '/profile',          label: '👤 My Profile',      legacy: 'page-profile' },
-      { to: '/platform',         label: '👑 Platform Console', legacy: 'page-platform',   platform: true },
+      // No '/platform' entry here: it was gated `platform: true`, but a platform
+      // admin is rendered PLATFORM_SECTIONS instead of SECTIONS, so this row
+      // could never appear for anyone. Platform Console lives in PLATFORM_SECTIONS.
     ],
   },
   {
