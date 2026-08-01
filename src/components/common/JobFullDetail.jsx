@@ -55,7 +55,7 @@ function fmt(ms) {
   });
 }
 
-const isUrgent = (p) => p === 'urgent' || p === 'high';
+const isUrgent = (p) => p === 'urgent' || p === 'high' || p === 'most_urgent';
 const has = (v) => v != null && v !== '';
 const hasArr = (v) => Array.isArray(v) && v.length > 0;
 
@@ -152,6 +152,13 @@ export default function JobFullDetail({ job: jobProp }) {
             )}
             {job.designWait === 'approval' && <Row label="Wait status" value="Awaiting approval" />}
             {job.designWait === 'client_data' && <Row label="Wait status" value="Awaiting client data" />}
+            {job.designWait === 'changes' && <Row label="Wait status" value="Client wants changes" />}
+            {job.designApprovals > 0 && <Row label="Sent for approval" value={`${job.designApprovals}×`} />}
+            {job.designImage && (
+              <div style={{ padding: '3px 0' }}>
+                <img src={job.designImage} alt="Design preview" style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 8, border: '1px solid var(--border)' }} />
+              </div>
+            )}
           </Section>
         )}
 

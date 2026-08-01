@@ -45,14 +45,25 @@ export const RESOURCES = {
   products: {
     collection: 'products', title: '🛍 Products', plural: 'Products', singular: 'Product',
     legacyId: 'page-products', writeRoles: ADMIN,
+    // A product IS its stock item — everything the inventory engine needs is
+    // captured here, so adding a product never leaves stock half-configured.
+    // `stock` is the live quantity the movement engine reads and writes;
+    // `openingStock` is only the starting figure and is never mutated after.
     fields: [
       { key: 'name', label: 'Name', type: 'text', required: true, table: true },
       { key: 'category', label: 'Category', type: 'text', table: true },
-      { key: 'sku', label: 'SKU', type: 'text', table: true },
-      { key: 'price', label: 'Price (₹)', type: 'number', table: true },
-      { key: 'unit', label: 'Unit', type: 'text' },
+      { key: 'sku', label: 'SKU / Code', type: 'text', table: true },
+      { key: 'type', label: 'Type', type: 'select', options: ['product', 'service'] },
+      { key: 'unit', label: 'Unit (pcs / sqft / kg)', type: 'text' },
+      { key: 'purchasePrice', label: 'Purchase Price (₹)', type: 'number' },
+      { key: 'price', label: 'Sale Price (₹)', type: 'number', table: true },
+      { key: 'gst', label: 'GST %', type: 'select', options: ['0', '5', '12', '18', '28'] },
       { key: 'hsn', label: 'HSN', type: 'text' },
-      { key: 'stock', label: 'Stock', type: 'number' },
+      { key: 'trackStock', label: 'Track Stock?', type: 'select', options: ['yes', 'no'] },
+      { key: 'openingStock', label: 'Opening Stock', type: 'number' },
+      { key: 'stock', label: 'Current Stock', type: 'number', table: true },
+      { key: 'lowStock', label: 'Low-stock Alert At', type: 'number' },
+      { key: 'material', label: 'Material / Spec', type: 'textarea' },
       { key: 'image', label: 'Image URL', type: 'text' },
       { key: 'status', label: 'Status', type: 'select', options: STATUS_ACTIVE },
     ],

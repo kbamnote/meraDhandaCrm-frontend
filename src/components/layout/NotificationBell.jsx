@@ -2,6 +2,13 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { meApi } from '../../services/api';
 import { socket } from '../../services/realtime';
+import NotificationPopups from '../common/NotificationPopups';
+
+// Notification types that surface as a live popup. 'job' = new job cards (the
+// design pool broadcast + the tenant-wide "new job card" alert), which is what
+// a designer needs to see the moment a card is created. Everything else (stage
+// moves, announcements, GST reminders) stays bell-only.
+const POPUP_TYPES = new Set(['job']);
 
 // Turn an epoch-ms timestamp into a short relative string ("just now", "5m", "3h", "2d").
 function relativeTime(ts) {
@@ -27,12 +34,28 @@ export default function NotificationBell() {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
+  const [popups, setPopups] = useState([]);
   const rootRef = useRef(null);
+  // ids already surfaced; null until the first load seeds it — so an old unread
+  // backlog never popups on page load / login, only genuinely new arrivals do.
+  const seenRef = useRef(null);
 
   const load = useCallback(async () => {
     try {
       const data = await meApi.notifications();
-      setItems(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setItems(list);
+
+      // Anything unread of a POPUP_TYPE we haven't seen before is a new arrival
+      // → surface it. seenRef updates synchronously, so a burst of change events
+      // can't double-popup the same notification.
+      if (seenRef.current !== null) {
+        const fresh = list.filter(
+          (n) => !n.read && POPUP_TYPES.has(n.type) && !seenRef.current.has(n.id)
+        );
+        if (fresh.length) setPopups((prev) => [...prev, ...fresh]);
+      }
+      seenRef.current = new Set(list.map((n) => n.id));
     } catch {
       // network/auth error — keep whatever we already have
     }
@@ -91,6 +114,24 @@ export default function NotificationBell() {
     } catch {
       /* ignore — a later refetch corrects state */
     }
+  };
+
+  // Clicking a popup opens the notification's link and marks it read.
+  const handleOpenPopup = async (n) => {
+    setPopups((prev) => prev.filter((x) => x.id !== n.id));
+    if (!n.read) {
+      setItems((prev) => prev.map((it) => (it.id === n.id ? { ...it, read: true } : it)));
+      try {
+        await meApi.readNotification(n.id);
+      } catch {
+        /* ignore — a later refetch corrects state */
+      }
+    }
+    if (n.link) navigate(n.link);
+  };
+
+  const handleClosePopup = (id) => {
+    setPopups((prev) => prev.filter((x) => x.id !== id));
   };
 
   return (
@@ -235,6 +276,10 @@ export default function NotificationBell() {
           )}
         </div>
       )}
+
+      {/* Live popup alerts — new job cards etc. (fixed position, escapes this
+          relative container). Rendered from the topbar so they follow every page. */}
+      <NotificationPopups items={popups} onOpen={handleOpenPopup} onClose={handleClosePopup} />
     </div>
   );
 }

@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
 import AssignProductionModal from '../components/common/AssignProductionModal';
+import JobFullDetail from '../components/common/JobFullDetail';
 import { useT } from '../i18n/LanguageContext';
 
 const S = {
@@ -28,6 +29,7 @@ export default function JobSetterPage() {
   const [jobs, setJobs] = useState({});
   const [tab, setTab] = useState('pending');     // 'pending' | 'completed'
   const [assignJob, setAssignJob] = useState(null);
+  const [detailJob, setDetailJob] = useState(null);
 
   useEffect(() => {
     const u = onValue(ref(db, 'mpw/jobs'), (snap) => setJobs(snap.val() || {}));
@@ -71,7 +73,7 @@ export default function JobSetterPage() {
         </div>
       ) : (
         list.map((job) => (
-          <div key={job.id} className="card mb-3">
+          <div key={job.id} className="card mb-3" onClick={() => setDetailJob(job)} style={{ cursor: 'pointer' }}>
             <div className="flex items-start justify-between">
               <div style={{ flex: 1, paddingRight: 12 }}>
                 <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text3)' }}>{job.jobNo}</div>
@@ -94,7 +96,11 @@ export default function JobSetterPage() {
             </div>
 
             {tab === 'pending' ? (
-              <button className="btn btn-primary" style={{ width: '100%', marginTop: 14 }} onClick={() => setAssignJob(job)}>
+              <button
+                className="btn btn-primary"
+                style={{ width: '100%', marginTop: 14 }}
+                onClick={(e) => { e.stopPropagation(); setAssignJob(job); }}
+              >
                 {t('selectType')} →
               </button>
             ) : (
@@ -113,6 +119,32 @@ export default function JobSetterPage() {
           onClose={() => setAssignJob(null)}
           onDone={() => setAssignJob(null)}
         />
+      )}
+
+      {detailJob && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200,
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflow: 'auto',
+          }}
+          onClick={() => setDetailJob(null)}
+        >
+          <div
+            style={{
+              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+              maxWidth: 640, width: '100%', padding: 16, position: 'relative', margin: 'auto 0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+              <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+                {detailJob.jobNo}
+              </div>
+              <button className="btn btn-sm" onClick={() => setDetailJob(null)} aria-label="Close">✕</button>
+            </div>
+            <JobFullDetail job={detailJob} />
+          </div>
+        </div>
       )}
     </div>
   );

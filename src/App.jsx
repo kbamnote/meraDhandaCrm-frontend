@@ -62,6 +62,7 @@ import CustomDomainPage from './pages/CustomDomainPage';
 import ReferralsPage from './pages/ReferralsPage';
 import CustomerOutboxPage from './pages/CustomerOutboxPage';
 import SendNotificationPage from './pages/SendNotificationPage';
+import ProductsPage from './pages/ProductsPage';
 
 // Explicit page components for routes that have a finished React component.
 // Preferred over the ResourcePage/PageStub fallback in the route table below.
@@ -107,6 +108,7 @@ const CUSTOM_PAGES = {
   'referrals': ReferralsPage,
   'customer-outbox': CustomerOutboxPage,
   'send-notification': SendNotificationPage,
+  'products': ProductsPage,
 };
 
 // Routes that reuse another route's resource config.

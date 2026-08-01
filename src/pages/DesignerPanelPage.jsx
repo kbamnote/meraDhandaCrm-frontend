@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import { socket } from '../services/realtime';
-import { ordersApi } from '../services/api';
+import { ordersApi, uploadApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
@@ -27,6 +27,15 @@ const S = {
   awaiting:  { en: '⏸ Awaiting client approval', hi: '⏸ क्लाइंट अप्रूवल का इंतज़ार', hinglish: '⏸ Client approval ka wait', gu: '⏸ ક્લાયન્ટ મંજૂરીની રાહ', mr: '⏸ क्लायंट मंजुरीची वाट', mwr: '⏸ क्लाइंट अप्रूवल रो इंतज़ार' },
   sendApproval:{ en: 'Send for Approval', hi: 'अप्रूवल के लिए भेजें', hinglish: 'Send for Approval', gu: 'મંજૂરી માટે મોકલો', mr: 'मंजुरीसाठी पाठवा', mwr: 'अप्रूवल खातर भेजो' },
   waitData:  { en: 'Waiting for Client Data', hi: 'क्लाइंट डेटा का इंतज़ार', hinglish: 'Waiting for Client Data', gu: 'ક્લાયન્ટ ડેટાની રાહ', mr: 'क्लायंट डेटाची वाट', mwr: 'क्लाइंट डेटा रो इंतज़ार' },
+  clientReceived: { en: 'Client Data received', hi: 'क्लाइंट डेटा मिल गया', hinglish: 'Client Data received', gu: 'ક્લાયન્ટ ડેટા મળ્યો', mr: 'क्लायंट डेटा मिळाला', mwr: 'क्लाइंट डेटा मिल गयो' },
+  clientChanges:  { en: 'Client wants changes', hi: 'क्लाइंट बदलाव चाहता है', hinglish: 'Client wants changes', gu: 'ક્લાયન્ટ ફેરફાર ઇચ્છે છે', mr: 'क्लायंट बदल इच्छितो', mwr: 'क्लाइंट बदलाव चाहे है' },
+  badgeChanges:   { en: 'Client wants changes', hi: 'क्लाइंट बदलाव चाहता है', hinglish: 'Client wants changes', gu: 'ક્લાયન્ટ ફેરફાર ઇચ્છે છે', mr: 'क्लायंट बदल इच्छितो', mwr: 'क्लाइंट बदलाव चाहे है' },
+  approvalsSent:  { en: 'Sent for approval', hi: 'अप्रूवल के लिए भेजा गया', hinglish: 'Sent for approval', gu: 'મંજૂરી માટે મોકલ્યું', mr: 'मंजुरीसाठी पाठवले', mwr: 'अप्रूवल खातर भेज्यो' },
+  uploadDesign: { en: 'Upload design image', hi: 'डिज़ाइन इमेज अपलोड करें', hinglish: 'Upload design image', gu: 'ડિઝાઇન ઇમેજ અપલોડ કરો', mr: 'डिझाइन इमेज अपलोड करा', mwr: 'डिज़ाइन इमेज अपलोड करो' },
+  changeDesign: { en: 'Change design image', hi: 'डिज़ाइन इमेज बदलें', hinglish: 'Change design image', gu: 'ડિઝાઇન ઇમેજ બદલો', mr: 'डिझाइन इमेज बदला', mwr: 'डिज़ाइन इमेज बदलो' },
+  uploading:    { en: 'Uploading…', hi: 'अपलोड हो रहा है…', hinglish: 'Uploading…', gu: 'અપલોડ થઈ રહ્યું છે…', mr: 'अपलोड होत आहे…', mwr: 'अपलोड हो रयो है…' },
+  imageSaved:   { en: 'Design image saved', hi: 'डिज़ाइन इमेज सेव हो गई', hinglish: 'Design image saved', gu: 'ડિઝાઇન ઇમેજ સેવ થઈ', mr: 'डिझाइन इमेज सेव झाली', mwr: 'डिज़ाइन इमेज सेव हो गई' },
+  uploadFail:   { en: 'Upload failed', hi: 'अपलोड नहीं हुआ', hinglish: 'Upload failed', gu: 'અપલોડ નિષ્ફળ', mr: 'अपलोड अयशस्वी', mwr: 'अपलोड कोनी हुयो' },
   complete:  { en: 'Design Complete', hi: 'डिज़ाइन पूरा', hinglish: 'Design Complete', gu: 'ડિઝાઇન પૂર્ણ', mr: 'डिझाइन पूर्ण', mwr: 'डिज़ाइन पूरो' },
   hold:      { en: 'Hold', hi: 'होल्ड', hinglish: 'Hold', gu: 'હોલ્ડ', mr: 'होल्ड', mwr: 'होल्ड' },
   passOthers:{ en: 'Pass to Others', hi: 'दूसरों को पास करें', hinglish: 'Pass to Others', gu: 'બીજાને પાસ કરો', mr: 'इतरांना पास करा', mwr: 'दूजां ने पास करो' },
@@ -48,6 +57,7 @@ export default function DesignerPanelPage() {
   const [all, setAll] = useState([]);
   const [onLeave, setOnLeave] = useState(!!profile?.onLeave);
   const [busyId, setBusyId] = useState(null);
+  const [uploading, setUploading] = useState(null);
 
   // Self-service designer feed (open pool + my claimed jobs). A dedicated endpoint
   // so a designer does NOT need the broad `jobs` (Job Cards) permission to see
@@ -74,6 +84,23 @@ export default function DesignerPanelPage() {
     finally { setBusyId(null); }
   };
 
+  // Upload the design preview image via the generic /upload endpoint, then link
+  // the returned URL onto the job. Updates the local card immediately so the
+  // thumbnail appears without waiting for the next feed refresh.
+  const uploadDesign = async (e, job) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    setUploading(job.id);
+    try {
+      const r = await uploadApi.upload(f);
+      await ordersApi.designerDesignImage(job.id, r.url);
+      setAll((prev) => prev.map((j) => (j.id === job.id ? { ...j, designImage: r.url } : j)));
+      showToast(t('imageSaved'), 'success');
+    } catch (err) { showToast(err.response?.data?.error || t('uploadFail'), 'error'); }
+    finally { setUploading(null); }
+  };
+
   const toggleLeave = async () => {
     const next = !onLeave;
     try { await ordersApi.designerLeave(next); setOnLeave(next); } catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
@@ -94,12 +121,14 @@ export default function DesignerPanelPage() {
       </div>
       {!mine.length && <div className="card" style={{ textAlign: 'center', padding: 20, color: 'var(--text3)' }}>{t('noneMine')}</div>}
       {mine.map((job) => {
-        const isUrgent = job.priority === 'urgent' || job.priority === 'high';
+        const isUrgent = job.priority === 'urgent' || job.priority === 'high' || job.priority === 'most_urgent';
         const badge = job.designWait === 'approval'
           ? { label: t('badgeApproval'), bg: 'var(--amber)', fg: '#fff' }
           : job.designWait === 'client_data'
             ? { label: t('badgeData'), bg: '#0EA5E9', fg: '#fff' }
-            : { label: t('badgeDesigning'), bg: 'var(--surface2)', fg: 'var(--text2)' };
+            : job.designWait === 'changes'
+              ? { label: t('badgeChanges'), bg: 'var(--red)', fg: '#fff' }
+              : { label: t('badgeDesigning'), bg: 'var(--surface2)', fg: 'var(--text2)' };
         return (
         <div key={job.id} className="card" style={{ marginBottom: 8, borderLeft: '4px solid #8B5CF6' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
@@ -117,6 +146,15 @@ export default function DesignerPanelPage() {
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
             {job.deliveryDate && <span>📅 {t('delivery')}: {fmt(job.deliveryDate)}</span>}
             {job.createdAt && <span>🕒 {t('received')}: {fmt(job.createdAt)}</span>}
+            {job.designApprovals > 0 && <span>✉️ {t('approvalsSent')}: {job.designApprovals}×</span>}
+          </div>
+          <div className="flex gap-2 items-center" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+            {job.designImage && <img src={job.designImage} alt="design preview" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />}
+            <input id={`des-${job.id}`} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadDesign(e, job)} />
+            <button className="btn btn-sm" onClick={() => document.getElementById(`des-${job.id}`).click()} disabled={busyId === job.id || uploading === job.id}
+              style={{ background: 'var(--surface2)', color: 'var(--text2)', border: 'none' }}>
+              {uploading === job.id ? t('uploading') : (job.designImage ? t('changeDesign') : t('uploadDesign'))}
+            </button>
           </div>
           <div className="flex gap-2" style={{ marginTop: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerWait(job.id, job.designWait === 'approval' ? null : 'approval'))} disabled={busyId === job.id}
@@ -124,8 +162,12 @@ export default function DesignerPanelPage() {
               {t('sendApproval')}
             </button>
             <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerWait(job.id, job.designWait === 'client_data' ? null : 'client_data'))} disabled={busyId === job.id}
-              style={{ background: job.designWait === 'client_data' ? '#0EA5E9' : 'var(--surface2)', color: job.designWait === 'client_data' ? '#fff' : 'var(--text2)', border: 'none' }}>
-              {t('waitData')}
+              style={{ background: job.designWait === 'client_data' ? 'var(--green)' : 'var(--surface2)', color: job.designWait === 'client_data' ? '#fff' : 'var(--text2)', border: 'none' }}>
+              {job.designWait === 'client_data' ? t('clientReceived') : t('waitData')}
+            </button>
+            <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerWait(job.id, job.designWait === 'changes' ? null : 'changes'))} disabled={busyId === job.id}
+              style={{ background: job.designWait === 'changes' ? 'var(--red)' : 'var(--surface2)', color: job.designWait === 'changes' ? '#fff' : 'var(--text2)', border: 'none' }}>
+              {t('clientChanges')}
             </button>
             <button className="btn btn-success btn-sm" onClick={() => run(job.id, () => ordersApi.designerReady(job.id))} disabled={busyId === job.id}>{t('complete')}</button>
             <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerHold(job.id))} disabled={busyId === job.id}
@@ -170,7 +212,7 @@ function JobLine({ job }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{job.jobNo}</span>
-        {job.priority === 'urgent' && <span className="badge badge-amber">⚡</span>}
+        {(job.priority === 'urgent' || job.priority === 'most_urgent') && <span className="badge badge-amber">⚡</span>}
       </div>
       <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{job.clientName}</div>
       <div style={{ fontSize: 12, color: 'var(--text2)' }}>{job.work || '—'}{job.deliveryDate ? ` · 📅 ${job.deliveryDate}` : ''}</div>

@@ -55,7 +55,7 @@ function QCCard({ job, t }) {
     <div className="card" style={{ marginBottom: 10, borderLeft: '4px solid #CA8A04' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{job.jobNo}</span>
-        {job.priority === 'urgent' && <span className="badge badge-amber">⚡</span>}
+        {(job.priority === 'urgent' || job.priority === 'most_urgent') && <span className="badge badge-amber">⚡</span>}
       </div>
       <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{job.clientName}</div>
       <div style={{ fontSize: 12, color: 'var(--text2)' }}>{job.work || '—'}{job.deliveryDate ? ` · 📅 ${job.deliveryDate}` : ''}</div>

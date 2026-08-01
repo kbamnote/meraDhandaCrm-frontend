@@ -153,6 +153,7 @@ export default function JobCardsPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>{job.jobNo || '—'}</span>
                 <StageBadge stage={job.stage} />
+                {job.priority === 'most_urgent' && <span className="badge badge-red">🔥</span>}
                 {job.priority === 'urgent' && <span className="badge badge-amber">⚡</span>}
               </div>
               <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{job.clientName}</div>
@@ -224,7 +225,9 @@ function NewJobModal({ onClose, t }) {
   const [form, setForm] = useState(BLANK);
   const [items, setItems] = useState([]);
   const [attachments, setAttachments] = useState([]);
-  const [dh, setDh] = useState(''); const [dm, setDm] = useState('');
+  // Delivery time as 12-hour + AM/PM. Stored as "5:00 PM" to match the format
+  // already used by every existing job (170 of 180 carried this shape).
+  const [dh, setDh] = useState(''); const [dm, setDm] = useState(''); const [dap, setDap] = useState('PM');
   const [showGst, setShowGst] = useState(false);
   const [preview, setPreview] = useState('');
   const [busy, setBusy] = useState(false);
@@ -233,6 +236,8 @@ function NewJobModal({ onClose, t }) {
   const [salespeople, setSalespeople] = useState([]);
   const [clientQ, setClientQ] = useState('');
   const [clientMatches, setClientMatches] = useState([]);
+  // The existing client whose details were pulled into the form (null = new client).
+  const [existingClient, setExistingClient] = useState(null);
   const [prodSel, setProdSel] = useState(''); const [prodQty, setProdQty] = useState('');
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -255,7 +260,15 @@ function NewJobModal({ onClose, t }) {
   const pickClient = (c) => {
     setForm((f) => ({ ...f, clientName: c.name || '', clientMobile: c.phone || '', clientEmail: c.email || '', address: c.address || '', gstNo: c.gstNo || '', pan: c.pan || '' }));
     setClientQ('');
+    setExistingClient(c);
     if (c.gstNo || c.pan) setShowGst(true);
+  };
+
+  // Dismiss the returning-customer banner and blank the auto-filled identity so
+  // the entered details can't silently belong to the previous client.
+  const clearExistingClient = () => {
+    setExistingClient(null);
+    setForm((f) => ({ ...f, clientName: '', clientMobile: '', clientEmail: '', address: '', gstNo: '', pan: '' }));
   };
 
   const addItem = () => {
@@ -266,7 +279,10 @@ function NewJobModal({ onClose, t }) {
   };
 
   const suggestDate = () => {
-    const days = form.priority === 'urgent' ? 1 : (items.length > 3 ? 5 : 3);
+    // Most urgent = same day; urgent = next day; otherwise size-based.
+    const days = form.priority === 'most_urgent' ? 0
+      : form.priority === 'urgent' ? 1
+        : (items.length > 3 ? 5 : 3);
     const d = new Date(); d.setDate(d.getDate() + days);
     set('deliveryDate', d.toISOString().slice(0, 10));
   };
@@ -298,7 +314,7 @@ function NewJobModal({ onClose, t }) {
         creditLimit: form.creditLimit ? Number(form.creditLimit) : null,
         items,
         attachments,
-        deliveryTime: (dh !== '' && dm !== '') ? `${String(dh).padStart(2, '0')}:${dm}` : null,
+        deliveryTime: (dh !== '' && dm !== '') ? `${dh}:${dm} ${dap}` : null,
       });
       showToast(`${t('created')} — ${job.jobNo}`, 'success');
       onClose();
@@ -324,7 +340,21 @@ function NewJobModal({ onClose, t }) {
               <div className="card" style={{ position: 'absolute', zIndex: 5, left: 0, right: 0, top: '100%', marginTop: 2, padding: 0, maxHeight: 180, overflow: 'auto' }}>
                 {clientMatches.map((c) => (
                   <div key={c.id} onClick={() => pickClient(c)} style={{ padding: '8px 10px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 13 }}><b>{c.name || '—'}</b> <span style={{ color: 'var(--text3)' }}>{c.phone || ''}</span></div>
+                    <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <b>{c.name || '—'}</b>
+                      <span style={{ color: 'var(--text3)' }}>{c.phone || ''}</span>
+                      {c.jobCount > 0 && (
+                        <span className="badge badge-green" style={{ fontSize: 10 }}>
+                          {c.jobCount} {c.jobCount === 1 ? 'job' : 'jobs'}
+                        </span>
+                      )}
+                    </div>
+                    {c.lastJobNo ? (
+                      <div style={{ fontSize: 11, color: 'var(--text2)' }}>
+                        Last: <b style={{ fontFamily: 'monospace' }}>{c.lastJobNo}</b>
+                        {c.lastStage ? ` · ${c.lastStage}` : ''}
+                      </div>
+                    ) : null}
                     {(c.email || c.gstNo || c.address) ? (
                       <div style={{ fontSize: 11, color: 'var(--text3)' }}>{[c.email, c.gstNo, c.address].filter(Boolean).join(' · ')}</div>
                     ) : null}
@@ -333,6 +363,37 @@ function NewJobModal({ onClose, t }) {
               </div>
             )}
           </div>
+
+          {/* Returning-customer banner — makes it obvious the details were filled
+              from an existing record, so nobody creates a near-duplicate client. */}
+          {existingClient && (
+            <div
+              className="card"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                marginBottom: 10, background: 'var(--surface2)', borderLeft: '3px solid var(--green)',
+              }}
+            >
+              <span style={{ fontSize: 18 }}>🔁</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  Existing client — {existingClient.name}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text2)' }}>
+                  {existingClient.jobCount > 0 ? (
+                    <>
+                      {existingClient.jobCount} total {existingClient.jobCount === 1 ? 'job' : 'jobs'}
+                      {existingClient.lastJobNo ? (
+                        <> · last <b style={{ fontFamily: 'monospace' }}>{existingClient.lastJobNo}</b>
+                          {existingClient.lastStage ? ` (${existingClient.lastStage})` : ''}</>
+                      ) : null}
+                    </>
+                  ) : 'No jobs yet — this will be their first.'}
+                </div>
+              </div>
+              <button type="button" className="btn btn-ghost btn-xs" onClick={clearExistingClient}>Clear</button>
+            </div>
+          )}
           <div className="form-group">
             <label style={lbl}>Client Name *</label>
             <input className="input" placeholder="Client ka poora naam..." value={form.clientName} onChange={(e) => set('clientName', e.target.value)} autoFocus required />
@@ -404,18 +465,27 @@ function NewJobModal({ onClose, t }) {
               </label>
               <input className="input" type="date" value={form.deliveryDate} onChange={(e) => set('deliveryDate', e.target.value)} />
             </div>
-            <div className="form-group" style={{ width: 130 }}>
+            <div className="form-group" style={{ width: 190 }}>
               <label style={lbl}>Delivery Time</label>
               <div className="flex gap-2">
                 <select className="input" value={dh} onChange={(e) => setDh(e.target.value)}>
-                  <option value="">--</option>
-                  {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}</option>)}
+                  <option value="">Hr</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => <option key={h} value={h}>{h}</option>)}
                 </select>
                 <select className="input" value={dm} onChange={(e) => setDm(e.target.value)}>
-                  <option value="">--</option>
-                  {['00', '15', '30', '45'].map((m) => <option key={m} value={m}>{m}</option>)}
+                  <option value="">Min</option>
+                  {['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select className="input" value={dap} onChange={(e) => setDap(e.target.value)}>
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
                 </select>
               </div>
+              {(dh !== '' && dm !== '') ? (
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                  Delivery by <b>{dh}:{dm} {dap}</b>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="flex gap-2">
@@ -424,6 +494,7 @@ function NewJobModal({ onClose, t }) {
               <select className="input" value={form.priority} onChange={(e) => set('priority', e.target.value)}>
                 <option value="normal">Normal</option>
                 <option value="urgent">⚡ Urgent</option>
+                <option value="most_urgent">🔥 Most Urgent</option>
               </select>
             </div>
             <div className="form-group" style={{ flex: 1 }}>

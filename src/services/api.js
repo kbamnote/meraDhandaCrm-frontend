@@ -216,6 +216,7 @@ export const ordersApi = {
   designerReady:    (id)    => api.post(`/orders/${id}/designer/ready`).then(r => r.data),
   designerApproval: (id)    => api.post(`/orders/${id}/designer/client-approval`).then(r => r.data),
   designerWait:     (id, reason) => api.post(`/orders/${id}/designer/wait`, { reason }).then(r => r.data),
+  designerDesignImage: (id, url) => api.post(`/orders/${id}/designer/design-image`, { url }).then(r => r.data),
   designerHold:     (id)    => api.post(`/orders/${id}/designer/hold`).then(r => r.data),
   designerFeed:     ()      => api.get('/orders/designer/feed').then(r => r.data),
   designerLeave:    (onLeave) => api.post('/orders/designer/leave', { onLeave }).then(r => r.data),
@@ -258,6 +259,8 @@ export const salesApi = {
 export const stockApi = {
   move:      (body)   => api.post('/stock/move', body).then(r => r.data),
   movements: (itemId) => api.get('/stock/movements', { params: itemId ? { itemId } : {} }).then(r => r.data),
+  // Bulk product/stock import. Pass { rows, dryRun: true } to preview first.
+  bulk:      (body)   => api.post('/stock/bulk', body).then(r => r.data),
 };
 
 // Customer messaging — templates, broadcast, outbox (send is stubbed server-side).
