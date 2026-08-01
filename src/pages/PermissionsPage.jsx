@@ -51,6 +51,12 @@ const S = {
 
   thAccess: { en: 'Access', hi: 'एक्सेस', hinglish: 'Access', gu: 'એક્સેસ', mr: 'अॅक्सेस', mwr: 'एक्सेस' },
   manageAccess: { en: '🔧 Access', hi: '🔧 एक्सेस', hinglish: '🔧 Access', gu: '🔧 એક્સેસ', mr: '🔧 अॅक्सेस', mwr: '🔧 एक्सेस' },
+  edit: { en: 'Edit', hi: 'एडिट', hinglish: 'Edit', gu: 'એડિટ', mr: 'एडिट', mwr: 'एडिट' },
+  editUser: { en: 'Edit user', hi: 'यूज़र एडिट करें', hinglish: 'User edit karein', gu: 'યૂઝર એડિટ કરો', mr: 'युझर एडिट करा', mwr: 'यूज़र एडिट करो' },
+  active: { en: 'Active (can sign in)', hi: 'सक्रिय (लॉगिन कर सकता है)', hinglish: 'Active (login kar sakta hai)', gu: 'સક્રિય (લૉગિન કરી શકે)', mr: 'सक्रिय (लॉगिन करू शकतो)', mwr: 'सक्रिय (लॉगिन कर सके)' },
+  newPassword: { en: 'New password (leave blank to keep current)', hi: 'नया पासवर्ड (खाली छोड़ने पर मौजूदा रहेगा)', hinglish: 'Naya password (blank chhodne par current rahega)', gu: 'નવો પાસવર્ડ (ખાલી રાખવાથી હાલનો જ રહેશે)', mr: 'नवीन पासवर्ड (रिकामे ठेवल्यास सध्याचाच राहील)', mwr: 'नयो पासवर्ड (खाली राखण पर मौजूदा रैहसे)' },
+  userUpdated: { en: 'User updated', hi: 'यूज़र अपडेट हो गया', hinglish: 'User update ho gaya', gu: 'યૂઝર અપડેટ થયો', mr: 'युझर अपडेट झाला', mwr: 'यूज़र अपडेट हो ग्यो' },
+  cannotDisableSelf: { en: 'You cannot deactivate your own account.', hi: 'आप अपना अकाउंट बंद नहीं कर सकते।', hinglish: 'Aap apna account band nahi kar sakte.', gu: 'તમે તમારું એકાઉન્ટ બંધ કરી શકતા નથી.', mr: 'तुम्ही तुमचे खाते बंद करू शकत नाही.', mwr: 'थम अपनो अकाउंट बंद नई कर सको।' },
   accessFor: { en: 'Module access', hi: 'मॉड्यूल एक्सेस', hinglish: 'Module access', gu: 'મોડ્યુલ એક્સેસ', mr: 'मॉड्यूल अॅक्सेस', mwr: 'मॉड्यूल एक्सेस' },
   canViewCol: { en: 'View', hi: 'देखें', hinglish: 'View', gu: 'જુઓ', mr: 'पाहा', mwr: 'देखो' },
   canEditCol: { en: 'Edit', hi: 'एडिट', hinglish: 'Edit', gu: 'એડિટ', mr: 'एडिट', mwr: 'एडिट' },
@@ -113,7 +119,7 @@ const ROLE_BADGE = {
 };
 
 export default function PermissionsPage() {
-  const { hasRole } = useAuth();
+  const { hasRole, profile } = useAuth();
   const t = useT(S);
   const [users, setUsers] = useState({});
   const [search, setSearch] = useState('');
@@ -180,12 +186,13 @@ export default function PermissionsPage() {
                 <th>{t('thCurrentRole')}</th>
                 <th>{t('thCustomRole')}</th>
                 {canEdit && <th style={{ minWidth: 320 }}>{t('thChangeRole')}</th>}
+                {canEdit && <th>{t('edit')}</th>}
                 {canEdit && <th>{t('thAccess')}</th>}
               </tr>
             </thead>
             <tbody>
               {filtered.map((u) => (
-                <RoleRow key={u.id} u={u} canEdit={canEdit} t={t} />
+                <RoleRow key={u.id} u={u} canEdit={canEdit} t={t} meId={profile?.id} />
               ))}
             </tbody>
           </table>
@@ -197,11 +204,12 @@ export default function PermissionsPage() {
   );
 }
 
-function RoleRow({ u, canEdit, t }) {
+function RoleRow({ u, canEdit, t, meId }) {
   const [role, setRole] = useState(u.role || 'pending');
   const [customRole, setCustomRole] = useState(u.customRole || '');
   const [busy, setBusy] = useState(false);
   const [showAccess, setShowAccess] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const badgeClass = ROLE_BADGE[u.role] || 'badge-blue';
 
@@ -234,6 +242,14 @@ function RoleRow({ u, canEdit, t }) {
               {busy ? t('saving') : t('save')}
             </button>
           </div>
+        </td>
+      )}
+      {canEdit && (
+        <td>
+          <button className="btn btn-ghost btn-xs" onClick={() => setShowEdit(true)}>
+            {t('edit')}
+          </button>
+          {showEdit && <EditUserModal u={u} t={t} meId={meId} onClose={() => setShowEdit(false)} />}
         </td>
       )}
       {canEdit && (
@@ -346,6 +362,76 @@ function PermissionsModal({ u, t, onClose }) {
           <button className="btn btn-ghost" onClick={onClose}>{t('close')}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function EditUserModal({ u, t, onClose, meId }) {
+  const [form, setForm] = useState({
+    name: u.name || '',
+    email: u.email || '',
+    department: u.department || '',
+    active: u.active !== false,
+    password: '',
+  });
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const isSelf = meId && String(meId) === String(u.id);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const body = {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        department: form.department.trim() || null,
+        active: form.active,
+      };
+      if (form.password) body.password = form.password;
+      await authApi.updateUser(u.id, body);
+      showToast(t('userUpdated'), 'success');
+      onClose();
+    } catch (err) {
+      showToast(err.response?.data?.error || t('failed'), 'error');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <form className="card" onSubmit={submit} style={{ maxWidth: 440, width: '100%' }}>
+        <h3 style={{ marginBottom: 14 }}>{t('editUser')}</h3>
+
+        <div className="form-group">
+          <label>{t('fullName')}</label>
+          <input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} autoFocus />
+        </div>
+        <div className="form-group">
+          <label>{t('emailStar')}</label>
+          <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required />
+        </div>
+        <div className="form-group">
+          <label>{t('department')}</label>
+          <input className="input" value={form.department} onChange={(e) => set('department', e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label>{t('newPassword')}</label>
+          <input className="input" type="text" value={form.password} onChange={(e) => set('password', e.target.value)} placeholder={t('passwordPlaceholder')} />
+        </div>
+
+        <label className="flex items-center gap-2" style={{ margin: '10px 0', cursor: isSelf ? 'not-allowed' : 'pointer' }}>
+          <input type="checkbox" checked={form.active} disabled={isSelf} onChange={(e) => set('active', e.target.checked)} style={{ width: 16, height: 16 }} />
+          <span>{t('active')}</span>
+        </label>
+        {isSelf && <div style={{ fontSize: 11, color: 'var(--amber)', marginBottom: 8 }}>{t('cannotDisableSelf')}</div>}
+
+        <div className="flex gap-2 mt-2">
+          <button type="submit" className="btn btn-primary flex-1" disabled={busy}>
+            {busy ? t('saving') : t('save')}
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button>
+        </div>
+      </form>
     </div>
   );
 }
