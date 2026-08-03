@@ -88,6 +88,24 @@ export default function JobAlertPopup() {
   }, [check]);
 
   const current = queue[0];
+
+  // Proper modal behaviour while one is showing: the page behind must not
+  // scroll, and Escape should dismiss. Both effects sit above the early return
+  // so hook order stays stable between renders.
+  useEffect(() => {
+    if (!current) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [current]);
+
+  useEffect(() => {
+    if (!current) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setQueue((q) => q.slice(1)); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [current]);
+
   if (!current) return null;
 
   const close = () => setQueue((q) => q.slice(1));
@@ -109,10 +127,20 @@ export default function JobAlertPopup() {
       }}
       onClick={close}
     >
+      <style>{`
+        @keyframes jobAlertIn {
+          from { opacity: 0; transform: scale(0.92) translateY(8px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+      `}</style>
       <div
         className="card"
         onClick={(e) => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 420, padding: 20, textAlign: 'center' }}
+        style={{
+          width: '100%', maxWidth: 420, padding: 20, textAlign: 'center',
+          animation: 'jobAlertIn .18s ease-out',
+          boxShadow: '0 18px 50px rgba(0,0,0,0.35)',
+        }}
       >
         <div style={{ fontSize: 40, lineHeight: 1 }}>🎨</div>
         <h3 style={{ margin: '10px 0 4px', fontSize: 18 }}>{current.title || 'New job'}</h3>
