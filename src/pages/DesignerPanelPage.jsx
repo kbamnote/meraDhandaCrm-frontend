@@ -31,8 +31,6 @@ const S = {
   clientChanges:  { en: 'Client wants changes', hi: 'क्लाइंट बदलाव चाहता है', hinglish: 'Client wants changes', gu: 'ક્લાયન્ટ ફેરફાર ઇચ્છે છે', mr: 'क्लायंट बदल इच्छितो', mwr: 'क्लाइंट बदलाव चाहे है' },
   badgeChanges:   { en: 'Client wants changes', hi: 'क्लाइंट बदलाव चाहता है', hinglish: 'Client wants changes', gu: 'ક્લાયન્ટ ફેરફાર ઇચ્છે છે', mr: 'क्लायंट बदल इच्छितो', mwr: 'क्लाइंट बदलाव चाहे है' },
   approvalsSent:  { en: 'Sent for approval', hi: 'अप्रूवल के लिए भेजा गया', hinglish: 'Sent for approval', gu: 'મંજૂરી માટે મોકલ્યું', mr: 'मंजुरीसाठी पाठवले', mwr: 'अप्रूवल खातर भेज्यो' },
-  uploadDesign: { en: 'Upload design image', hi: 'डिज़ाइन इमेज अपलोड करें', hinglish: 'Upload design image', gu: 'ડિઝાઇન ઇમેજ અપલોડ કરો', mr: 'डिझाइन इमेज अपलोड करा', mwr: 'डिज़ाइन इमेज अपलोड करो' },
-  changeDesign: { en: 'Change design image', hi: 'डिज़ाइन इमेज बदलें', hinglish: 'Change design image', gu: 'ડિઝાઇન ઇમેજ બદલો', mr: 'डिझाइन इमेज बदला', mwr: 'डिज़ाइन इमेज बदलो' },
   uploading:    { en: 'Uploading…', hi: 'अपलोड हो रहा है…', hinglish: 'Uploading…', gu: 'અપલોડ થઈ રહ્યું છે…', mr: 'अपलोड होत आहे…', mwr: 'अपलोड हो रयो है…' },
   imageSaved:   { en: 'Design image saved', hi: 'डिज़ाइन इमेज सेव हो गई', hinglish: 'Design image saved', gu: 'ડિઝાઇન ઇમેજ સેવ થઈ', mr: 'डिझाइन इमेज सेव झाली', mwr: 'डिज़ाइन इमेज सेव हो गई' },
   uploadFail:   { en: 'Upload failed', hi: 'अपलोड नहीं हुआ', hinglish: 'Upload failed', gu: 'અપલોડ નિષ્ફળ', mr: 'अपलोड अयशस्वी', mwr: 'अपलोड कोनी हुयो' },
@@ -99,23 +97,6 @@ export default function DesignerPanelPage() {
     const job = passJob;
     setPassJob(null);
     await run(job.id, () => ordersApi.designerReject(job.id, reason), 'Job passed back to the pool');
-  };
-
-  // Upload the design preview image via the generic /upload endpoint, then link
-  // the returned URL onto the job. Updates the local card immediately so the
-  // thumbnail appears without waiting for the next feed refresh.
-  const uploadDesign = async (e, job) => {
-    const f = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!f) return;
-    setUploading(job.id);
-    try {
-      const r = await uploadApi.upload(f);
-      await ordersApi.designerDesignImage(job.id, r.url);
-      setAll((prev) => prev.map((j) => (j.id === job.id ? { ...j, designImage: r.url } : j)));
-      showToast(t('imageSaved'), 'success');
-    } catch (err) { showToast(err.response?.data?.error || t('uploadFail'), 'error'); }
-    finally { setUploading(null); }
   };
 
   // Design Complete requires a design image. If one's already attached the job
@@ -190,14 +171,11 @@ export default function DesignerPanelPage() {
             {job.createdAt && <span>🕒 {t('received')}: {fmt(job.createdAt)}</span>}
             {job.designApprovals > 0 && <span>✉️ {t('approvalsSent')}: {job.designApprovals}×</span>}
           </div>
-          <div className="flex gap-2 items-center" style={{ marginTop: 8, flexWrap: 'wrap' }}>
-            {job.designImage && <img src={job.designImage} alt="design preview" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />}
-            <input id={`des-${job.id}`} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadDesign(e, job)} />
-            <button className="btn btn-sm" onClick={() => document.getElementById(`des-${job.id}`).click()} disabled={busyId === job.id || uploading === job.id}
-              style={{ background: 'var(--surface2)', color: 'var(--text2)', border: 'none' }}>
-              {uploading === job.id ? t('uploading') : (job.designImage ? t('changeDesign') : t('uploadDesign'))}
-            </button>
-          </div>
+          {job.designImage && (
+            <div className="flex gap-2 items-center" style={{ marginTop: 8 }}>
+              <img src={job.designImage} alt="design preview" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
+            </div>
+          )}
           <div className="flex gap-2" style={{ marginTop: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerWait(job.id, job.designWait === 'approval' ? null : 'approval'))} disabled={busyId === job.id}
               style={{ background: job.designWait === 'approval' ? 'var(--amber)' : 'var(--surface2)', color: job.designWait === 'approval' ? '#fff' : 'var(--text2)', border: 'none' }}>
