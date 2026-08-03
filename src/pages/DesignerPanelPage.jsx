@@ -58,6 +58,8 @@ export default function DesignerPanelPage() {
   const [onLeave, setOnLeave] = useState(!!profile?.onLeave);
   const [busyId, setBusyId] = useState(null);
   const [uploading, setUploading] = useState(null);
+  const [passJob, setPassJob] = useState(null);   // job awaiting a pass reason
+  const [passReason, setPassReason] = useState('');
 
   // Self-service designer feed (open pool + my claimed jobs). A dedicated endpoint
   // so a designer does NOT need the broad `jobs` (Job Cards) permission to see
@@ -82,6 +84,17 @@ export default function DesignerPanelPage() {
     try { await fn(); if (okMsg) showToast(okMsg, 'success'); }
     catch (e) { showToast(e.response?.status === 409 ? t('taken') : (e.response?.data?.error || t('failed')), 'error'); }
     finally { setBusyId(null); }
+  };
+
+  // Passing a job sends it back to every designer, so the next person needs to
+  // know why it bounced. The reason is required — the server rejects an empty one.
+  const askPassReason = (job) => { setPassJob(job); setPassReason(''); };
+  const submitPass = async () => {
+    const reason = passReason.trim();
+    if (reason.length < 3) return showToast('Please write why you are passing this job', 'error');
+    const job = passJob;
+    setPassJob(null);
+    await run(job.id, () => ordersApi.designerReject(job.id, reason), 'Job passed back to the pool');
   };
 
   // Upload the design preview image via the generic /upload endpoint, then link
@@ -172,7 +185,7 @@ export default function DesignerPanelPage() {
             <button className="btn btn-success btn-sm" onClick={() => run(job.id, () => ordersApi.designerReady(job.id))} disabled={busyId === job.id}>{t('complete')}</button>
             <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerHold(job.id))} disabled={busyId === job.id}
               style={{ background: 'var(--surface2)', color: 'var(--text2)', border: 'none' }}>{t('hold')}</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => run(job.id, () => ordersApi.designerReject(job.id))} disabled={busyId === job.id}>{t('passOthers')}</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => askPassReason(job)} disabled={busyId === job.id}>{t('passOthers')}</button>
           </div>
         </div>
         );
@@ -190,10 +203,45 @@ export default function DesignerPanelPage() {
           <JobLine job={job} />
           <div className="flex gap-2" style={{ marginTop: 8 }}>
             <button className="btn btn-primary btn-sm" onClick={() => run(job.id, () => ordersApi.designerClaim(job.id))} disabled={busyId === job.id}>{t('accept')}</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => run(job.id, () => ordersApi.designerReject(job.id))} disabled={busyId === job.id}>{t('pass')}</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => askPassReason(job)} disabled={busyId === job.id}>{t('pass')}</button>
           </div>
         </div>
       ))}
+
+      {/* Pass reason — required, because the job goes back to every designer and
+          the next one needs to know why it bounced. */}
+      {passJob && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPassJob(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, padding: 18 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 4, fontSize: 16 }}>Why are you passing this job?</h3>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
+              <b style={{ fontFamily: 'monospace' }}>{passJob.jobNo}</b> — {passJob.clientName}
+            </div>
+            <textarea
+              className="input"
+              rows={3}
+              autoFocus
+              value={passReason}
+              onChange={(e) => setPassReason(e.target.value)}
+              placeholder="e.g. Client artwork missing / not my specialisation / already overloaded"
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={submitPass} disabled={busyId === passJob.id}>
+                Pass job back
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => setPassJob(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

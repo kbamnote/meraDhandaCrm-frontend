@@ -212,7 +212,7 @@ export const ordersApi = {
   deptComplete:(id, body)   => api.post(`/orders/${id}/dept-complete`, body).then(r => r.data),
   stockItems:  ()           => api.get('/orders/stock-items').then(r => r.data),
   designerClaim:    (id)    => api.post(`/orders/${id}/designer/claim`).then(r => r.data),
-  designerReject:   (id)    => api.post(`/orders/${id}/designer/reject`).then(r => r.data),
+  designerReject:   (id, reason) => api.post(`/orders/${id}/designer/reject`, { reason }).then(r => r.data),
   designerReady:    (id)    => api.post(`/orders/${id}/designer/ready`).then(r => r.data),
   designerApproval: (id)    => api.post(`/orders/${id}/designer/client-approval`).then(r => r.data),
   designerWait:     (id, reason) => api.post(`/orders/${id}/designer/wait`, { reason }).then(r => r.data),
