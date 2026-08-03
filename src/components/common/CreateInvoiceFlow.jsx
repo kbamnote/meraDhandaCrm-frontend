@@ -15,7 +15,7 @@
  *   onCreated(inv) — called with the created invoice before onClose()
  */
 import { useEffect, useMemo, useState } from 'react';
-import { accountingApi } from '../../services/api';
+import { accountingApi, ordersApi, uploadApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
 
@@ -44,7 +44,17 @@ const TYPE_CARDS = [
   { type: 'cash',     icon: '💵', titleKey: 'cashTitle',     descKey: 'cashDesc' },
 ];
 
-const blankItem = () => ({ name: '', hsn: '', qty: '1', rate: '', taxRate: '18' });
+// No per-item taxRate — GST is now a single invoice-level rate (GST Rate
+// dropdown on the right), so a line is just what's being billed and how much.
+const blankItem = () => ({ name: '', hsn: '', qty: '1', rate: '' });
+
+const DOC_TYPES = [
+  { value: 'proforma', label: 'Proforma Invoice' },
+  { value: 'invoice', label: 'Tax Invoice' },
+  { value: 'cash', label: 'Cash / Non-GST Bill' },
+];
+const GST_RATES = ['0', '5', '12', '18', '28'];
+const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer'];
 
 export default function CreateInvoiceFlow({ job, onClose, onCreated }) {
   const t = useT(S);
@@ -107,43 +117,141 @@ function Row({ label, value, bold, color }) {
 function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }) {
   const [type, setType] = useState(initialType);
   const isCash = type === 'cash';
+
+  // Bill To — search-and-select (same pattern as the Job Cards client picker),
+  // with the selected/typed party editable underneath.
+  const [clientQ, setClientQ] = useState('');
+  const [clientMatches, setClientMatches] = useState([]);
+  const [party, setParty] = useState({
+    clientId: null, clientName: job?.clientName || '', clientPhone: '', clientAddress: '', gstNo: job?.gstNo || '',
+  });
+  const setP = (k, v) => setParty((p) => ({ ...p, [k]: v }));
+
   const [form, setForm] = useState({
-    clientName: job?.clientName || '',
-    gstNo: job?.gstNo || '',
     jobNo: job?.jobNo || '',
     date: new Date().toISOString().slice(0, 10),
-    interState: false,
+    ewayBillNo: '', vehicleNo: '', poNumber: '', approvedBy: '',
+    eventType: '', salesPerson: '', deliveryType: '',
+    invoicePrefix: '', invoiceNumber: '',
+    paymentTermDays: '', dueDate: '',
+    placeOfSupply: 'auto',
+    gstRate: '18',
+    discount: '0',
+    markFullyPaid: false,
+    amountReceived: '0',
+    paymentMode: 'Cash',
+    notes: '', showNotes: false,
+    terms: '', editingTerms: false,
   });
-  const [items, setItems] = useState([
-    job ? { name: job.work || '', hsn: '', qty: '1', rate: '', taxRate: '18' } : blankItem(),
-  ]);
-  const [preview, setPreview] = useState('');
-  const [busy, setBusy] = useState(false);
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  useEffect(() => { accountingApi.invoiceNumber(type).then((r) => setPreview(r.invoiceNo)).catch(() => {}); }, [type]);
+  const [items, setItems] = useState([
+    job ? { name: job.work || '', hsn: '', qty: '1', rate: '' } : blankItem(),
+  ]);
+  const [attachments, setAttachments] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [defaults, setDefaults] = useState(null); // GET /invoice-defaults result
+  const [busy, setBusy] = useState(false);
+
+  // Company defaults (bank, terms, prefix, next number, GSTIN/state) — reload
+  // whenever the document type changes, since each type has its own
+  // prefix/number sequence and its own default Terms text.
+  useEffect(() => {
+    accountingApi.invoiceDefaults(type).then((d) => {
+      setDefaults(d);
+      setForm((f) => ({ ...f, invoicePrefix: d.invoicePrefix, invoiceNumber: d.invoiceNumber, terms: f.terms || d.terms }));
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]);
+
+  // Debounced party search — identical pattern to the Job Cards client picker.
+  useEffect(() => {
+    const q = clientQ.trim();
+    if (q.length < 2) { setClientMatches([]); return undefined; }
+    const id = setTimeout(() => {
+      ordersApi.searchClients(q).then((r) => setClientMatches(Array.isArray(r) ? r : [])).catch(() => setClientMatches([]));
+    }, 250);
+    return () => clearTimeout(id);
+  }, [clientQ]);
+
+  const pickClient = (c) => {
+    setParty({ clientId: c.id, clientName: c.name || '', clientPhone: c.phone || '', clientAddress: c.address || '', gstNo: c.gstNo || '' });
+    setClientQ('');
+  };
+
+  // Payment Terms (days) drives Due Date automatically; editing Due Date
+  // directly is still allowed and simply stops following the days field.
+  const setPaymentDays = (v) => {
+    setF('paymentTermDays', v);
+    const days = Number(v);
+    if (Number.isFinite(days) && days >= 0) {
+      const d = new Date(form.date || Date.now());
+      d.setDate(d.getDate() + days);
+      setF('dueDate', d.toISOString().slice(0, 10));
+    }
+  };
 
   const setItem = (i, k, v) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
+
+  // Client-side preview of Place of Supply — the server recomputes
+  // authoritatively at save time from the same GSTIN, this is display-only.
+  const stateMap = useMemo(() => Object.fromEntries((defaults?.states || []).map((s) => [s.code, s.name])), [defaults]);
+  const buyerStatePreview = stateMap[String(party.gstNo || '').slice(0, 2)] || null;
+  const posPreview = form.placeOfSupply === 'auto' ? (buyerStatePreview || defaults?.companyState || '—') : form.placeOfSupply;
+  const interStatePreview = !isCash && !!defaults?.companyState && !!posPreview && posPreview !== '—' && posPreview !== defaults.companyState;
+
   const totals = useMemo(() => {
-    let st = 0; let tax = 0;
-    items.forEach((it) => {
-      const a = (Number(it.qty) || 0) * (Number(it.rate) || 0);
-      st += a;
-      if (!isCash) tax += (a * (Number(it.taxRate) || 0)) / 100; // cash bill: no GST
-    });
-    return { subtotal: round2(st), tax: round2(tax), total: round2(st + tax) };
-  }, [items, isCash]);
+    let st = 0;
+    items.forEach((it) => { st += (Number(it.qty) || 0) * (Number(it.rate) || 0); });
+    const subtotal = round2(st);
+    const rate = isCash ? 0 : (Number(form.gstRate) || 0);
+    const taxTotal = round2((subtotal * rate) / 100);
+    const cgst = interStatePreview ? 0 : round2(taxTotal / 2);
+    const sgst = interStatePreview ? 0 : round2(taxTotal / 2);
+    const igst = interStatePreview ? taxTotal : 0;
+    const discount = round2(Number(form.discount) || 0);
+    const total = round2(Math.max(0, subtotal + taxTotal - discount));
+    const received = form.markFullyPaid ? total : round2(Number(form.amountReceived) || 0);
+    const balance = round2(Math.max(0, total - Math.min(received, total)));
+    return { subtotal, taxTotal, cgst, sgst, igst, discount, total, received, balance };
+  }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, interStatePreview]);
+
+  const addAttachment = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    setUploading(true);
+    try {
+      const r = await uploadApi.upload(f);
+      setAttachments((a) => [...a, r.url]);
+    } catch (err) { showToast('Upload failed', 'error'); }
+    finally { setUploading(false); }
+  };
 
   const submit = async () => {
-    if (!form.clientName.trim()) return showToast('Client name required', 'error');
+    if (!party.clientName.trim()) return showToast('Bill To — client name required', 'error');
     if (!items.some((it) => it.name.trim() && Number(it.rate) > 0)) return showToast('Add at least one item', 'error');
     setBusy(true);
     try {
       const inv = await accountingApi.createInvoice({
-        type, ...form,
-        jobId: job?.id, // server stamps job.billNumber when jobId is set
-        interState: isCash ? false : form.interState, // cash bill is never inter-state (no GST)
-        items: items.filter((it) => it.name.trim()).map((it) => ({ name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate), taxRate: isCash ? 0 : Number(it.taxRate) })),
+        type,
+        clientId: party.clientId, clientName: party.clientName.trim(),
+        clientPhone: party.clientPhone.trim(), clientAddress: party.clientAddress.trim(),
+        gstNo: party.gstNo.trim(),
+        jobId: job?.id, jobNo: form.jobNo, // server stamps job.billNumber when jobId is set
+        date: form.date,
+        ewayBillNo: form.ewayBillNo, vehicleNo: form.vehicleNo, poNumber: form.poNumber, approvedBy: form.approvedBy,
+        eventType: form.eventType, salesPerson: form.salesPerson, deliveryType: form.deliveryType,
+        invoicePrefix: form.invoicePrefix, invoiceNumber: form.invoiceNumber,
+        paymentTermDays: form.paymentTermDays, dueDate: form.dueDate,
+        placeOfSupply: form.placeOfSupply,
+        gstRate: isCash ? 0 : Number(form.gstRate) || 0,
+        discount: totals.discount,
+        markFullyPaid: form.markFullyPaid,
+        amountReceived: form.markFullyPaid ? undefined : Number(form.amountReceived) || 0,
+        paymentMode: form.paymentMode,
+        notes: form.notes, terms: form.terms, attachments,
+        items: items.filter((it) => it.name.trim()).map((it) => ({ name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate) })),
       });
       showToast(`${inv.invoiceNo} created`, 'success');
       onCreated?.(inv);
@@ -154,54 +262,220 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 640, width: '100%', maxHeight: '92vh', overflow: 'auto' }}>
-        <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
-          <h3>{t('newInv')} <span style={{ fontFamily: 'monospace', color: 'var(--blue, #C05621)', fontSize: 14 }}>{preview}</span></h3>
-          <select className="input" style={{ width: 'auto' }} value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="invoice">GST Invoice</option>
-            <option value="proforma">Proforma</option>
-            <option value="cash">Cash / Non-GST</option>
-          </select>
-        </div>
-
-        <div className="flex gap-2">
-          <div className="form-group" style={{ flex: 2 }}><label>Client name *</label><input className="input" value={form.clientName} onChange={(e) => set('clientName', e.target.value)} /></div>
-          <div className="form-group" style={{ flex: 1 }}><label>GST No</label><input className="input" value={form.gstNo} onChange={(e) => set('gstNo', e.target.value)} /></div>
-        </div>
-        <div className="flex gap-2">
-          <div className="form-group" style={{ flex: 1 }}><label>Date</label><input className="input" type="date" value={form.date} onChange={(e) => set('date', e.target.value)} /></div>
-          <div className="form-group" style={{ flex: 1 }}><label>Job no (optional)</label><input className="input" value={form.jobNo} onChange={(e) => set('jobNo', e.target.value)} /></div>
-          {isCash ? (
-            <span className="badge badge-amber" style={{ alignSelf: 'flex-end', marginBottom: 14 }}>{t('noGstNote')}</span>
-          ) : (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-end', paddingBottom: 14, fontSize: 13 }}>
-              <input type="checkbox" checked={form.interState} onChange={(e) => set('interState', e.target.checked)} /> Inter-state (IGST)
-            </label>
-          )}
-        </div>
-
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', margin: '8px 0 4px' }}>Items</div>
-        {items.map((it, i) => (
-          <div key={i} className="flex gap-2" style={{ marginBottom: 6, alignItems: 'center' }}>
-            <input className="input" style={{ flex: 3 }} placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
-            <input className="input" style={{ flex: 1, minWidth: 50 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
-            <input className="input" style={{ flex: 1.5, minWidth: 60 }} placeholder="Rate" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
-            {!isCash && <input className="input" style={{ flex: 1, minWidth: 50 }} placeholder="GST%" type="number" value={it.taxRate} onChange={(e) => setItem(i, 'taxRate', e.target.value)} />}
-            <button className="btn btn-ghost btn-xs" onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))} disabled={items.length === 1}>×</button>
+      <div className="card" style={{ maxWidth: 980, width: '100%', maxHeight: '94vh', overflow: 'auto', padding: 20 }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
+          <h3 style={{ margin: 0 }}>Create Sales Invoice</h3>
+          <div className="flex gap-2">
+            <button className="btn btn-ghost" onClick={onClose} disabled={busy}>{t('cancel')}</button>
+            <button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? '…' : 'Save'}</button>
           </div>
-        ))}
-        <button className="btn btn-ghost btn-sm" onClick={() => setItems((a) => [...a, blankItem()])}>+ Add item</button>
-
-        <div className="card" style={{ background: 'var(--surface2)', marginTop: 10 }}>
-          <Row label={t('taxable')} value={inr(totals.subtotal)} />
-          {!isCash && <Row label="GST" value={inr(totals.tax)} />}
-          <Row label="Total" value={inr(isCash ? totals.subtotal : totals.total)} bold />
-          {isCash && <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>{t('noGstNote')}</div>}
         </div>
 
-        <div className="flex gap-2 mt-2" style={{ marginTop: 12 }}>
-          <button className="btn btn-primary flex-1" onClick={submit} disabled={busy}>{busy ? '…' : t('newInv')}</button>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
+          {/* ── LEFT COLUMN ── */}
+          <div style={{ flex: '1 1 560px', minWidth: 320 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 6 }}>Bill To</div>
+            {party.clientName ? (
+              <div className="card" style={{ background: 'var(--surface2)', marginBottom: 8, padding: 12 }}>
+                <div className="flex items-center justify-between">
+                  <b>{party.clientName}</b>
+                  <button className="btn btn-ghost btn-xs" onClick={() => setParty({ clientId: null, clientName: '', clientPhone: '', clientAddress: '', gstNo: '' })}>Change</button>
+                </div>
+                {party.clientPhone && <div style={{ fontSize: 12.5, color: 'var(--text2)' }}>📞 {party.clientPhone}</div>}
+                {party.clientAddress && <div style={{ fontSize: 12.5, color: 'var(--text2)' }}>📍 {party.clientAddress}</div>}
+                {party.gstNo && <div style={{ fontSize: 12, color: 'var(--text3)' }}>GSTIN: {party.gstNo}</div>}
+              </div>
+            ) : null}
+            <div style={{ position: 'relative', marginBottom: 10 }}>
+              <input className="input" placeholder="Search party by name or number" value={clientQ} onChange={(e) => setClientQ(e.target.value)} />
+              {clientMatches.length > 0 && (
+                <div className="card" style={{ position: 'absolute', zIndex: 5, left: 0, right: 0, top: '100%', marginTop: 2, padding: 0, maxHeight: 180, overflow: 'auto' }}>
+                  {clientMatches.map((c) => (
+                    <div key={c.id} onClick={() => pickClient(c)} style={{ padding: '8px 10px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: 13 }}><b>{c.name || '—'}</b> <span style={{ color: 'var(--text3)' }}>{c.phone || ''}</span></div>
+                      {c.address && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{c.address}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {!party.clientName && (
+              <div className="flex gap-2" style={{ marginBottom: 10 }}>
+                <input className="input" style={{ flex: 1 }} placeholder="Or type a new party name" value={party.clientName} onChange={(e) => setP('clientName', e.target.value)} />
+                <input className="input" style={{ flex: 1 }} placeholder="Mobile" value={party.clientPhone} onChange={(e) => setP('clientPhone', e.target.value)} />
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <div className="form-group" style={{ flex: 1 }}><label>E-way Bill No.</label><input className="input" value={form.ewayBillNo} onChange={(e) => setF('ewayBillNo', e.target.value)} /></div>
+              <div className="form-group" style={{ flex: 1 }}><label>Vehicle No.</label><input className="input" value={form.vehicleNo} onChange={(e) => setF('vehicleNo', e.target.value)} /></div>
+              <div className="form-group" style={{ flex: 1 }}><label>PO Number</label><input className="input" value={form.poNumber} onChange={(e) => setF('poNumber', e.target.value)} /></div>
+              <div className="form-group" style={{ flex: 1 }}><label>Approved By</label><input className="input" value={form.approvedBy} onChange={(e) => setF('approvedBy', e.target.value)} /></div>
+            </div>
+            <div className="flex gap-2">
+              <div className="form-group" style={{ flex: 1 }}><label>Event Type</label><input className="input" value={form.eventType} onChange={(e) => setF('eventType', e.target.value)} /></div>
+              <div className="form-group" style={{ flex: 1 }}><label>Sales Person</label><input className="input" value={form.salesPerson} onChange={(e) => setF('salesPerson', e.target.value)} /></div>
+              <div className="form-group" style={{ flex: 1 }}><label>Delivery Type</label><input className="input" value={form.deliveryType} onChange={(e) => setF('deliveryType', e.target.value)} /></div>
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', margin: '10px 0 6px' }}>Items / Services</div>
+            <div style={{ display: 'flex', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', padding: '0 2px 4px' }}>
+              <span style={{ width: 22 }}>No</span>
+              <span style={{ flex: 3 }}>Item / Service</span>
+              <span style={{ flex: 1.2 }}>HSN/SAC</span>
+              <span style={{ width: 55 }}>Qty</span>
+              <span style={{ flex: 1.2 }}>Price (₹)</span>
+              <span style={{ flex: 1.2, textAlign: 'right' }}>Amount</span>
+              <span style={{ width: 18 }} />
+            </div>
+            {items.map((it, i) => {
+              const amount = round2((Number(it.qty) || 0) * (Number(it.rate) || 0));
+              return (
+                <div key={i} className="flex gap-2" style={{ marginBottom: 6, alignItems: 'center' }}>
+                  <span style={{ width: 22, fontSize: 12, color: 'var(--text3)' }}>{i + 1}</span>
+                  <input className="input" style={{ flex: 3 }} placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
+                  <input className="input" style={{ flex: 1.2, minWidth: 60 }} placeholder="HSN/SAC" value={it.hsn} onChange={(e) => setItem(i, 'hsn', e.target.value)} />
+                  <input className="input" style={{ width: 55 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
+                  <input className="input" style={{ flex: 1.2, minWidth: 70 }} placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
+                  <span style={{ flex: 1.2, textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{inr(amount)}</span>
+                  <button className="btn btn-ghost btn-xs" style={{ width: 18 }} onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))} disabled={items.length === 1}>×</button>
+                </div>
+              );
+            })}
+            <button className="btn btn-ghost btn-sm" onClick={() => setItems((a) => [...a, blankItem()])}>+ Add Item</button>
+
+            <div className="flex items-center justify-between" style={{ margin: '14px 0 8px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>📎 Attachments / Images</div>
+              <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer', margin: 0 }}>
+                {uploading ? 'Uploading…' : '+ Add Image'}
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={addAttachment} disabled={uploading} />
+              </label>
+            </div>
+            {attachments.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                {attachments.map((url, i) => (
+                  <div key={i} style={{ position: 'relative' }}>
+                    <img src={url} alt="" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
+                    <button onClick={() => setAttachments((a) => a.filter((_, idx) => idx !== i))} style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: 'var(--red, #DC2626)', color: '#fff', border: 'none', fontSize: 11, cursor: 'pointer' }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!form.showNotes ? (
+              <button className="btn btn-ghost btn-xs" onClick={() => setF('showNotes', true)} style={{ padding: '4px 0' }}>+ Add Notes</button>
+            ) : (
+              <div className="form-group">
+                <label>Notes</label>
+                <textarea className="input" rows={2} value={form.notes} onChange={(e) => setF('notes', e.target.value)} />
+              </div>
+            )}
+
+            <div style={{ fontSize: 13, fontWeight: 700, marginTop: 12, marginBottom: 4 }}>Terms and Conditions</div>
+            {form.editingTerms ? (
+              <textarea className="input" rows={5} value={form.terms} onChange={(e) => setF('terms', e.target.value)} onBlur={() => setF('editingTerms', false)} autoFocus />
+            ) : (
+              <div className="card" style={{ background: 'var(--surface2)', fontSize: 12.5, color: 'var(--text2)', whiteSpace: 'pre-line', maxHeight: 110, overflow: 'auto' }}>
+                {form.terms || '—'}
+              </div>
+            )}
+            <button className="btn btn-ghost btn-xs" onClick={() => setF('editingTerms', true)} style={{ padding: '4px 0' }}>✏️ Edit Terms</button>
+
+            {defaults?.bank?.accountNumber && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Bank Details</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.7 }}>
+                  Account Number: {defaults.bank.accountNumber}<br />
+                  IFSC Code: {defaults.bank.ifsc}<br />
+                  Bank &amp; Branch: {defaults.bank.branch}<br />
+                  Account Holder: {defaults.bank.holderName}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── RIGHT COLUMN ── */}
+          <div style={{ flex: '1 1 300px', minWidth: 260 }}>
+            <div className="flex gap-2">
+              <div className="form-group" style={{ flex: 1 }}><label>Invoice Prefix</label><input className="input" value={form.invoicePrefix} onChange={(e) => setF('invoicePrefix', e.target.value)} /></div>
+              <div className="form-group" style={{ flex: 1 }}><label>Invoice Number</label><input className="input" value={form.invoiceNumber} onChange={(e) => setF('invoiceNumber', e.target.value)} /></div>
+            </div>
+            <div className="form-group">
+              <label>Sales Invoice Date</label>
+              <input className="input" type="date" value={form.date} onChange={(e) => setF('date', e.target.value)} />
+            </div>
+            <div className="flex gap-2">
+              <div className="form-group" style={{ flex: 1 }}><label>Payment Terms (days)</label><input className="input" type="number" min="0" value={form.paymentTermDays} onChange={(e) => setPaymentDays(e.target.value)} /></div>
+              <div className="form-group" style={{ flex: 1 }}><label>Due Date</label><input className="input" type="date" value={form.dueDate} onChange={(e) => setF('dueDate', e.target.value)} /></div>
+            </div>
+            <div className="form-group">
+              <label>Document Type</label>
+              <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
+                {DOC_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+              </select>
+            </div>
+            {!isCash && (
+              <div className="form-group">
+                <label>Place of Supply</label>
+                <select className="input" value={form.placeOfSupply} onChange={(e) => setF('placeOfSupply', e.target.value)}>
+                  <option value="auto">Auto (from GSTIN){buyerStatePreview ? ` — ${buyerStatePreview}` : ''}</option>
+                  {(defaults?.states || []).map((s) => <option key={s.code} value={s.name}>{s.name}</option>)}
+                </select>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>Override if supply location is different from buyer state</div>
+              </div>
+            )}
+
+            <div className="card" style={{ background: 'var(--surface2)', marginTop: 8 }}>
+              <Row label="Subtotal" value={inr(totals.subtotal)} />
+              {!isCash && (
+                <>
+                  <div className="flex items-center justify-between" style={{ padding: '3px 0' }}>
+                    <span>GST Rate</span>
+                    <select className="input" style={{ width: 90 }} value={form.gstRate} onChange={(e) => setF('gstRate', e.target.value)}>
+                      {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+                    </select>
+                  </div>
+                  {interStatePreview ? (
+                    <Row label={`IGST @${form.gstRate}%`} value={inr(totals.igst)} />
+                  ) : (
+                    <>
+                      <Row label={`CGST @${round2(Number(form.gstRate) / 2)}%`} value={inr(totals.cgst)} />
+                      <Row label={`SGST @${round2(Number(form.gstRate) / 2)}%`} value={inr(totals.sgst)} />
+                    </>
+                  )}
+                </>
+              )}
+              <div className="flex items-center justify-between" style={{ padding: '3px 0' }}>
+                <span>Discount</span>
+                <input className="input" type="number" style={{ width: 90, textAlign: 'right' }} value={form.discount} onChange={(e) => setF('discount', e.target.value)} />
+              </div>
+              <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+              <Row label="Total Amount" value={inr(totals.total)} bold />
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 13 }}>
+              <input type="checkbox" checked={form.markFullyPaid} onChange={(e) => setF('markFullyPaid', e.target.checked)} /> Mark as fully paid
+            </label>
+            {!form.markFullyPaid && (
+              <div className="flex gap-2">
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Amount Received</label>
+                  <input className="input" type="number" value={form.amountReceived} onChange={(e) => setF('amountReceived', e.target.value)} />
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Mode</label>
+                  <select className="input" value={form.paymentMode} onChange={(e) => setF('paymentMode', e.target.value)}>
+                    {PAY_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+            <Row label="Balance Amount" value={inr(totals.balance)} bold color={totals.balance > 0 ? 'var(--red, #DC2626)' : 'var(--green, #16A34A)'} />
+
+            <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 14, textAlign: 'right' }}>
+              Authorized signatory for<br /><b style={{ color: 'var(--text2)' }}>{defaults?.authorizedSignatory || ''}</b>
+            </div>
+          </div>
         </div>
       </div>
     </div>

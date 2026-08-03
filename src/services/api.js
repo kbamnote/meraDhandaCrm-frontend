@@ -237,6 +237,9 @@ export const productionTypesApi = {
 // Billing & Accounting — GST/proforma invoices, payments, ledger, P&L, GST report.
 export const accountingApi = {
   invoiceNumber: (type)     => api.get('/accounting/invoice-number', { params: { type } }).then(r => r.data),
+  // Everything the Create Invoice form prefills: next number, bank details,
+  // company GSTIN/state, default Terms for this doc type, GST state list.
+  invoiceDefaults: (type)   => api.get('/accounting/invoice-defaults', { params: { type } }).then(r => r.data),
   createInvoice: (body)     => api.post('/accounting/invoice', body).then(r => r.data),
   recordPayment: (id, body) => api.post(`/accounting/invoice/${id}/payment`, body).then(r => r.data),
   ledger:        ()         => api.get('/accounting/ledger').then(r => r.data),

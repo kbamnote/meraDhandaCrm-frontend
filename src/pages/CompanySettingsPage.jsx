@@ -11,7 +11,16 @@ import { useAuth } from '../context/AuthContext';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
 
-const EMPTY = { name: '', tagline: '', phone: '', email: '', address: '', gstNo: '', website: '' };
+const EMPTY = {
+  name: '', tagline: '', phone: '', email: '', address: '', gstNo: '', website: '',
+  // Used by invoice creation (GET /accounting/invoice-defaults): shown in the
+  // Bank Details box, and the signatory line at the bottom of every invoice.
+  bankAccountNumber: '', bankIFSC: '', bankBranch: '', bankHolderName: '',
+  authorizedSignatory: '',
+  // Default Terms & Conditions per document type — prefilled on every new
+  // invoice of that type, still editable per invoice via "Edit Terms".
+  termsProforma: '', termsInvoice: '', termsCash: '',
+};
 
 const S = {
   title: { en: '🏢 Company Settings', hi: '🏢 कंपनी सेटिंग्स', hinglish: '🏢 Company Settings', gu: '🏢 કંપની સેટિંગ્સ', mr: '🏢 कंपनी सेटिंग्ज', mwr: '🏢 कंपनी सेटिंग्स' },
@@ -332,6 +341,51 @@ export default function CompanySettingsPage() {
               disabled={!canEdit}
             />
           </div>
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--border)', margin: '18px 0 14px' }} />
+        <h3 style={{ fontSize: 15, marginBottom: 10 }}>🏦 Bank Details</h3>
+        <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
+          Shown on every invoice so customers know where to pay.
+        </div>
+        <div className="flex gap-2">
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Account Number</label>
+            <input className="input" value={form.bankAccountNumber} onChange={(e) => setField('bankAccountNumber', e.target.value)} disabled={!canEdit} />
+          </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>IFSC Code</label>
+            <input className="input" value={form.bankIFSC} onChange={(e) => setField('bankIFSC', e.target.value.toUpperCase())} disabled={!canEdit} />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Bank &amp; Branch</label>
+            <input className="input" placeholder="IDFC First, Jhade Bhavan C.A. Road, Nagpur" value={form.bankBranch} onChange={(e) => setField('bankBranch', e.target.value)} disabled={!canEdit} />
+          </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Account Holder</label>
+            <input className="input" placeholder={form.name || 'Defaults to company name'} value={form.bankHolderName} onChange={(e) => setField('bankHolderName', e.target.value)} disabled={!canEdit} />
+          </div>
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--border)', margin: '18px 0 14px' }} />
+        <h3 style={{ fontSize: 15, marginBottom: 10 }}>🧾 Invoicing</h3>
+        <div className="form-group">
+          <label>Authorized Signatory</label>
+          <input className="input" placeholder={form.name || 'Defaults to company name'} value={form.authorizedSignatory} onChange={(e) => setField('authorizedSignatory', e.target.value)} disabled={!canEdit} />
+        </div>
+        <div className="form-group">
+          <label>Default Terms — Proforma Invoice</label>
+          <textarea className="input" rows={3} placeholder="1. This is a Proforma Invoice and not a demand for payment.&#10;2. Prices are valid for 7 days from the date of issue." value={form.termsProforma} onChange={(e) => setField('termsProforma', e.target.value)} disabled={!canEdit} />
+        </div>
+        <div className="form-group">
+          <label>Default Terms — GST Tax Invoice</label>
+          <textarea className="input" rows={3} placeholder="1. Goods once sold will not be taken back or exchanged.&#10;2. Interest @18% p.a. on bills unpaid after the due date." value={form.termsInvoice} onChange={(e) => setField('termsInvoice', e.target.value)} disabled={!canEdit} />
+        </div>
+        <div className="form-group">
+          <label>Default Terms — Cash / Non-GST Bill</label>
+          <textarea className="input" rows={2} placeholder="1. Goods once sold will not be taken back or exchanged." value={form.termsCash} onChange={(e) => setField('termsCash', e.target.value)} disabled={!canEdit} />
         </div>
 
         {canEdit && (
