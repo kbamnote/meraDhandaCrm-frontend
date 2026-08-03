@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
 import { PERM_OF, canViewModule } from '../../config/access';
@@ -225,9 +226,15 @@ const MODULE_OF = {
   '/bulk-orders': 'bulk', '/enquiry': 'bulk', '/sample-dm': 'bulk',
 };
 
+// Strips the emoji/icon prefix most labels carry, so searching "job" matches
+// "📋 Job Cards" — the raw label starts with a symbol, not the word itself.
+const stripIcon = (s) => String(s || '').replace(/^[^\w]+/, '').trim();
+
 export default function Sidebar({ open, onClose }) {
   const { profile, tenant, isPlatformAdmin, signOut } = useAuth();
   const t = useT(SECTION_S);
+  const navigate = useNavigate();
+  const [q, setQ] = useState('');
   const role = profile?.role;
   const custom = profile?.customRole;
   const modules = tenant?.settings?.modules || null;
@@ -254,6 +261,25 @@ export default function Sidebar({ open, onClose }) {
 
   const onTrial = tenant && tenant.plan === 'trial';
 
+  // Search matches against the TRANSLATED label (what's actually on screen),
+  // so typing in Hindi/Gujarati/etc. finds the same items a user is reading.
+  // Sections with no match collapse away instead of showing an empty title.
+  const sections = isPlatformAdmin ? PLATFORM_SECTIONS : SECTIONS;
+  const query = q.trim().toLowerCase();
+  const visibleSections = sections
+    .map((sec) => ({ ...sec, items: sec.items.filter(canSee) }))
+    .map((sec) => ({
+      ...sec,
+      items: query ? sec.items.filter((item) => stripIcon(t(item.label)).toLowerCase().includes(query)) : sec.items,
+    }))
+    .filter((sec) => sec.items.length > 0);
+
+  const goToFirstMatch = (e) => {
+    if (e.key !== 'Enter') return;
+    const first = visibleSections[0]?.items[0];
+    if (first) { navigate(first.to); onClose && onClose(); setQ(''); }
+  };
+
   return (
     <>
       <aside className={`sidebar ${open ? 'open' : ''}`}>
@@ -271,11 +297,43 @@ export default function Sidebar({ open, onClose }) {
             </a>
           )}
         </div>
+        <div style={{ padding: '0 12px 8px' }}>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, opacity: 0.6 }}>🔍</span>
+            <input
+              type="text"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={goToFirstMatch}
+              placeholder="Search menu…"
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: '7px 28px 7px 30px',
+                borderRadius: 8, border: '1px solid rgba(255,255,255,.14)',
+                background: 'rgba(255,255,255,.08)', color: '#fff',
+                fontSize: 13, outline: 'none',
+              }}
+            />
+            {q && (
+              <button
+                type="button"
+                onClick={() => setQ('')}
+                aria-label="Clear search"
+                style={{
+                  position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', color: 'rgba(255,255,255,.6)', cursor: 'pointer', fontSize: 13,
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
         <nav>
-          {(isPlatformAdmin ? PLATFORM_SECTIONS : SECTIONS).map(sec => (
+          {visibleSections.map(sec => (
             <div key={sec.title}>
               <div className="sidebar-section-title">{t(sec.title)}</div>
-              {sec.items.filter(canSee).map(item => (
+              {sec.items.map(item => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -288,6 +346,11 @@ export default function Sidebar({ open, onClose }) {
               ))}
             </div>
           ))}
+          {query && visibleSections.length === 0 && (
+            <div style={{ padding: '16px 16px', fontSize: 12, color: 'rgba(255,255,255,.55)' }}>
+              No menu item matches "{q}"
+            </div>
+          )}
         </nav>
         <div style={{ marginTop: 'auto', padding: 16, borderTop: '1px solid rgba(255,255,255,.06)' }}>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,.55)', marginBottom: 8 }}>

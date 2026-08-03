@@ -47,6 +47,9 @@ const S = {
   received:  { en: 'Received', hi: 'प्राप्त', hinglish: 'Received', gu: 'મળ્યું', mr: 'मिळाले', mwr: 'मिल्यो' },
   onLeaveMsg:{ en: "You're on leave — jobs won't be shown. Turn off to accept work.", hi: 'आप छुट्टी पर हैं — जॉब नहीं दिखेंगे।', hinglish: 'Aap leave par hain — jobs nahi dikhenge.', gu: 'તમે રજા પર છો — જોબ બતાવાશે નહીં.', mr: 'तुम्ही रजेवर आहात — जॉब दिसणार नाहीत.', mwr: 'थे छुट्टी पर हो — जॉब कोनी दिखसी।' },
   taken:     { en: 'Job already taken', hi: 'जॉब पहले ही ले ली गई', hinglish: 'Job already taken', gu: 'જોબ પહેલેથી લેવાઈ', mr: 'जॉब आधीच घेतले', mwr: 'जॉब पैलाईं ले ली' },
+  completeNeedsImage: { en: 'Attach the design image to mark this complete', hi: 'पूरा करने के लिए डिज़ाइन इमेज लगाएं', hinglish: 'Complete karne ke liye design image lagayein', gu: 'પૂર્ણ કરવા ડિઝાઇન ઇમેજ જોડો', mr: 'पूर्ण करण्यासाठी डिझाइन इमेज जोडा', mwr: 'पूरो करण खातर डिज़ाइन इमेज लगावो' },
+  chooseImage: { en: 'Choose image…', hi: 'इमेज चुनें…', hinglish: 'Image chunein…', gu: 'ઇમેજ પસંદ કરો…', mr: 'इमेज निवडा…', mwr: 'इमेज चुणो…' },
+  completedOk: { en: 'Design marked complete', hi: 'डिज़ाइन पूरा हुआ', hinglish: 'Design complete ho gaya', gu: 'ડિઝાઇન પૂર્ણ થયું', mr: 'डिझाइन पूर्ण झाले', mwr: 'डिज़ाइन पूरो हुयो' },
   failed:    { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua', gu: 'નિષ્ફળ', mr: 'अयशस्वी', mwr: 'कोनी हुयो' },
 };
 
@@ -60,6 +63,7 @@ export default function DesignerPanelPage() {
   const [uploading, setUploading] = useState(null);
   const [passJob, setPassJob] = useState(null);   // job awaiting a pass reason
   const [passReason, setPassReason] = useState('');
+  const [completeJob, setCompleteJob] = useState(null); // job awaiting its design image before it can complete
 
   // Self-service designer feed (open pool + my claimed jobs). A dedicated endpoint
   // so a designer does NOT need the broad `jobs` (Job Cards) permission to see
@@ -110,6 +114,31 @@ export default function DesignerPanelPage() {
       await ordersApi.designerDesignImage(job.id, r.url);
       setAll((prev) => prev.map((j) => (j.id === job.id ? { ...j, designImage: r.url } : j)));
       showToast(t('imageSaved'), 'success');
+    } catch (err) { showToast(err.response?.data?.error || t('uploadFail'), 'error'); }
+    finally { setUploading(null); }
+  };
+
+  // Design Complete requires a design image. If one's already attached the job
+  // just advances; otherwise this opens a modal that uploads the image AND
+  // advances the job in one step, so "complete" can never happen without it —
+  // matching the same rule the server enforces on /designer/ready.
+  const clickComplete = (job) => {
+    if (job.designImage) { run(job.id, () => ordersApi.designerReady(job.id)); return; }
+    setCompleteJob(job);
+  };
+  const completeWithImage = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    const job = completeJob;
+    if (!f || !job) return;
+    setUploading(job.id);
+    try {
+      const r = await uploadApi.upload(f);
+      await ordersApi.designerDesignImage(job.id, r.url);
+      await ordersApi.designerReady(job.id);
+      setAll((prev) => prev.map((j) => (j.id === job.id ? { ...j, designImage: r.url } : j)));
+      showToast(t('completedOk'), 'success');
+      setCompleteJob(null);
     } catch (err) { showToast(err.response?.data?.error || t('uploadFail'), 'error'); }
     finally { setUploading(null); }
   };
@@ -182,7 +211,7 @@ export default function DesignerPanelPage() {
               style={{ background: job.designWait === 'changes' ? 'var(--red)' : 'var(--surface2)', color: job.designWait === 'changes' ? '#fff' : 'var(--text2)', border: 'none' }}>
               {t('clientChanges')}
             </button>
-            <button className="btn btn-success btn-sm" onClick={() => run(job.id, () => ordersApi.designerReady(job.id))} disabled={busyId === job.id}>{t('complete')}</button>
+            <button className="btn btn-success btn-sm" onClick={() => clickComplete(job)} disabled={busyId === job.id}>{t('complete')}</button>
             <button className="btn btn-sm" onClick={() => run(job.id, () => ordersApi.designerHold(job.id))} disabled={busyId === job.id}
               style={{ background: 'var(--surface2)', color: 'var(--text2)', border: 'none' }}>{t('hold')}</button>
             <button className="btn btn-ghost btn-sm" onClick={() => askPassReason(job)} disabled={busyId === job.id}>{t('passOthers')}</button>
@@ -207,6 +236,41 @@ export default function DesignerPanelPage() {
           </div>
         </div>
       ))}
+
+      {/* Design Complete without an image yet — forces the upload right here
+          instead of just erroring, then advances the job in the same step. */}
+      {completeJob && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => (uploading ? null : setCompleteJob(null))}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, padding: 18, textAlign: 'center' }}>
+            <div style={{ fontSize: 32 }}>🖼️</div>
+            <h3 style={{ margin: '8px 0 4px', fontSize: 16 }}>{t('completeNeedsImage')}</h3>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14 }}>
+              <b style={{ fontFamily: 'monospace' }}>{completeJob.jobNo}</b> — {completeJob.clientName}
+            </div>
+            <input id="complete-image-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={completeWithImage} />
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ width: '100%' }}
+              onClick={() => document.getElementById('complete-image-input').click()}
+              disabled={uploading === completeJob.id}
+            >
+              {uploading === completeJob.id ? t('uploading') : t('chooseImage')}
+            </button>
+            <button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => setCompleteJob(null)} disabled={uploading === completeJob.id}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Pass reason — required, because the job goes back to every designer and
           the next one needs to know why it bounced. */}
