@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import JobAlertPopup from '../common/JobAlertPopup';
 import { useAuth } from '../../context/AuthContext';
 
 // Apply the tenant's saved branding (theme class + accent colour + font size) to
@@ -31,6 +32,9 @@ export default function AppLayout() {
         </main>
       </div>
       <div id="toast-container" />
+      {/* Global so a designer sees a new pool job from any page, not just the
+          designer panel. Renders nothing unless an alert actually arrives. */}
+      <JobAlertPopup />
     </div>
   );
 }
