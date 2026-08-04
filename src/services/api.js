@@ -242,9 +242,66 @@ export const accountingApi = {
   invoiceDefaults: (type)   => api.get('/accounting/invoice-defaults', { params: { type } }).then(r => r.data),
   createInvoice: (body)     => api.post('/accounting/invoice', body).then(r => r.data),
   recordPayment: (id, body) => api.post(`/accounting/invoice/${id}/payment`, body).then(r => r.data),
+  voidInvoice:   (id)       => api.post(`/accounting/invoice/${id}/void`).then(r => r.data),
+  alerts:        ()         => api.get('/accounting/alerts').then(r => r.data),
   ledger:        ()         => api.get('/accounting/ledger').then(r => r.data),
   pnl:           (params)   => api.get('/accounting/pnl', { params }).then(r => r.data),
   gstReport:     (params)   => api.get('/accounting/gst-report', { params }).then(r => r.data),
+  creditNote:    (body)     => api.post('/accounting/credit-note', body).then(r => r.data),
+  creditNotes:   ()         => api.get('/accounting/credit-notes').then(r => r.data),
+  // Expenses CRUD
+  expenses:      ()         => api.get('/accounting/expenses').then(r => r.data),
+  createExpense: (body)     => api.post('/accounting/expenses', body).then(r => r.data),
+  updateExpense: (id, body) => api.put(`/accounting/expenses/${id}`, body).then(r => r.data),
+  deleteExpense: (id)       => api.delete(`/accounting/expenses/${id}`).then(r => r.data),
+  expenseCategories: ()     => api.get('/accounting/expense-categories').then(r => r.data),
+  suggestCategory:   (body) => api.post('/accounting/expenses/suggest-category', body).then(r => r.data),
+  reminders:         ()     => api.get('/accounting/automation/reminders').then(r => r.data),
+  markReminderRead:  (id)   => api.post(`/accounting/automation/reminders/${id}/read`).then(r => r.data),
+  // Purchase Orders CRUD
+  purchaseOrders: ()        => api.get('/accounting/purchase-orders').then(r => r.data),
+  createPO:      (body)     => api.post('/accounting/purchase-orders', body).then(r => r.data),
+  updatePO:      (id, body) => api.put(`/accounting/purchase-orders/${id}`, body).then(r => r.data),
+  receivePO:     (id, body) => api.post(`/accounting/purchase-orders/${id}/receive`, body || {}).then(r => r.data),
+  deletePO:      (id)       => api.delete(`/accounting/purchase-orders/${id}`).then(r => r.data),
+  // Client Ledger
+  clientLedger:  (clientId) => api.get(`/accounting/client-ledger/${clientId}`).then(r => r.data),
+  // Delivery Challans
+  deliveryChallans: ()        => api.get('/accounting/delivery-challans').then(r => r.data),
+  createDC:      (body)     => api.post('/accounting/delivery-challans', body).then(r => r.data),
+  updateDC:      (id, body) => api.put(`/accounting/delivery-challans/${id}`, body).then(r => r.data),
+  deleteDC:      (id)       => api.delete(`/accounting/delivery-challans/${id}`).then(r => r.data),
+  // Recurring Invoices
+  recurringInvoices: ()     => api.get('/accounting/recurring-invoices').then(r => r.data),
+  createRecurringInvoice: (body) => api.post('/accounting/recurring-invoices', body).then(r => r.data),
+  updateRecurringInvoice: (id, body) => api.put(`/accounting/recurring-invoices/${id}`, body).then(r => r.data),
+  deleteRecurringInvoice: (id) => api.delete(`/accounting/recurring-invoices/${id}`).then(r => r.data),
+  generateRecurringInvoice: (id) => api.post(`/accounting/recurring-invoices/${id}/generate`).then(r => r.data),
+  // Branches (multi-location)
+  branches:          ()     => api.get('/accounting/branches').then(r => r.data),
+  createBranch:      (body) => api.post('/accounting/branches', body).then(r => r.data),
+  updateBranch:      (id, body) => api.put(`/accounting/branches/${id}`, body).then(r => r.data),
+  deleteBranch:      (id)   => api.delete(`/accounting/branches/${id}`).then(r => r.data),
+  // Global search across parties / invoices / jobs / stock / POs
+  search:            (q)    => api.get('/accounting/search', { params: { q } }).then(r => r.data),
+};
+
+// Double-entry ledger reports — every endpoint reads the journalEntries
+// projection produced by the posting engine, so Trial Balance / P&L / Balance
+// Sheet / Cash Flow / party statements all agree by construction.
+export const ledgerApi = {
+  accounts:       (params) => api.get('/ledger/accounts', { params }).then(r => r.data),
+  trialBalance:   (params) => api.get('/ledger/trial-balance', { params }).then(r => r.data),
+  pnl:            (params) => api.get('/ledger/pnl', { params }).then(r => r.data),
+  balanceSheet:   (params) => api.get('/ledger/balance-sheet', { params }).then(r => r.data),
+  cashFlow:       (params) => api.get('/ledger/cash-flow', { params }).then(r => r.data),
+  party:          (id, type) => api.get(`/ledger/party/${id}`, { params: type ? { type } : {} }).then(r => r.data),
+  entries:        (params) => api.get('/ledger/entries', { params }).then(r => r.data),
+  openingBalance: (body)   => api.post('/ledger/opening-balance', body).then(r => r.data),
+  // Manual vouchers (journal / payment / receipt / contra). DELETE only works for
+  // these — entries derived from invoices/payments/expenses/POs are immutable.
+  entry:          (body)   => api.post('/ledger/entry', body).then(r => r.data),
+  deleteEntry:    (id)     => api.delete(`/ledger/entry/${id}`).then(r => r.data),
 };
 
 // Sales / Leads CRM — assign, outcome, Excel import, targets, leaderboard, reports.
@@ -262,8 +319,18 @@ export const salesApi = {
 export const stockApi = {
   move:      (body)   => api.post('/stock/move', body).then(r => r.data),
   movements: (itemId) => api.get('/stock/movements', { params: itemId ? { itemId } : {} }).then(r => r.data),
+  // Current stock value at moving-average cost (Accounting dashboard + Balance Sheet).
+  // Pass { method: 'fifo'|'fefo' } to value from batch costs instead.
+  valuation: (params) => api.get('/stock/valuation', { params }).then(r => r.data),
   // Bulk product/stock import. Pass { rows, dryRun: true } to preview first.
   bulk:      (body)   => api.post('/stock/bulk', body).then(r => r.data),
+  // Variants & batches
+  items:       (params) => api.get('/stock/items', { params }).then(r => r.data),
+  batches:     (params) => api.get('/stock/batches', { params }).then(r => r.data),
+  receiveBatch: (body)  => api.post('/stock/batch', body).then(r => r.data),
+  issueBatch:   (body)  => api.post('/stock/batch-out', body).then(r => r.data),
+  addVariant:   (body)  => api.post('/stock/variant', body).then(r => r.data),
+  deleteVariant: (id, body) => api.delete(`/stock/variant/${id}`, { data: body }).then(r => r.data),
 };
 
 // Customer messaging — templates, broadcast, outbox (send is stubbed server-side).

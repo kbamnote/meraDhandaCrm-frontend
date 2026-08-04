@@ -143,6 +143,15 @@ export default function JobSetterPage() {
               <button className="btn btn-sm" onClick={() => setDetailJob(null)} aria-label="Close">✕</button>
             </div>
             <JobFullDetail job={detailJob} />
+            {detailJob.stage === 'jobsetter' && (
+              <button
+                className="btn btn-primary"
+                style={{ width: '100%', marginTop: 14 }}
+                onClick={() => { setDetailJob(null); setAssignJob(detailJob); }}
+              >
+                {t('selectType')} →
+              </button>
+            )}
           </div>
         </div>
       )}

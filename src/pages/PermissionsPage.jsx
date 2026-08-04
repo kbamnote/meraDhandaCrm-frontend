@@ -97,6 +97,13 @@ const MODULE_LABELS = {
   review: { en: 'Review Generator', hi: 'रिव्यू जनरेटर', hinglish: 'Review Generator' },
   invoices: { en: 'Invoices & Accounting', hi: 'इनवॉइस', hinglish: 'Invoices' },
   expenses: { en: 'Expenses & Purchases', hi: 'खर्चे', hinglish: 'Expenses' },
+  parties: { en: 'Parties (Customers & Suppliers)', hi: 'पार्टी', hinglish: 'Parties' },
+  purchases: { en: 'Purchases', hi: 'खरीद', hinglish: 'Purchases' },
+  inventory: { en: 'Inventory', hi: 'इन्वेंटरी', hinglish: 'Inventory' },
+  cashbank: { en: 'Cash & Bank', hi: 'कैश / बैंक', hinglish: 'Cash & Bank' },
+  gst: { en: 'GST', hi: 'जीएसटी', hinglish: 'GST' },
+  reports: { en: 'Reports', hi: 'रिपोर्ट', hinglish: 'Reports' },
+  entries: { en: 'Journal Entries', hi: 'जर्नल', hinglish: 'Journal Entries' },
   attendance: { en: 'Team Attendance', hi: 'अटेंडेंस', hinglish: 'Team Attendance' },
   leaves: { en: 'Leave Applications', hi: 'छुट्टियां', hinglish: 'Leaves' },
   payroll: { en: 'Payroll & Salary', hi: 'पेरोल', hinglish: 'Payroll' },
@@ -109,12 +116,14 @@ const CATALOG_FEATURES = PERMISSION_CATALOG.flatMap((g) => g.features);
 const BUILTIN_ROLES = [
   'pending', 'staff', 'designer', 'jobsetter', 'sales', 'hr',
   'manager', 'floor_manager', 'admin', 'superadmin', 'owner',
+  'accountant', 'cashier', 'inventory', 'viewer',
 ];
 
 const ROLE_BADGE = {
   admin: 'badge-red', superadmin: 'badge-red', owner: 'badge-red',
   manager: 'badge-amber', floor_manager: 'badge-amber', hr: 'badge-amber',
   designer: 'badge-blue', jobsetter: 'badge-blue', sales: 'badge-blue',
+  accountant: 'badge-blue', cashier: 'badge-blue', inventory: 'badge-blue', viewer: 'badge-green',
   staff: 'badge-green', pending: 'badge-amber',
 };
 

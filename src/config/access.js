@@ -21,6 +21,9 @@ export const PERM_OF = {
   '/designers': 'designers', '/designer': 'designers', '/designers-view': 'designers',
   '/leads-crm': 'leads', '/sales-panel': 'leads', '/sales-admin': 'leads',
   '/accounting': 'invoices', '/invoice-view': 'invoices', '/client-ledger': 'invoices',
+  '/accounting/sales': 'invoices', '/accounting/purchases': 'purchases',
+  '/accounting/parties': 'parties', '/accounting/reports': 'reports', '/accounting/gst': 'gst',
+  '/accounting/cash': 'cashbank', '/accounting/inventory': 'inventory', '/accounting/entries': 'entries',
   '/expenses': 'expenses', '/purchase-orders': 'expenses',
   '/products': 'products', '/stock': 'stock', '/vendors': 'vendors',
   '/machines': 'machines', '/machine-history': 'machines',
@@ -37,17 +40,22 @@ export const CORE_MODULES = [
   'jobs', 'production', 'qc', 'dispatch', 'designers', 'clients', 'leads',
   'invoices', 'expenses', 'stock', 'products', 'vendors', 'machines', 'tasks', 'attendance',
 ];
-export const GATED_MODULES = [...CORE_MODULES, 'leaves', 'payroll', 'productivity', 'review'];
+const ACCOUNTING_MODULES = ['parties', 'purchases', 'inventory', 'cashbank', 'gst', 'reports', 'entries'];
+export const GATED_MODULES = [...CORE_MODULES, 'leaves', 'payroll', 'productivity', 'review', ...ACCOUNTING_MODULES];
 
 // What each built-in job role can see out of the box. Plain staff/pending start
 // with only the basics (non-gated routes); admins bypass entirely.
 export const ROLE_READ_DEFAULTS = {
-  manager: [...CORE_MODULES, 'productivity', 'review', 'completed', 'hold', 'jobsetter', 'analytics'],
+  manager: [...CORE_MODULES, 'productivity', 'review', 'completed', 'hold', 'jobsetter', 'analytics', 'parties', 'gst', 'reports'],
   floor_manager: ['jobs', 'production', 'qc', 'dispatch', 'designers', 'machines', 'stock', 'tasks', 'completed', 'hold', 'jobsetter'],
   designer: ['designers', 'jobs', 'tasks', 'completed', 'hold', 'jobsetter'],
   jobsetter: ['jobs', 'production', 'tasks', 'completed', 'hold', 'jobsetter'],
-  sales: ['leads', 'clients', 'invoices', 'tasks', 'review'],
+  sales: ['leads', 'clients', 'invoices', 'tasks', 'review', 'parties', 'reports'],
   hr: ['attendance', 'tasks', 'leaves', 'payroll', 'productivity'],
+  accountant: [...CORE_MODULES, ...ACCOUNTING_MODULES, 'leaves', 'payroll', 'productivity'],
+  cashier: ['clients', 'invoices', 'payments', 'parties', 'cashbank'], // no reports/gst — payments + cash only
+  inventory: ['products', 'stock', 'vendors', 'purchases', 'inventory', 'parties'],
+  viewer: ['invoices', 'parties', 'gst', 'reports'],
   staff: [],
   pending: [],
 };
@@ -73,6 +81,10 @@ export const PERMISSION_CATALOG = [
   ] },
   { group: 'accounting', features: [
     { key: 'invoices', manage: true }, { key: 'expenses', manage: true },
+    { key: 'parties', manage: true }, { key: 'purchases', manage: true },
+    { key: 'inventory', manage: true }, { key: 'cashbank', manage: true },
+    { key: 'entries', manage: true }, { key: 'gst', manage: false },
+    { key: 'reports', manage: false },
   ] },
   // NOTE: payroll is intentionally absent — it's in the backend SENSITIVE_NO_GRANT
   // set (salary data, owner/HR-only). Including it would make sanitizePermissions

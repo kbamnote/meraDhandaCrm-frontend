@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { accountingApi, ordersApi, uploadApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
+import BranchSelect from './BranchSelect';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const inr = (n) => '₹' + (round2(n)).toLocaleString('en-IN');
@@ -131,7 +132,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
     jobNo: job?.jobNo || '',
     date: new Date().toISOString().slice(0, 10),
     ewayBillNo: '', vehicleNo: '', poNumber: '', approvedBy: '',
-    eventType: '', salesPerson: '', deliveryType: '',
+    eventType: '', salesPerson: '', deliveryType: '', branchId: '',
     invoicePrefix: '', invoiceNumber: '',
     paymentTermDays: '', dueDate: '',
     placeOfSupply: 'auto',
@@ -242,6 +243,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
         date: form.date,
         ewayBillNo: form.ewayBillNo, vehicleNo: form.vehicleNo, poNumber: form.poNumber, approvedBy: form.approvedBy,
         eventType: form.eventType, salesPerson: form.salesPerson, deliveryType: form.deliveryType,
+        branchId: form.branchId || undefined,
         invoicePrefix: form.invoicePrefix, invoiceNumber: form.invoiceNumber,
         paymentTermDays: form.paymentTermDays, dueDate: form.dueDate,
         placeOfSupply: form.placeOfSupply,
@@ -316,6 +318,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
               <div className="form-group" style={{ flex: 1 }}><label>Event Type</label><input className="input" value={form.eventType} onChange={(e) => setF('eventType', e.target.value)} /></div>
               <div className="form-group" style={{ flex: 1 }}><label>Sales Person</label><input className="input" value={form.salesPerson} onChange={(e) => setF('salesPerson', e.target.value)} /></div>
               <div className="form-group" style={{ flex: 1 }}><label>Delivery Type</label><input className="input" value={form.deliveryType} onChange={(e) => setF('deliveryType', e.target.value)} /></div>
+              <div className="form-group" style={{ flex: 1 }}><label>Branch</label><BranchSelect value={form.branchId} onChange={(v) => setF('branchId', v)} /></div>
             </div>
 
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', margin: '10px 0 6px' }}>Items / Services</div>

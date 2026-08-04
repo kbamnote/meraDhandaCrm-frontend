@@ -46,7 +46,23 @@ import DesignersPage from './pages/DesignersPage';
 import ProductionPage from './pages/ProductionPage';
 import QCPage from './pages/QCPage';
 import DispatchPage from './pages/DispatchPage';
-import AccountingPage from './pages/AccountingPage';
+import AccountingDashboardPage from './pages/accounting/AccountingDashboardPage';
+import SalesInvoicesPage from './pages/accounting/SalesInvoicesPage';
+import PartiesPage from './pages/accounting/PartiesPage';
+import ReportsPage from './pages/accounting/ReportsPage';
+import GstPage from './pages/accounting/GstPage';
+import PurchasesPage from './pages/accounting/PurchasesPage';
+import EntriesPage from './pages/accounting/EntriesPage';
+import CashBankPage from './pages/accounting/CashBankPage';
+import InventoryPage from './pages/accounting/InventoryPage';
+import ExpensesPage from './pages/accounting/ExpensesPage';
+import PurchaseOrdersPage from './pages/accounting/PurchaseOrdersPage';
+import ClientLedgerPage from './pages/accounting/ClientLedgerPage';
+import CreditNotesPage from './pages/accounting/CreditNotesPage';
+import DeliveryChallansPage from './pages/accounting/DeliveryChallansPage';
+import RecurringInvoicesPage from './pages/accounting/RecurringInvoicesPage';
+import BranchesPage from './pages/accounting/BranchesPage';
+import SearchPage from './pages/accounting/SearchPage';
 import StockPage from './pages/StockPage';
 import BroadcastPage from './pages/BroadcastPage';
 import AssignProdPage from './pages/AssignProdPage';
@@ -92,7 +108,23 @@ const CUSTOM_PAGES = {
   'production': ProductionPage,
   'qc': QCPage,
   'dispatch': DispatchPage,
-  'accounting': AccountingPage,
+  'accounting': AccountingDashboardPage,
+  'accounting/sales': SalesInvoicesPage,
+  'accounting/parties': PartiesPage,
+  'accounting/reports': ReportsPage,
+  'accounting/gst': GstPage,
+  'accounting/purchases': PurchasesPage,
+  'accounting/entries': EntriesPage,
+  'accounting/cash': CashBankPage,
+  'accounting/inventory': InventoryPage,
+  'expenses': ExpensesPage,
+  'purchase-orders': PurchaseOrdersPage,
+  'client-ledger': ClientLedgerPage,
+  'accounting/credit-notes': CreditNotesPage,
+  'accounting/challans': DeliveryChallansPage,
+  'accounting/recurring': RecurringInvoicesPage,
+  'accounting/branches': BranchesPage,
+  'accounting/search': SearchPage,
   'stock': StockPage,
   'broadcast': BroadcastPage,
   'assign-prod': AssignProdPage,
@@ -151,6 +183,20 @@ const STUB_ROUTES = [
   ['vendors',         '🏪 Vendors',           'page-vendors',         'mpw/vendors'],
 
   ['accounting',      '💰 Accounting',        'page-accounting',      'mpw/invoices'],
+  ['accounting/sales', '🧾 Sales Invoices',   'page-accounting-sales', 'mpw/invoices'],
+  ['accounting/parties', '🤝 Parties',        'page-accounting-parties', 'mpw/clients'],
+  ['accounting/reports', '📊 Reports',        'page-accounting-reports', null],
+  ['accounting/gst',  '🧮 GST',               'page-accounting-gst',  null],
+  // Phase 2 — real pages backed by CUSTOM_PAGES components.
+  ['accounting/inventory', '📦 Inventory',    'page-accounting-inventory', null],
+  ['accounting/purchases', '📦 Purchases',   'page-accounting-purchases', null],
+  ['accounting/entries',   '📝 Journal',      'page-accounting-entries',   null],
+  ['accounting/cash',      '💵 Cash & Bank',  'page-accounting-cash',      null],
+  ['accounting/credit-notes', '📝 Credit Notes', 'page-accounting-credit-notes', null],
+  ['accounting/challans',     '🚚 Delivery Challans', 'page-accounting-challans', null],
+  ['accounting/recurring',    '🔁 Recurring Invoices', 'page-accounting-recurring', null],
+  ['accounting/branches',     '🏬 Branches',           'page-accounting-branches',  null],
+  ['accounting/search',       '🔍 Search',             'page-accounting-search',    null],
   ['invoice-view',    '🧾 Invoice',           'page-invoice-view',    'mpw/invoices'],
   ['expenses',        '🧾 Expenses',          'page-expenses',        'mpw/expenses'],
   ['purchase-orders', '📦 Purchase Orders',   'page-purchase-orders', 'mpw/purchaseOrders'],
