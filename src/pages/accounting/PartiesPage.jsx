@@ -36,6 +36,15 @@ const S = {
   failed:   { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua' },
   name:     { en: 'Name', hi: 'नाम', hinglish: 'Name' },
   phone:    { en: 'Phone', hi: 'फोन', hinglish: 'Phone' },
+  email:    { en: 'Email', hi: 'ईमेल', hinglish: 'Email' },
+  address:  { en: 'Address', hi: 'पता', hinglish: 'Address' },
+  gst:      { en: 'GST No', hi: 'GST नंबर', hinglish: 'GST No' },
+  save:     { en: 'Save', hi: 'सेव', hinglish: 'Save' },
+  cancel:   { en: 'Cancel', hi: 'रद्द', hinglish: 'Cancel' },
+  adding:   { en: 'Saving…', hi: '…', hinglish: 'Saving…' },
+  nameReq:  { en: 'Name is required', hi: 'नाम जरूरी है', hinglish: 'Naam required' },
+  addCustomer: { en: 'New Customer', hi: 'नया ग्राहक', hinglish: 'Naya Customer' },
+  addSupplier: { en: 'New Supplier', hi: 'नया आपूर्तिकर्ता', hinglish: 'Naya Supplier' },
 };
 
 const partyName = (p) => p.name || p.company || p.title || '—';
@@ -50,6 +59,7 @@ export default function PartiesPage() {
   const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(null); // { type, id, name }
+  const [partyForm, setPartyForm] = useState(null); // { type: 'client' | 'vendor' } → shows the add-party modal
 
   useEffect(() => {
     const a = onValue(ref(db, 'mpw/clients'), (s) => setClients(s.val() || {}));
@@ -95,23 +105,13 @@ export default function PartiesPage() {
     return rows.filter((r) => r.name.toLowerCase().includes(s) || r.phone.toLowerCase().includes(s) || r.gstNo.toLowerCase().includes(s));
   }, [rows, q]);
 
-  const addParty = async (type) => {
-    const name = window.prompt(t('name'));
-    if (!name || !name.trim()) return;
-    const phone = window.prompt(t('phone'), '') || '';
-    try {
-      await dbApi.create(type === 'client' ? 'clients' : 'vendors', { name: name.trim(), phone: phone.trim(), status: 'active', createdAt: Date.now() });
-      showToast('✅ ' + (type === 'client' ? t('customers') : t('suppliers')), 'success');
-    } catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
-  };
-
   return (
     <div>
       <div className="flex items-center justify-between mb-4" style={{ flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
         <div className="flex" style={{ gap: 6 }}>
-          <button className="btn btn-primary btn-sm" onClick={() => addParty('client')}>{t('newCustomer')}</button>
-          <button className="btn btn-ghost btn-sm" onClick={() => addParty('vendor')}>{t('newSupplier')}</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setPartyForm({ type: 'client' })}>{t('newCustomer')}</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setPartyForm({ type: 'vendor' })}>{t('newSupplier')}</button>
         </div>
       </div>
 
@@ -147,7 +147,75 @@ export default function PartiesPage() {
         ))}
       </div>
 
+      {partyForm && <PartyFormModal type={partyForm.type} t={t} onClose={() => setPartyForm(null)} />}
       {sel && <StatementModal party={sel} t={t} onClose={() => setSel(null)} />}
+    </div>
+  );
+}
+
+// Add-customer / add-supplier modal — a proper form instead of browser prompts.
+function PartyFormModal({ type, t, onClose }) {
+  const isClient = type === 'client';
+  const [form, setForm] = useState({ name: '', phone: '', gstNo: '', email: '', address: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) { setError(t('nameReq')); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await dbApi.create(isClient ? 'clients' : 'vendors', {
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        gstNo: form.gstNo.trim().toUpperCase(),
+        email: form.email.trim(),
+        address: form.address.trim(),
+        status: 'active',
+        createdAt: Date.now(),
+      });
+      showToast('✅ ' + (isClient ? t('customers') : t('suppliers')), 'success');
+      onClose();
+    } catch (err) {
+      setError(err?.response?.data?.error || t('failed'));
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <form className="card" onSubmit={submit} style={{ width: '100%', maxWidth: 440, padding: 20 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 14 }}>{isClient ? t('addCustomer') : t('addSupplier')}</h3>
+        <div className="form-group">
+          <label>{t('name')} *</label>
+          <input className="input" autoFocus value={form.name} onChange={(e) => set('name', e.target.value)}
+            placeholder={isClient ? 'e.g. Sharma Traders' : 'e.g. Jain Paper House'} />
+        </div>
+        <div className="form-group">
+          <label>{t('phone')}</label>
+          <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="e.g. 98765 43210" />
+        </div>
+        <div className="form-group">
+          <label>{t('gst')}</label>
+          <input className="input" value={form.gstNo} onChange={(e) => set('gstNo', e.target.value)} placeholder="e.g. 27AABCU9603R1ZM" />
+        </div>
+        <div className="form-group">
+          <label>{t('email')}</label>
+          <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="name@company.com" />
+        </div>
+        <div className="form-group">
+          <label>{t('address')}</label>
+          <textarea className="input" rows={2} value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="Street, city, PIN" />
+        </div>
+        {error && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? t('adding') : t('save')}</button>
+        </div>
+      </form>
     </div>
   );
 }
