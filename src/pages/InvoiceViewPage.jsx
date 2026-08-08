@@ -5,7 +5,8 @@
  *
  * Same realtime pattern as TasksPage: onValue(ref(db, 'mpw/invoices')).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ref, onValue, db } from '../services/realtime';
 import { useT } from '../i18n/LanguageContext';
 import InvoiceDocument from '../components/common/InvoiceDocument';
@@ -60,9 +61,12 @@ function cellText(value) {
 
 export default function InvoiceViewPage() {
   const t = useT(S);
+  const [params] = useSearchParams();
+  const urlId = params.get('id');
   const [invoices, setInvoices] = useState({}); // { id: invoice }
   const [selectedId, setSelectedId] = useState(null);
   const [openId, setOpenId] = useState(null);   // non-null = full-page document view
+  const appliedDeepLink = useRef(null);         // ?id= applied exactly once
 
   useEffect(() => {
     const r = ref(db, 'mpw/invoices');
@@ -83,6 +87,17 @@ export default function InvoiceViewPage() {
       setSelectedId(list[0].id);
     }
   }, [list, selectedId]);
+
+  // Deep-link: /invoice-view?id=<invoiceId> selects AND opens that invoice's
+  // document once it arrives in the realtime feed. Applied once per id so a
+  // user can still go "Back to list" and browse without it re-opening.
+  useEffect(() => {
+    if (!urlId || appliedDeepLink.current === urlId) return;
+    if (!list.some((inv) => inv.id === urlId)) return; // not loaded yet
+    appliedDeepLink.current = urlId;
+    setSelectedId(urlId);
+    setOpenId(urlId);
+  }, [list, urlId]);
 
   const selected = useMemo(
     () => list.find((inv) => inv.id === selectedId) || null,

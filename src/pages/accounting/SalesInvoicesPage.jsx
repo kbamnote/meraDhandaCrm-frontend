@@ -5,6 +5,7 @@
  * double-entry ledger server-side.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ref, onValue, db } from '../../services/realtime';
 import { accountingApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
@@ -180,6 +181,7 @@ export default function SalesInvoicesPage() {
 }
 
 function InvoiceRow({ inv, t }) {
+  const navigate = useNavigate();
   const [paying, setPaying] = useState(false);
   const [voiding, setVoiding] = useState(false);
   const [showCrn, setShowCrn] = useState(false);
@@ -219,6 +221,7 @@ function InvoiceRow({ inv, t }) {
           <div style={{ fontSize: 18, fontWeight: 700 }}>{inr(inv.total)}</div>
           <div style={{ fontSize: 11, color: 'var(--text3)' }}>{t('taxable')} {inr(inv.subtotal)} + {inr(inv.taxTotal)} GST</div>
           <div className="flex" style={{ gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
+            <button className="btn btn-sm btn-ghost" onClick={() => navigate(`/invoice-view?id=${inv.id}`)}>{t('view')}</button>
             {inv.type !== 'proforma' && inv.status !== 'paid' && inv.status !== 'void' && (
               <button className="btn btn-sm btn-ghost" onClick={pay} disabled={paying}>{t('pay')}</button>
             )}
