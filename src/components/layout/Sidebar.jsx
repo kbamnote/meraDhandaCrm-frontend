@@ -44,6 +44,7 @@ const SECTION_S = {
   '🏪 Vendors':            { en: '🏪 Vendors',            hi: '🏪 वेंडर',               hinglish: '🏪 Vendors',            gu: '🏪 વેન્ડર',              mr: '🏪 व्हेंडर',             mwr: '🏪 वेंडर' },
   '💰 Dashboard':         { en: '💰 Dashboard',         hi: '💰 डैशबोर्ड',            hinglish: '💰 Dashboard',          gu: '💰 ડેશબોર્ડ',            mr: '💰 डॅशबोर्ड',            mwr: '💰 डैशबोर्ड' },
   '🧾 Sales Invoices':    { en: '🧾 Sales Invoices',    hi: '🧾 सेल्स इनवॉइस',        hinglish: '🧾 Sales Invoices',     gu: '🧾 સેલ્સ ઇન્વોઇસ',        mr: '🧾 सेल्स इनव्हॉइस',       mwr: '🧾 सेल्स इनवॉइस' },
+  '📦 Items':             { en: '📦 Items',             hi: '📦 आइटम',                hinglish: '📦 Items',             gu: '📦 આઇટમ્સ',              mr: '📦 आयटम',                mwr: '📦 आइटम' },
   '🤝 Parties':           { en: '🤝 Parties',           hi: '🤝 पार्टी',               hinglish: '🤝 Parties',            gu: '🤝 પાર્ટી',              mr: '🤝 पार्टी',              mwr: '🤝 पार्टी' },
   '📊 Reports':           { en: '📊 Reports',           hi: '📊 रिपोर्ट',              hinglish: '📊 Reports',            gu: '📊 રિપોર્ટ',             mr: '📊 रिपोर्ट',             mwr: '📊 रिपोर्ट' },
   '🧮 GST':               { en: '🧮 GST',               hi: '🧮 जीएसटी',               hinglish: '🧮 GST',                gu: '🧮 જીએસટી',              mr: '🧮 जीएसटी',              mwr: '🧮 जीएसटी' },
@@ -146,6 +147,7 @@ const SECTIONS = [
     items: [
       { to: '/accounting',       label: '💰 Dashboard',        legacy: 'page-accounting' },
       { to: '/accounting/sales', label: '🧾 Sales Invoices',   legacy: 'page-accounting-sales' },
+      { to: '/accounting/items', label: '📦 Items',            legacy: 'page-accounting-items' },
       { to: '/accounting/parties', label: '🤝 Parties',        legacy: 'page-accounting-parties' },
       { to: '/expenses',         label: '🧾 Expenses',         legacy: 'page-expenses' },
       { to: '/purchase-orders',  label: '📦 Purchase Orders',  legacy: 'page-purchase-orders' },

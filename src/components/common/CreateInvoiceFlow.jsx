@@ -19,6 +19,7 @@ import { accountingApi, ordersApi, uploadApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
 import BranchSelect from './BranchSelect';
+import { ref, onValue, db } from '../../services/realtime';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const inr = (n) => '₹' + (round2(n)).toLocaleString('en-IN');
@@ -47,7 +48,9 @@ const TYPE_CARDS = [
 
 // No per-item taxRate — GST is now a single invoice-level rate (GST Rate
 // dropdown on the right), so a line is just what's being billed and how much.
-const blankItem = () => ({ name: '', hsn: '', qty: '1', rate: '' });
+// itemId links the line to the Items catalog (products); lines without an
+// itemId (free-text or job work) invoice as-is and don't move stock.
+const blankItem = () => ({ name: '', hsn: '', qty: '1', rate: '', itemId: null });
 
 const DOC_TYPES = [
   { value: 'proforma', label: 'Proforma Invoice' },
@@ -154,6 +157,17 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
   const [defaults, setDefaults] = useState(null); // GET /invoice-defaults result
   const [busy, setBusy] = useState(false);
 
+  // Items catalog (the `products` collection) for the line-item picker — live,
+  // so stock hints and prices stay current after an invoice deducts stock.
+  const [catalog, setCatalog] = useState([]);
+  useEffect(() => {
+    const unsub = onValue(ref(db, 'mpw/products'), (snap) => {
+      const raw = snap.val() || {};
+      setCatalog(Object.entries(raw).map(([id, rec]) => ({ ...rec, id })));
+    });
+    return () => unsub();
+  }, []);
+
   // Company defaults (bank, terms, prefix, next number, GSTIN/state) — reload
   // whenever the document type changes, since each type has its own
   // prefix/number sequence and its own default Terms text.
@@ -192,7 +206,13 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
     }
   };
 
-  const setItem = (i, k, v) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
+  // Manually re-typing the name detaches the line from the catalog (free-text),
+  // so stock won't be deducted for a name the user changed after picking.
+  const setItem = (i, k, v) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, [k]: v, ...(k === 'name' ? { itemId: null } : {}) } : it)));
+
+  // Picking a catalog product fills Name / HSN / Selling Price and links itemId
+  // so the backend deducts that product's stock when the invoice is saved.
+  const pickCatalogItem = (i, p) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, itemId: p.id, name: p.name, hsn: p.hsn || '', rate: String(p.price ?? '') } : it)));
 
   // Client-side preview of Place of Supply — the server recomputes
   // authoritatively at save time from the same GSTIN, this is display-only.
@@ -253,7 +273,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
         amountReceived: form.markFullyPaid ? undefined : Number(form.amountReceived) || 0,
         paymentMode: form.paymentMode,
         notes: form.notes, terms: form.terms, attachments,
-        items: items.filter((it) => it.name.trim()).map((it) => ({ name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate) })),
+        items: items.filter((it) => it.name.trim()).map((it) => ({ name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate), itemId: it.itemId || null })),
       });
       showToast(`${inv.invoiceNo} created`, 'success');
       onCreated?.(inv);
@@ -333,10 +353,40 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
             </div>
             {items.map((it, i) => {
               const amount = round2((Number(it.qty) || 0) * (Number(it.rate) || 0));
+              const q = (it.name || '').trim().toLowerCase();
+              const exactMatch = catalog.some((c) => c.name === it.name);
+              const itemMatches = (q.length < 1 || exactMatch)
+                ? []
+                : catalog.filter((p) => (p.name || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q)).slice(0, 8);
+              const picked = it.itemId ? catalog.find((c) => c.id === it.itemId) : null;
+              const trackable = picked && picked.trackStock !== 'no' && picked.type !== 'service';
+              const overStock = trackable && picked.stock != null && (Number(it.qty) || 0) > Number(picked.stock);
               return (
                 <div key={i} className="flex gap-2" style={{ marginBottom: 6, alignItems: 'center' }}>
                   <span style={{ width: 22, fontSize: 12, color: 'var(--text3)' }}>{i + 1}</span>
-                  <input className="input" style={{ flex: 3 }} placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
+                  <div style={{ position: 'relative', flex: 3 }}>
+                    <input className="input" style={{ width: '100%' }} placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
+                    {itemMatches.length > 0 && (
+                      <div className="card" style={{ position: 'absolute', zIndex: 5, left: 0, right: 0, top: '100%', marginTop: 2, padding: 0, maxHeight: 160, overflow: 'auto' }}>
+                        {itemMatches.map((p) => (
+                          <div key={p.id} onClick={() => pickCatalogItem(i, p)} style={{ padding: '7px 9px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
+                            <b>{p.name}</b>
+                            {p.sku ? <span style={{ color: 'var(--text3)', marginLeft: 6 }}>{p.sku}</span> : null}
+                            <span style={{ float: 'right', color: 'var(--text2)' }}>
+                              {p.trackStock !== 'no' && p.type !== 'service' && p.stock != null ? `stock ${Number(p.stock)}${p.unit ? ' ' + p.unit : ''}` : ''}
+                              {p.price ? ` · ₹${Number(p.price).toLocaleString('en-IN')}` : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {picked && (
+                      <div style={{ fontSize: 10.5, marginTop: 1, color: overStock ? 'var(--red, #DC2626)' : 'var(--text3)' }}>
+                        {trackable ? `stock ${Number(picked.stock)}${picked.unit ? ' ' + picked.unit : ''}` : 'service / no stock tracking'}
+                        {overStock ? ` — qty exceeds available stock` : ''}
+                      </div>
+                    )}
+                  </div>
                   <input className="input" style={{ flex: 1.2, minWidth: 60 }} placeholder="HSN/SAC" value={it.hsn} onChange={(e) => setItem(i, 'hsn', e.target.value)} />
                   <input className="input" style={{ width: 55 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
                   <input className="input" style={{ flex: 1.2, minWidth: 70 }} placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />

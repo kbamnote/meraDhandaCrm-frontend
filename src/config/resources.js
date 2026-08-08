@@ -342,6 +342,27 @@ export const RESOURCES = {
     ],
   },
 
+  'accounting/items': {
+    collection: 'products', title: '📦 Items', plural: 'Items', singular: 'Item',
+    legacyId: 'page-accounting-items', writeRoles: ADMIN,
+    // The Items catalog — a focused view over the same `products` collection
+    // the Inventory module uses (name / sku / stock / selling / purchase), so
+    // stock deduction on sales invoices and inventory valuation stay in sync
+    // with exactly one item master.
+    fields: [
+      { key: 'name', label: 'Item Name', type: 'text', required: true, table: true },
+      { key: 'sku', label: 'Item Code', type: 'text', table: true },
+      { key: 'stock', label: 'Stock QTY', type: 'number', table: true },
+      { key: 'price', label: 'Selling Price (₹)', type: 'number', table: true },
+      { key: 'purchasePrice', label: 'Purchase Price (₹)', type: 'number', table: true },
+      { key: 'category', label: 'Category', type: 'text' },
+      { key: 'hsn', label: 'HSN', type: 'text' },
+      { key: 'gst', label: 'GST %', type: 'select', options: ['0', '5', '12', '18', '28'] },
+      { key: 'unit', label: 'Unit', type: 'text' },
+      { key: 'lowStock', label: 'Low Stock Alert At', type: 'number' },
+    ],
+  },
+
   'hr-leaves': {
     collection: 'leaves', title: '🏖 Leaves', plural: 'Leaves', singular: 'Leave',
     legacyId: 'page-hr-leaves', writeRoles: ADMIN_HR,

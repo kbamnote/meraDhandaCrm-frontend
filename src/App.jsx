@@ -184,6 +184,7 @@ const STUB_ROUTES = [
 
   ['accounting',      '💰 Accounting',        'page-accounting',      'mpw/invoices'],
   ['accounting/sales', '🧾 Sales Invoices',   'page-accounting-sales', 'mpw/invoices'],
+  ['accounting/items', '📦 Items',            'page-accounting-items', 'mpw/products'],
   ['accounting/parties', '🤝 Parties',        'page-accounting-parties', 'mpw/clients'],
   ['accounting/reports', '📊 Reports',        'page-accounting-reports', null],
   ['accounting/gst',  '🧮 GST',               'page-accounting-gst',  null],
