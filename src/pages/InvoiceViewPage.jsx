@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
 import { useT } from '../i18n/LanguageContext';
+import InvoiceDocument from '../components/common/InvoiceDocument';
 
 const S = {
   invoiceView: { en: 'Invoice View', hi: 'इनवॉइस व्यू', hinglish: 'Invoice View', gu: 'ઇન્વોઇસ વ્યૂ', mr: 'इनव्हॉइस व्ह्यू', mwr: 'इनवॉइस व्यू' },
@@ -42,6 +43,8 @@ const KNOWN = new Set([
   'id', 'invoiceNo', 'client', 'amount', 'status', 'date', 'dueDate',
 ]);
 
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
 function money(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return '—';
@@ -59,6 +62,7 @@ export default function InvoiceViewPage() {
   const t = useT(S);
   const [invoices, setInvoices] = useState({}); // { id: invoice }
   const [selectedId, setSelectedId] = useState(null);
+  const [openId, setOpenId] = useState(null);   // non-null = full-page document view
 
   useEffect(() => {
     const r = ref(db, 'mpw/invoices');
@@ -90,6 +94,27 @@ export default function InvoiceViewPage() {
     return Object.entries(selected).filter(([k]) => !KNOWN.has(k));
   }, [selected]);
 
+  // Full-page document mode — the printable invoice on its own, with the app
+  // chrome hidden by the document's own print CSS.
+  if (openId) {
+    const doc = list.find((inv) => inv.id === openId);
+    if (!doc) { setOpenId(null); return null; }
+    return (
+      <div data-legacy-id="page-invoice-view">
+        <div className="flex items-center justify-between mb-2 no-print" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setOpenId(null)}>← Back to list</button>
+          <div className="flex gap-2">
+            <span className={`badge ${STATUS_BADGE[doc.status] || 'badge-blue'}`} style={{ alignSelf: 'center' }}>
+              {doc.status || t('draft')}
+            </span>
+            <button className="btn btn-primary btn-sm" onClick={() => window.print()}>{t('print')}</button>
+          </div>
+        </div>
+        <InvoiceDocument invoice={doc} />
+      </div>
+    );
+  }
+
   return (
     <div data-legacy-id="page-invoice-view">
       <div className="flex items-center justify-between mb-4">
@@ -120,7 +145,7 @@ export default function InvoiceViewPage() {
                 <button
                   key={inv.id}
                   type="button"
-                  onClick={() => setSelectedId(inv.id)}
+                  onClick={() => { setSelectedId(inv.id); setOpenId(inv.id); }}
                   style={{
                     display: 'block',
                     width: '100%',
@@ -138,17 +163,19 @@ export default function InvoiceViewPage() {
                     {inv.invoiceNo || `#${inv.id}`}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
-                    {inv.client || '—'}
+                    {/* `clientName` is what the invoice actually stores; `client`
+                        is only present on older//legacy rows. */}
+                    {inv.clientName || inv.client || '—'}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-                    {money(inv.amount)}
+                    {money(inv.total ?? inv.amount)}
                   </div>
                 </button>
               );
             })}
           </div>
 
-          {/* Detail card */}
+          {/* Summary card — the full document opens on click (or via Open). */}
           <div className="card flex-1" style={{ minWidth: 280 }}>
             {!selected ? (
               <div style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
@@ -165,35 +192,31 @@ export default function InvoiceViewPage() {
                   </span>
                 </div>
 
-                <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 16 }}>
-                  {money(selected.amount)}
+                <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>
+                  {money(selected.total ?? selected.amount)}
                 </div>
+                {Number(selected.paidAmount) > 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>
+                    Paid {money(selected.paidAmount)} · Balance {money(round2((selected.total || 0) - (selected.paidAmount || 0)))}
+                  </div>
+                )}
 
                 <table className="crm-table" style={{ width: '100%' }}>
                   <tbody>
                     <DetailRow label={t('invoiceNo')} value={selected.invoiceNo} />
-                    <DetailRow label={t('client')} value={selected.client} />
-                    <DetailRow label={t('amount')} value={money(selected.amount)} />
+                    <DetailRow label={t('client')} value={selected.clientName || selected.client} />
+                    <DetailRow label={t('amount')} value={money(selected.total ?? selected.amount)} />
                     <DetailRow label={t('status')} value={selected.status} />
                     <DetailRow label={t('date')} value={selected.date} />
                     <DetailRow label={t('dueDate')} value={selected.dueDate} />
                   </tbody>
                 </table>
 
-                {!!extraEntries.length && (
-                  <>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', margin: '16px 0 6px', textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                      {t('otherDetails')}
-                    </div>
-                    <table className="crm-table" style={{ width: '100%' }}>
-                      <tbody>
-                        {extraEntries.map(([k, v]) => (
-                          <DetailRow key={k} label={k} value={cellText(v)} />
-                        ))}
-                      </tbody>
-                    </table>
-                  </>
-                )}
+                <div className="flex gap-2" style={{ marginTop: 14 }}>
+                  <button className="btn btn-primary btn-sm" onClick={() => setOpenId(selected.id)}>
+                    📄 Open invoice
+                  </button>
+                </div>
               </div>
             )}
           </div>

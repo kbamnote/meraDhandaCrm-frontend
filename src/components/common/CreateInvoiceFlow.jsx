@@ -16,6 +16,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { accountingApi, ordersApi, uploadApi } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
 import BranchSelect from './BranchSelect';
@@ -50,7 +51,7 @@ const TYPE_CARDS = [
 // dropdown on the right), so a line is just what's being billed and how much.
 // itemId links the line to the Items catalog (products); lines without an
 // itemId (free-text or job work) invoice as-is and don't move stock.
-const blankItem = () => ({ name: '', hsn: '', qty: '1', rate: '', itemId: null });
+const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', itemId: null });
 
 const DOC_TYPES = [
   { value: 'proforma', label: 'Proforma Invoice' },
@@ -119,6 +120,10 @@ function Row({ label, value, bold, color }) {
 }
 
 function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }) {
+  const { tenant } = useAuth();
+  // Snapshot the branding logo onto the invoice so a reprint keeps the mark the
+  // document was issued under, even if branding changes later.
+  const tenantLogo = tenant?.settings?.branding?.logo || '';
   const [type, setType] = useState(initialType);
   const isCash = type === 'cash';
 
@@ -128,6 +133,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
   const [clientMatches, setClientMatches] = useState([]);
   const [party, setParty] = useState({
     clientId: null, clientName: job?.clientName || '', clientPhone: '', clientAddress: '', gstNo: job?.gstNo || '',
+    clientPan: '',
+    // Ship To defaults to the billing party; only sent when "different" is ticked.
+    shipDifferent: false, shipToName: '', shipToAddress: '',
   });
   const setP = (k, v) => setParty((p) => ({ ...p, [k]: v }));
 
@@ -150,7 +158,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const [items, setItems] = useState([
-    job ? { name: job.work || '', hsn: '', qty: '1', rate: '' } : blankItem(),
+    job ? { ...blankItem(), name: job.work || '' } : blankItem(),
   ]);
   const [attachments, setAttachments] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -258,7 +266,12 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
         type,
         clientId: party.clientId, clientName: party.clientName.trim(),
         clientPhone: party.clientPhone.trim(), clientAddress: party.clientAddress.trim(),
-        gstNo: party.gstNo.trim(),
+        gstNo: party.gstNo.trim(), clientPan: party.clientPan.trim(),
+        // Omit when shipping to the billing address — the server then mirrors
+        // Bill To into Ship To rather than storing a blank block.
+        shipToName: party.shipDifferent ? party.shipToName.trim() : undefined,
+        shipToAddress: party.shipDifferent ? party.shipToAddress.trim() : undefined,
+        companyLogo: tenantLogo || undefined,
         jobId: job?.id, jobNo: form.jobNo, // server stamps job.billNumber when jobId is set
         date: form.date,
         ewayBillNo: form.ewayBillNo, vehicleNo: form.vehicleNo, poNumber: form.poNumber, approvedBy: form.approvedBy,
@@ -329,6 +342,34 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
             )}
 
             <div className="flex gap-2">
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Client PAN</label>
+                <input className="input" placeholder="AAACU8310N" value={party.clientPan} onChange={(e) => setP('clientPan', e.target.value.toUpperCase())} />
+              </div>
+              <div className="form-group" style={{ flex: 2 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="checkbox" checked={party.shipDifferent} onChange={(e) => setP('shipDifferent', e.target.checked)} />
+                  Ship to a different address
+                </label>
+                {!party.shipDifferent && (
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Ship To will match Bill To.</div>
+                )}
+              </div>
+            </div>
+            {party.shipDifferent && (
+              <div className="flex gap-2">
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Ship To — name</label>
+                  <input className="input" value={party.shipToName} onChange={(e) => setP('shipToName', e.target.value)} />
+                </div>
+                <div className="form-group" style={{ flex: 2 }}>
+                  <label>Ship To — address</label>
+                  <input className="input" value={party.shipToAddress} onChange={(e) => setP('shipToAddress', e.target.value)} />
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
               <div className="form-group" style={{ flex: 1 }}><label>E-way Bill No.</label><input className="input" value={form.ewayBillNo} onChange={(e) => setF('ewayBillNo', e.target.value)} /></div>
               <div className="form-group" style={{ flex: 1 }}><label>Vehicle No.</label><input className="input" value={form.vehicleNo} onChange={(e) => setF('vehicleNo', e.target.value)} /></div>
               <div className="form-group" style={{ flex: 1 }}><label>PO Number</label><input className="input" value={form.poNumber} onChange={(e) => setF('poNumber', e.target.value)} /></div>
@@ -362,7 +403,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
               const trackable = picked && picked.trackStock !== 'no' && picked.type !== 'service';
               const overStock = trackable && picked.stock != null && (Number(it.qty) || 0) > Number(picked.stock);
               return (
-                <div key={i} className="flex gap-2" style={{ marginBottom: 6, alignItems: 'center' }}>
+                <div key={i}>
+                <div className="flex gap-2" style={{ marginBottom: 6, alignItems: 'center' }}>
                   <span style={{ width: 22, fontSize: 12, color: 'var(--text3)' }}>{i + 1}</span>
                   <div style={{ position: 'relative', flex: 3 }}>
                     <input className="input" style={{ width: '100%' }} placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
@@ -388,10 +430,24 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
                     )}
                   </div>
                   <input className="input" style={{ flex: 1.2, minWidth: 60 }} placeholder="HSN/SAC" value={it.hsn} onChange={(e) => setItem(i, 'hsn', e.target.value)} />
-                  <input className="input" style={{ width: 55 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
+                  <input className="input" style={{ width: 50 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
+                  <input className="input" style={{ width: 52 }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
                   <input className="input" style={{ flex: 1.2, minWidth: 70 }} placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
                   <span style={{ flex: 1.2, textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{inr(amount)}</span>
                   <button className="btn btn-ghost btn-xs" style={{ width: 18 }} onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))} disabled={items.length === 1}>×</button>
+                </div>
+                {/* Optional second line printed under the item name on the invoice. */}
+                <div className="flex gap-2" style={{ marginBottom: 8, alignItems: 'center' }}>
+                  <span style={{ width: 22 }} />
+                  <input
+                    className="input"
+                    style={{ flex: 1, fontSize: 12 }}
+                    placeholder="Description (optional) — printed under the item name"
+                    value={it.description}
+                    onChange={(e) => setItem(i, 'description', e.target.value)}
+                  />
+                  <span style={{ width: 18 }} />
+                </div>
                 </div>
               );
             })}

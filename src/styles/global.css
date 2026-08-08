@@ -138,3 +138,15 @@ table.crm-table{width:100%;border-collapse:collapse;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
 .center-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;}
+
+/* ── Print ────────────────────────────────────────────────────────────────
+   Strip the app chrome so Ctrl+P / "Save as PDF" yields the document alone.
+   Without this the sidebar, topbar and page padding all land on the paper.
+   Anything marked .no-print is dropped too (back buttons, action bars). */
+@media print {
+  .sidebar, .sidebar-overlay, .topbar, #toast-container, .no-print { display: none !important; }
+  .crm-layout { display: block !important; min-height: 0 !important; }
+  .main-area { margin-left: 0 !important; min-height: 0 !important; display: block !important; }
+  .page-content { padding: 0 !important; }
+  body { background: #fff !important; }
+}

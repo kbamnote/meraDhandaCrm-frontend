@@ -16,6 +16,9 @@ const EMPTY = {
   // Used by invoice creation (GET /accounting/invoice-defaults): shown in the
   // Bank Details box, and the signatory line at the bottom of every invoice.
   bankAccountNumber: '', bankIFSC: '', bankBranch: '', bankHolderName: '',
+  // `pan` prints in the invoice header; `upiId` renders the payment QR on the
+  // invoice; `signatureImage` is the stamp/sign shown above the signatory line.
+  pan: '', upiId: '', signatureImage: '',
   authorizedSignatory: '',
   // Default Terms & Conditions per document type — prefilled on every new
   // invoice of that type, still editable per invoice via "Edit Terms".
@@ -199,8 +202,25 @@ export default function CompanySettingsPage() {
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [signBusy, setSignBusy] = useState(false);
 
   const canEdit = hasRole('admin', 'superadmin', 'owner');
+
+  // Upload the signature/stamp, then store the returned URL on the form. Saved
+  // with the rest of the settings, so the user still has to press Save.
+  const uploadSignature = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setSignBusy(true);
+    try {
+      const r = await uploadApi.upload(file);
+      setForm((f) => ({ ...f, signatureImage: r.url }));
+      showToast('Signature uploaded — press Save to apply', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Upload failed', 'error');
+    } finally { setSignBusy(false); }
+  };
 
   useEffect(() => {
     let active = true;
@@ -343,6 +363,17 @@ export default function CompanySettingsPage() {
           </div>
         </div>
 
+        <div className="flex gap-2">
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>PAN Number</label>
+            <input className="input" placeholder="AARCM9639F" value={form.pan} onChange={(e) => setField('pan', e.target.value.toUpperCase())} disabled={!canEdit} />
+          </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>UPI ID (payment QR on invoice)</label>
+            <input className="input" placeholder="yourbusiness@bank" value={form.upiId} onChange={(e) => setField('upiId', e.target.value)} disabled={!canEdit} />
+          </div>
+        </div>
+
         <div style={{ borderTop: '1px solid var(--border)', margin: '18px 0 14px' }} />
         <h3 style={{ fontSize: 15, marginBottom: 10 }}>🏦 Bank Details</h3>
         <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
@@ -374,6 +405,26 @@ export default function CompanySettingsPage() {
         <div className="form-group">
           <label>Authorized Signatory</label>
           <input className="input" placeholder={form.name || 'Defaults to company name'} value={form.authorizedSignatory} onChange={(e) => setField('authorizedSignatory', e.target.value)} disabled={!canEdit} />
+        </div>
+        <div className="form-group">
+          <label>Signature / Stamp image</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            {form.signatureImage && (
+              <img src={form.signatureImage} alt="signature" style={{ height: 54, maxWidth: 160, objectFit: 'contain', background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: 4 }} />
+            )}
+            {canEdit && (
+              <>
+                <input id="signUp" type="file" accept="image/*" style={{ display: 'none' }} onChange={uploadSignature} />
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => document.getElementById('signUp').click()} disabled={signBusy}>
+                  {signBusy ? 'Uploading…' : (form.signatureImage ? 'Change image' : 'Upload image')}
+                </button>
+                {form.signatureImage && <button type="button" className="btn btn-ghost btn-xs" onClick={() => setField('signatureImage', '')}>Remove</button>}
+              </>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+            Printed above the “Authorised Signatory” line on every invoice. A transparent PNG works best.
+          </div>
         </div>
         <div className="form-group">
           <label>Default Terms — Proforma Invoice</label>
