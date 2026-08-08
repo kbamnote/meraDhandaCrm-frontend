@@ -16,10 +16,12 @@ const S = {
   totalInvoiced: { en: 'Total Invoiced', hinglish: 'Total Invoiced' },
   totalPaid:{ en: 'Total Paid', hinglish: 'Total Paid' },
   credited: { en: 'Credit Notes', hinglish: 'Credit Notes' },
+  debited:  { en: 'Debit Notes', hinglish: 'Debit Notes' },
   outstanding: { en: 'Outstanding', hi: 'बकाया', hinglish: 'Outstanding' },
   invoices: { en: 'Invoices', hinglish: 'Invoices' },
   payments: { en: 'Payments', hinglish: 'Payments' },
   creditNotes: { en: 'Credit Notes', hinglish: 'Credit Notes' },
+  debitNotes:  { en: 'Debit Notes', hinglish: 'Debit Notes' },
   ageWise:  { en: 'Age-wise Outstanding', hinglish: 'Age-wise Outstanding' },
   current:  { en: 'Current', hinglish: 'Current' },
   '1-30':   { en: '1–30 days', hinglish: '1–30 days' },
@@ -35,6 +37,7 @@ const S = {
   mode:     { en: 'Mode', hinglish: 'Mode' },
   reason:   { en: 'Reason', hinglish: 'Reason' },
   creditNo: { en: 'Credit No', hinglish: 'Credit No' },
+  debitNo:  { en: 'Debit No', hinglish: 'Debit No' },
   status:   { en: 'Status', hinglish: 'Status' },
   ageDays:  { en: 'Age (days)', hinglish: 'Age' },
   noClient: { en: 'Select a client to view their ledger.', hinglish: 'Select a client.' },
@@ -119,6 +122,7 @@ export default function ClientLedgerPage() {
             <Kpi label={t('totalInvoiced')} value={inr(ledger.totalInvoiced)} icon="🧾" color="var(--blue)" />
             <Kpi label={t('totalPaid')} value={inr(ledger.totalPaid)} icon="✅" color="var(--green)" />
             <Kpi label={t('credited')} value={inr(ledger.totalCredited)} icon="📝" color="var(--amber)" />
+            <Kpi label={t('debited')} value={inr(ledger.totalDebited || 0)} icon="➕" color="var(--red)" />
             <Kpi label={t('outstanding')} value={inr(ledger.outstanding)} icon="💰" color={ledger.outstanding > 0 ? 'var(--red)' : 'var(--green)'} />
           </KpiGrid>
 
@@ -139,7 +143,7 @@ export default function ClientLedgerPage() {
 
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 16 }}>
-            {['invoices', 'payments', 'creditNotes', 'party'].map((k) => (
+            {['invoices', 'payments', 'creditNotes', 'debitNotes', 'party'].map((k) => (
               <button key={k} onClick={() => setTab(k)}
                 style={{ padding: '8px 16px', cursor: 'pointer', border: 'none', background: 'none', fontWeight: tab === k ? 600 : 400, fontSize: 13, color: tab === k ? 'var(--blue)' : 'var(--text2)', borderBottom: tab === k ? '2px solid var(--blue)' : '2px solid transparent', marginBottom: -2 }}>
                 {t(k)}
@@ -216,6 +220,27 @@ export default function ClientLedgerPage() {
                         <td style={{ fontSize: 12 }}>{cn.date}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--amber)' }}>{inr(cn.total)}</td>
                         <td style={{ fontSize: 12 }}>{cn.reason || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* Debit Notes tab */}
+          {tab === 'debitNotes' && (
+            <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+              {!ledger.debitNotes || ledger.debitNotes.length === 0 ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--text3)' }}>{t('noData')}</div> : (
+                <table className="table table-sm" style={{ minWidth: 400, margin: 0 }}>
+                  <thead><tr><th>{t('debitNo')}</th><th>{t('date')}</th><th style={{ textAlign: 'right' }}>{t('amount')}</th><th>{t('reason')}</th></tr></thead>
+                  <tbody>
+                    {ledger.debitNotes.map((dn) => (
+                      <tr key={dn.id}>
+                        <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{dn.debitNo}</td>
+                        <td style={{ fontSize: 12 }}>{dn.date}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--red)' }}>+{inr(dn.total)}</td>
+                        <td style={{ fontSize: 12 }}>{dn.reason || '—'}</td>
                       </tr>
                     ))}
                   </tbody>

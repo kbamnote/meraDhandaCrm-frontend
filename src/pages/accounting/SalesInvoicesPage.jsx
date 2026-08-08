@@ -11,6 +11,7 @@ import { useT } from '../../i18n/LanguageContext';
 import { showToast } from '../../components/common/toast';
 import CreateInvoiceFlow from '../../components/common/CreateInvoiceFlow';
 import CreditNoteModal from '../../components/common/CreditNoteModal';
+import DebitNoteModal from '../../components/common/DebitNoteModal';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -37,6 +38,7 @@ const S = {
   failed:   { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua' },
   creditNotes: { en: 'Credit Notes', hi: 'क्रेडिट नोट्स', hinglish: 'Credit Notes' },
   creditNote:  { en: 'Credit Note', hi: 'क्रेडिट नोट', hinglish: 'Credit Note' },
+  debitNote:   { en: 'Debit Note', hi: 'डेबिट नोट', hinglish: 'Debit Note' },
   crnNone:  { en: 'No credit notes yet.', hi: 'अभी कोई क्रेडिट नोट नहीं।', hinglish: 'Abhi koi credit note nahi.' },
   against:  { en: 'Against', hi: 'विरुद्ध', hinglish: 'Against' },
 };
@@ -181,6 +183,7 @@ function InvoiceRow({ inv, t }) {
   const [paying, setPaying] = useState(false);
   const [voiding, setVoiding] = useState(false);
   const [showCrn, setShowCrn] = useState(false);
+  const [showDbn, setShowDbn] = useState(false);
   const due = round2((inv.total || 0) - (inv.paidAmount || 0));
 
   const pay = async () => {
@@ -222,6 +225,9 @@ function InvoiceRow({ inv, t }) {
             {inv.type !== 'proforma' && inv.status !== 'void' && due > 0 && (
               <button className="btn btn-sm btn-ghost" style={{ color: 'var(--blue, #C05621)' }} onClick={() => setShowCrn(true)}>{t('creditNote')}</button>
             )}
+            {inv.type !== 'proforma' && inv.status !== 'void' && (
+              <button className="btn btn-sm btn-ghost" style={{ color: 'var(--amber)' }} onClick={() => setShowDbn(true)}>{t('debitNote')}</button>
+            )}
             {inv.status !== 'void' && (
               <button className="btn btn-sm btn-ghost" style={{ color: 'var(--red)' }} onClick={doVoid} disabled={voiding}>{t('voidInv')}</button>
             )}
@@ -229,6 +235,7 @@ function InvoiceRow({ inv, t }) {
         </div>
       </div>
       {showCrn && <CreditNoteModal invoice={inv} onClose={() => setShowCrn(false)} />}
+      {showDbn && <DebitNoteModal invoice={inv} onClose={() => setShowDbn(false)} />}
     </div>
   );
 }

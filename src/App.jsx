@@ -59,6 +59,7 @@ import ExpensesPage from './pages/accounting/ExpensesPage';
 import PurchaseOrdersPage from './pages/accounting/PurchaseOrdersPage';
 import ClientLedgerPage from './pages/accounting/ClientLedgerPage';
 import CreditNotesPage from './pages/accounting/CreditNotesPage';
+import DebitNotesPage from './pages/accounting/DebitNotesPage';
 import DeliveryChallansPage from './pages/accounting/DeliveryChallansPage';
 import RecurringInvoicesPage from './pages/accounting/RecurringInvoicesPage';
 import BranchesPage from './pages/accounting/BranchesPage';
@@ -121,6 +122,7 @@ const CUSTOM_PAGES = {
   'purchase-orders': PurchaseOrdersPage,
   'client-ledger': ClientLedgerPage,
   'accounting/credit-notes': CreditNotesPage,
+  'accounting/debit-notes': DebitNotesPage,
   'accounting/challans': DeliveryChallansPage,
   'accounting/recurring': RecurringInvoicesPage,
   'accounting/branches': BranchesPage,
@@ -194,6 +196,7 @@ const STUB_ROUTES = [
   ['accounting/entries',   '📝 Journal',      'page-accounting-entries',   null],
   ['accounting/cash',      '💵 Cash & Bank',  'page-accounting-cash',      null],
   ['accounting/credit-notes', '📝 Credit Notes', 'page-accounting-credit-notes', null],
+  ['accounting/debit-notes',  '📝 Debit Notes',  'page-accounting-debit-notes',  null],
   ['accounting/challans',     '🚚 Delivery Challans', 'page-accounting-challans', null],
   ['accounting/recurring',    '🔁 Recurring Invoices', 'page-accounting-recurring', null],
   ['accounting/branches',     '🏬 Branches',           'page-accounting-branches',  null],

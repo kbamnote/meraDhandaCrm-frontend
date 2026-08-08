@@ -249,6 +249,8 @@ export const accountingApi = {
   gstReport:     (params)   => api.get('/accounting/gst-report', { params }).then(r => r.data),
   creditNote:    (body)     => api.post('/accounting/credit-note', body).then(r => r.data),
   creditNotes:   ()         => api.get('/accounting/credit-notes').then(r => r.data),
+  debitNote:     (body)     => api.post('/accounting/debit-note', body).then(r => r.data),
+  debitNotes:    ()         => api.get('/accounting/debit-notes').then(r => r.data),
   // Expenses CRUD
   expenses:      ()         => api.get('/accounting/expenses').then(r => r.data),
   createExpense: (body)     => api.post('/accounting/expenses', body).then(r => r.data),
