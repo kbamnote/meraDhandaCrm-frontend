@@ -19,6 +19,7 @@ const ADMIN = ['admin', 'superadmin', 'owner'];
 const ADMIN_SALES = [...ADMIN, 'sales'];
 const ADMIN_HR = [...ADMIN, 'hr'];
 const ADMIN_DESIGNER = [...ADMIN, 'designer'];
+const ADMIN_ACCOUNTANT = [...ADMIN, 'accountant'];
 
 const STATUS_ACTIVE = ['active', 'inactive'];
 
@@ -344,7 +345,7 @@ export const RESOURCES = {
 
   'accounting/items': {
     collection: 'products', title: '📦 Items', plural: 'Items', singular: 'Item',
-    legacyId: 'page-accounting-items', writeRoles: ADMIN,
+    legacyId: 'page-accounting-items', writeRoles: ADMIN_ACCOUNTANT,
     // The Items catalog — a focused view over the same `products` collection
     // the Inventory module uses (name / sku / stock / selling / purchase), so
     // stock deduction on sales invoices and inventory valuation stay in sync
