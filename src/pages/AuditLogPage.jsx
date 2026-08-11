@@ -19,6 +19,7 @@ const ACTIONS = [
   'expense.create', 'expense.update', 'expense.delete',
   'purchase.receive',
   'voucher.create', 'voucher.delete', 'opening_balance.post',
+  'recon.statement', 'recon.match', 'recon.unmatch', 'recon.automatch',
 ];
 
 // badge tone per action group
@@ -45,6 +46,10 @@ const ACTION_TONE = {
   'voucher.create': 'badge-blue',
   'voucher.delete': 'badge-red',
   'opening_balance.post': 'badge-green',
+  'recon.statement': 'badge-blue',
+  'recon.match': 'badge-green',
+  'recon.unmatch': 'badge-amber',
+  'recon.automatch': 'badge-green',
 };
 
 const S = {

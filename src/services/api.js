@@ -288,6 +288,13 @@ export const accountingApi = {
   deleteBranch:      (id)   => api.delete(`/accounting/branches/${id}`).then(r => r.data),
   // Global search across parties / invoices / jobs / stock / POs
   search:            (q)    => api.get('/accounting/search', { params: { q } }).then(r => r.data),
+  // Bank reconciliation (Phase 4A-3)
+  recon:           (params) => api.get('/accounting/recon', { params }).then(r => r.data),
+  reconStatements: (lines)  => api.post('/accounting/recon/statements', lines).then(r => r.data),
+  reconDelete:     (id)     => api.delete(`/accounting/recon/statements/${id}`).then(r => r.data),
+  reconMatch:      (body)   => api.post('/accounting/recon/match', body).then(r => r.data),
+  reconUnmatch:    (body)   => api.post('/accounting/recon/unmatch', body).then(r => r.data),
+  reconAutoMatch:  (body)   => api.post('/accounting/recon/auto-match', body).then(r => r.data),
 };
 
 // Double-entry ledger reports — every endpoint reads the journalEntries

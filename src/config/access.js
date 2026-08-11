@@ -23,7 +23,7 @@ export const PERM_OF = {
   '/accounting': 'invoices', '/invoice-view': 'invoices', '/client-ledger': 'invoices',
   '/accounting/sales': 'invoices', '/accounting/purchases': 'purchases',
   '/accounting/parties': 'parties', '/accounting/reports': 'reports', '/accounting/gst': 'gst',
-  '/accounting/cash': 'cashbank', '/accounting/inventory': 'inventory', '/accounting/entries': 'entries',
+  '/accounting/cash': 'cashbank', '/accounting/recon': 'cashbank', '/accounting/inventory': 'inventory', '/accounting/entries': 'entries',
   '/expenses': 'expenses', '/purchase-orders': 'expenses',
   '/products': 'products', '/stock': 'stock', '/vendors': 'vendors',
   '/machines': 'machines', '/machine-history': 'machines',
