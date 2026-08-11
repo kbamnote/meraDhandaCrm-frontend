@@ -14,6 +14,11 @@ const ACTIONS = [
   'webhook.create', 'webhook.delete',
   'domain.set', 'domain.verify',
   'referral.signup',
+  'invoice.create', 'invoice.payment', 'invoice.void',
+  'credit_note.create', 'debit_note.create',
+  'expense.create', 'expense.update', 'expense.delete',
+  'purchase.receive',
+  'voucher.create', 'voucher.delete', 'opening_balance.post',
 ];
 
 // badge tone per action group
@@ -28,6 +33,18 @@ const ACTION_TONE = {
   'domain.set': 'badge-blue',
   'domain.verify': 'badge-green',
   'referral.signup': 'badge-amber',
+  'invoice.create': 'badge-blue',
+  'invoice.payment': 'badge-green',
+  'invoice.void': 'badge-red',
+  'credit_note.create': 'badge-amber',
+  'debit_note.create': 'badge-amber',
+  'expense.create': 'badge-blue',
+  'expense.update': 'badge-amber',
+  'expense.delete': 'badge-red',
+  'purchase.receive': 'badge-green',
+  'voucher.create': 'badge-blue',
+  'voucher.delete': 'badge-red',
+  'opening_balance.post': 'badge-green',
 };
 
 const S = {
