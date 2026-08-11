@@ -20,6 +20,7 @@ const ACTIONS = [
   'purchase.receive',
   'voucher.create', 'voucher.delete', 'opening_balance.post',
   'recon.statement', 'recon.match', 'recon.unmatch', 'recon.automatch',
+  'tds.create', 'tds.delete',
 ];
 
 // badge tone per action group
@@ -50,6 +51,8 @@ const ACTION_TONE = {
   'recon.match': 'badge-green',
   'recon.unmatch': 'badge-amber',
   'recon.automatch': 'badge-green',
+  'tds.create': 'badge-amber',
+  'tds.delete': 'badge-red',
 };
 
 const S = {

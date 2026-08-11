@@ -55,6 +55,7 @@ import PurchasesPage from './pages/accounting/PurchasesPage';
 import EntriesPage from './pages/accounting/EntriesPage';
 import CashBankPage from './pages/accounting/CashBankPage';
 import ReconPage from './pages/accounting/ReconPage';
+import TdsPage from './pages/accounting/TdsPage';
 import InventoryPage from './pages/accounting/InventoryPage';
 import ExpensesPage from './pages/accounting/ExpensesPage';
 import PurchaseOrdersPage from './pages/accounting/PurchaseOrdersPage';
@@ -119,6 +120,7 @@ const CUSTOM_PAGES = {
   'accounting/entries': EntriesPage,
   'accounting/cash': CashBankPage,
   'accounting/recon': ReconPage,
+  'accounting/tds': TdsPage,
   'accounting/inventory': InventoryPage,
   'expenses': ExpensesPage,
   'purchase-orders': PurchaseOrdersPage,
@@ -198,6 +200,7 @@ const STUB_ROUTES = [
   ['accounting/entries',   '📝 Journal',      'page-accounting-entries',   null],
   ['accounting/cash',      '💵 Cash & Bank',  'page-accounting-cash',      null],
   ['accounting/recon',     '🏦 Bank Recon',   'page-accounting-recon',     null],
+  ['accounting/tds',       '🧾 TDS',          'page-accounting-tds',       null],
   ['accounting/credit-notes', '📝 Credit Notes', 'page-accounting-credit-notes', null],
   ['accounting/debit-notes',  '📝 Debit Notes',  'page-accounting-debit-notes',  null],
   ['accounting/challans',     '🚚 Delivery Challans', 'page-accounting-challans', null],

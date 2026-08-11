@@ -295,6 +295,12 @@ export const accountingApi = {
   reconMatch:      (body)   => api.post('/accounting/recon/match', body).then(r => r.data),
   reconUnmatch:    (body)   => api.post('/accounting/recon/unmatch', body).then(r => r.data),
   reconAutoMatch:  (body)   => api.post('/accounting/recon/auto-match', body).then(r => r.data),
+  // TDS (Phase 4A-4)
+  tdsSections: ()      => api.get('/accounting/tds/sections').then(r => r.data),
+  tdsList:     ()      => api.get('/accounting/tds').then(r => r.data),
+  tdsCreate:   (body)  => api.post('/accounting/tds', body).then(r => r.data),
+  tdsReport:   (params) => api.get('/accounting/tds/report', { params }).then(r => r.data),
+  tdsDelete:   (id)    => api.delete(`/accounting/tds/${id}`).then(r => r.data),
 };
 
 // Double-entry ledger reports — every endpoint reads the journalEntries

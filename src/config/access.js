@@ -24,6 +24,7 @@ export const PERM_OF = {
   '/accounting/sales': 'invoices', '/accounting/purchases': 'purchases',
   '/accounting/parties': 'parties', '/accounting/reports': 'reports', '/accounting/gst': 'gst',
   '/accounting/cash': 'cashbank', '/accounting/recon': 'cashbank', '/accounting/inventory': 'inventory', '/accounting/entries': 'entries',
+  '/accounting/tds': 'tds',
   '/expenses': 'expenses', '/purchase-orders': 'expenses',
   '/products': 'products', '/stock': 'stock', '/vendors': 'vendors',
   '/machines': 'machines', '/machine-history': 'machines',
@@ -40,7 +41,7 @@ export const CORE_MODULES = [
   'jobs', 'production', 'qc', 'dispatch', 'designers', 'clients', 'leads',
   'invoices', 'expenses', 'stock', 'products', 'vendors', 'machines', 'tasks', 'attendance',
 ];
-const ACCOUNTING_MODULES = ['parties', 'purchases', 'inventory', 'cashbank', 'gst', 'reports', 'entries'];
+const ACCOUNTING_MODULES = ['parties', 'purchases', 'inventory', 'cashbank', 'gst', 'reports', 'entries', 'tds'];
 export const GATED_MODULES = [...CORE_MODULES, 'leaves', 'payroll', 'productivity', 'review', ...ACCOUNTING_MODULES];
 
 // What each built-in job role can see out of the box. Plain staff/pending start
@@ -84,7 +85,7 @@ export const PERMISSION_CATALOG = [
     { key: 'parties', manage: true }, { key: 'purchases', manage: true },
     { key: 'inventory', manage: true }, { key: 'cashbank', manage: true },
     { key: 'entries', manage: true }, { key: 'gst', manage: false },
-    { key: 'reports', manage: false },
+    { key: 'reports', manage: false }, { key: 'tds', manage: true },
   ] },
   // NOTE: payroll is intentionally absent — it's in the backend SENSITIVE_NO_GRANT
   // set (salary data, owner/HR-only). Including it would make sanitizePermissions

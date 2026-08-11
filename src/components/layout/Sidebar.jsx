@@ -52,6 +52,7 @@ const SECTION_S = {
   '📝 Debit Notes':       { en: '📝 Debit Notes',       hi: '📝 डेबिट नोट',           hinglish: '📝 Debit Notes',        gu: '📝 ડેબિટ નોટ',            mr: '📝 डेबिट नोट',            mwr: '📝 डेबिट नोट' },
   '💵 Cash & Bank':       { en: '💵 Cash & Bank',       hi: '💵 कैश / बैंक',           hinglish: '💵 Cash & Bank',        gu: '💵 કેશ / બેંક',           mr: '💵 कॅश / बँक',           mwr: '💵 कैश / बैंक' },
   '🏦 Bank Recon':         { en: '🏦 Bank Recon',         hi: '🏦 बैंक मिलान',           hinglish: '🏦 Bank Recon',         gu: '🏦 બેંક મેળ',            mr: '🏦 बँक मिलाफ',           mwr: '🏦 बैंक मिलान' },
+  '🧾 TDS':                { en: '🧾 TDS',                hi: '🧾 टीडीएस',               hinglish: '🧾 TDS',                gu: '🧾 ટીડીએસ',               mr: '🧾 टीडीएस',               mwr: '🧾 टीडीएस' },
   '📦 Inventory':         { en: '📦 Inventory',         hi: '📦 इन्वेंटरी',            hinglish: '📦 Inventory',          gu: '📦 ઇન્વેન્ટરી',          mr: '📦 इन्व्हेंटरी',         mwr: '📦 इन्वेंटरी' },
   '📝 Journal':           { en: '📝 Journal',           hi: '📝 जर्नल',                hinglish: '📝 Journal',            gu: '📝 જર્નલ',               mr: '📝 जर्नल',               mwr: '📝 जर्नल' },
   '💰 Accounting':         { en: '💰 Accounting',         hi: '💰 अकाउंटिंग',           hinglish: '💰 Accounting',         gu: '💰 એકાઉન્ટિંગ',          mr: '💰 अकाउंटिंग',           mwr: '💰 अकाउंटिंग' },
@@ -167,6 +168,7 @@ const SECTIONS = [
       // Phase 2 — visible so users see the roadmap; the routes render stubs.
       { to: '/accounting/cash',      label: '💵 Cash & Bank',  legacy: 'page-accounting-cash' },
       { to: '/accounting/recon',     label: '🏦 Bank Recon',   legacy: 'page-accounting-recon' },
+      { to: '/accounting/tds',       label: '🧾 TDS',          legacy: 'page-accounting-tds' },
       { to: '/accounting/inventory', label: '📦 Inventory',    legacy: 'page-accounting-inventory' },
       { to: '/accounting/entries',   label: '📝 Journal',      legacy: 'page-accounting-entries' },
     ],
