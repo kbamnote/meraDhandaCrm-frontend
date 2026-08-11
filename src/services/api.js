@@ -247,6 +247,8 @@ export const accountingApi = {
   ledger:        ()         => api.get('/accounting/ledger').then(r => r.data),
   pnl:           (params)   => api.get('/accounting/pnl', { params }).then(r => r.data),
   gstReport:     (params)   => api.get('/accounting/gst-report', { params }).then(r => r.data),
+  // GSTR-1 offline-tool JSON (GSTN common schema) for the period — file-ready.
+  gstExport:     (params)   => api.get('/accounting/gst/export', { params }).then(r => r.data),
   creditNote:    (body)     => api.post('/accounting/credit-note', body).then(r => r.data),
   creditNotes:   ()         => api.get('/accounting/credit-notes').then(r => r.data),
   debitNote:     (body)     => api.post('/accounting/debit-note', body).then(r => r.data),

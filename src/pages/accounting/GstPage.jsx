@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { accountingApi, ledgerApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
-import { downloadCsv, downloadExcel, downloadPdf, printReport } from './ReportsPage';
+import { downloadCsv, downloadExcel, downloadPdf, printReport, downloadJson } from './ReportsPage';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const money = (n) => inr(round2(n));
@@ -38,6 +38,8 @@ const S = {
   exportExcel: { en: 'Excel', hinglish: 'Excel' },
   exportPdf: { en: 'PDF', hinglish: 'PDF' },
   print:    { en: 'Print', hi: 'प्रिंट', hinglish: 'Print' },
+  exportGstr1: { en: 'Download GSTR-1 JSON', hi: 'GSTR-1 JSON डाउनलोड करें', hinglish: 'GSTR-1 JSON download karein' },
+  busyExport:  { en: 'Building…', hinglish: 'Building…' },
 };
 
 export default function GstPage() {
@@ -46,8 +48,24 @@ export default function GstPage() {
   const [to, setTo] = useState('');
   const [data, setData] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [exporting, setExporting] = useState(false);
 
   const run = () => accountingApi.gstReport({ from: from || undefined, to: to || undefined }).then(setData).catch(() => setData(null));
+
+  // GSTR-1 offline-tool JSON for the selected period — pass a month `period`
+  // when the dates form one (what the portal wants), else the raw from/to.
+  const downloadGstr1Json = () => {
+    const sameMonth = from && to && from.slice(0, 7) === to.slice(0, 7);
+    setExporting(true);
+    accountingApi.gstExport({
+      period: sameMonth ? from.slice(0, 7) : undefined,
+      from: from || undefined,
+      to: to || undefined,
+    })
+      .then((json) => downloadJson(`gstr1-${json.fp || 'period'}.json`, json))
+      .catch(() => {})
+      .finally(() => setExporting(false));
+  };
   useEffect(() => { run(); ledgerApi.accounts().then(setAccounts).catch(() => setAccounts([])); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const acct = (k) => accounts.find((a) => a.key === k)?.balance || 0;
@@ -70,6 +88,7 @@ export default function GstPage() {
             <button className="btn btn-sm btn-ghost" onClick={() => downloadExcel('gstr1.xlsx', grid)}>{t('exportExcel')}</button>
             <button className="btn btn-sm btn-ghost" onClick={() => downloadPdf(t('gstr1'), grid, 'gstr1.pdf')}>{t('exportPdf')}</button>
             <button className="btn btn-sm btn-ghost" onClick={() => printReport(t('gstr1'), grid)}>{t('print')}</button>
+            <button className="btn btn-sm btn-primary" onClick={downloadGstr1Json} disabled={exporting}>{exporting ? t('busyExport') : t('exportGstr1')}</button>
           </div>
         )}
       </div>
