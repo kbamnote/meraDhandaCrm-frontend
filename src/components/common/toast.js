@@ -1,9 +1,15 @@
 // Simple toast helper that replicates the legacy `showToast(msg, type)` API.
-// Renders into #toast-container which is included in AppLayout.
+// Renders into #toast-container (included in AppLayout). On pages rendered
+// OUTSIDE AppLayout (login, signup, public pay), the container doesn't exist —
+// so create it on first use, otherwise those pages silently swallow toasts.
 
 export function showToast(msg, type = 'info') {
-  const root = document.getElementById('toast-container');
-  if (!root) { console.log('[toast]', msg); return; }
+  let root = document.getElementById('toast-container');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'toast-container';
+    document.body.appendChild(root);
+  }
   const el = document.createElement('div');
   el.className = 'toast';
   const color = ({

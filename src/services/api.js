@@ -243,6 +243,11 @@ export const accountingApi = {
   createInvoice: (body)     => api.post('/accounting/invoice', body).then(r => r.data),
   recordPayment: (id, body) => api.post(`/accounting/invoice/${id}/payment`, body).then(r => r.data),
   voidInvoice:   (id)       => api.post(`/accounting/invoice/${id}/void`).then(r => r.data),
+  // Payment links (Phase 4B-1) — status (no mint) and mint-if-missing.
+  payLinkStatus: (id)       => api.get(`/accounting/invoice/${id}/pay-link`).then(r => r.data),
+  payLinkMint:   (id)       => api.post(`/accounting/invoice/${id}/pay-link`).then(r => r.data),
+  // Public (no-auth) payment-page lookup — returns { valid, invoice, seller, items }.
+  publicPay:     (token)    => api.get(`/public/pay/${token}`).then(r => r.data),
   alerts:        ()         => api.get('/accounting/alerts').then(r => r.data),
   ledger:        ()         => api.get('/accounting/ledger').then(r => r.data),
   pnl:           (params)   => api.get('/accounting/pnl', { params }).then(r => r.data),

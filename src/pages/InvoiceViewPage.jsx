@@ -10,12 +10,14 @@ import { useSearchParams } from 'react-router-dom';
 import { ref, onValue, db } from '../services/realtime';
 import { useT } from '../i18n/LanguageContext';
 import InvoiceDocument from '../components/common/InvoiceDocument';
+import PayLinkModal from '../components/common/PayLinkModal';
 
 const S = {
   invoiceView: { en: 'Invoice View', hi: 'इनवॉइस व्यू', hinglish: 'Invoice View', gu: 'ઇન્વોઇસ વ્યૂ', mr: 'इनव्हॉइस व्ह्यू', mwr: 'इनवॉइस व्यू' },
   invoice: { en: 'invoice', hi: 'इनवॉइस', hinglish: 'invoice', gu: 'ઇન્વોઇસ', mr: 'इनव्हॉइस', mwr: 'इनवॉइस' },
   invoices: { en: 'invoices', hi: 'इनवॉइस', hinglish: 'invoices', gu: 'ઇન્વોઇસ', mr: 'इनव्हॉइस', mwr: 'इनवॉइस' },
   print: { en: '🖨 Print', hi: '🖨 प्रिंट', hinglish: '🖨 Print', gu: '🖨 પ્રિન્ટ', mr: '🖨 प्रिंट', mwr: '🖨 प्रिंट' },
+  payLink: { en: '🔗 Payment Link', hi: '🔗 भुगतान लिंक', hinglish: '🔗 Payment Link', gu: '🔗 ચુકવણી લિંક', mr: '🔗 देयक लिंक', mwr: '🔗 भुगतान लिंक' },
   noInvoices: { en: 'No invoices yet.', hi: 'अभी तक कोई इनवॉइस नहीं।', hinglish: 'Abhi tak koi invoice nahi.', gu: 'હજુ સુધી કોઈ ઇન્વોઇસ નથી.', mr: 'अद्याप कोणतेही इनव्हॉइस नाहीत.', mwr: 'अजे तांई कोई इनवॉइस कोनी।' },
   selectInvoice: { en: 'Select an invoice.', hi: 'कोई इनवॉइस चुनें।', hinglish: 'Koi invoice chunein.', gu: 'કોઈ ઇન્વોઇસ પસંદ કરો.', mr: 'एखादे इनव्हॉइस निवडा.', mwr: 'कोई इनवॉइस चुणो।' },
   invoiceWord: { en: 'Invoice', hi: 'इनवॉइस', hinglish: 'Invoice', gu: 'ઇન્વોઇસ', mr: 'इनव्हॉइस', mwr: 'इनवॉइस' },
@@ -44,6 +46,9 @@ const KNOWN = new Set([
   'id', 'invoiceNo', 'client', 'amount', 'status', 'date', 'dueDate',
 ]);
 
+// Internal bookkeeping shown via dedicated UI, never as a JSON blob.
+const HIDDEN = new Set(['paymentLink']);
+
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 function money(v) {
@@ -66,6 +71,7 @@ export default function InvoiceViewPage() {
   const [invoices, setInvoices] = useState({}); // { id: invoice }
   const [selectedId, setSelectedId] = useState(null);
   const [openId, setOpenId] = useState(null);   // non-null = full-page document view
+  const [showPayLink, setShowPayLink] = useState(false);
   const appliedDeepLink = useRef(null);         // ?id= applied exactly once
 
   useEffect(() => {
@@ -106,7 +112,7 @@ export default function InvoiceViewPage() {
 
   const extraEntries = useMemo(() => {
     if (!selected) return [];
-    return Object.entries(selected).filter(([k]) => !KNOWN.has(k));
+    return Object.entries(selected).filter(([k]) => !KNOWN.has(k) && !HIDDEN.has(k));
   }, [selected]);
 
   // Full-page document mode — the printable invoice on its own, with the app
@@ -231,11 +237,18 @@ export default function InvoiceViewPage() {
                   <button className="btn btn-primary btn-sm" onClick={() => setOpenId(selected.id)}>
                     📄 Open invoice
                   </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setShowPayLink(true)}>
+                    {t('payLink')}
+                  </button>
                 </div>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {showPayLink && selected && (
+        <PayLinkModal invoice={selected} onClose={() => setShowPayLink(false)} />
       )}
     </div>
   );

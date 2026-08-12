@@ -35,6 +35,7 @@ import CustDashboardPage from './pages/CustDashboardPage';
 import PermissionsPage from './pages/PermissionsPage';
 import HierarchyPage from './pages/HierarchyPage';
 import InvoiceViewPage from './pages/InvoiceViewPage';
+import PublicPayPage from './pages/PublicPayPage';
 import JobDetailPage from './pages/JobDetailPage';
 import JobViewPage from './pages/JobViewPage';
 import ReviewPage from './pages/ReviewPage';
@@ -273,6 +274,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/pay/:token" element={<PublicPayPage />} />
           <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
 
           <Route element={<ProtectedRoute><RequireOnboarded><AppLayout /></RequireOnboarded></ProtectedRoute>}>

@@ -152,6 +152,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
     markFullyPaid: false,
     amountReceived: '0',
     paymentMode: 'Cash',
+    sendPaymentLink: true, // queue the payment-link WhatsApp message on create
     notes: '', showNotes: false,
     terms: '', editingTerms: false,
   });
@@ -285,6 +286,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
         markFullyPaid: form.markFullyPaid,
         amountReceived: form.markFullyPaid ? undefined : Number(form.amountReceived) || 0,
         paymentMode: form.paymentMode,
+        sendPaymentLink: form.sendPaymentLink,
         notes: form.notes, terms: form.terms, attachments,
         items: items.filter((it) => it.name.trim()).map((it) => ({ name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate), itemId: it.itemId || null })),
       });
@@ -564,6 +566,10 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 13 }}>
               <input type="checkbox" checked={form.markFullyPaid} onChange={(e) => setF('markFullyPaid', e.target.checked)} /> Mark as fully paid
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 13, color: 'var(--text2)' }}>
+              <input type="checkbox" checked={form.sendPaymentLink} onChange={(e) => setF('sendPaymentLink', e.target.checked)} />
+              Send payment link on WhatsApp
             </label>
             {!form.markFullyPaid && (
               <div className="flex gap-2">
