@@ -15,12 +15,17 @@
  *   onCreated(inv) — called with the created invoice before onClose()
  */
 import { useEffect, useMemo, useState } from 'react';
-import { accountingApi, ordersApi, uploadApi } from '../../services/api';
+import { accountingApi, ordersApi, uploadApi, describeError } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
 import BranchSelect from './BranchSelect';
 import { ref, onValue, db } from '../../services/realtime';
+
+// Null-safe .trim() — building the request body must never throw on a field that
+// happens to be absent, or the failure surfaces as an unexplained "Failed" with
+// no request ever leaving the browser.
+const trim = (v) => String(v ?? '').trim();
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const inr = (n) => '₹' + (round2(n)).toLocaleString('en-IN');
@@ -39,6 +44,19 @@ const S = {
   cashTitle:     { en: 'Cash / Non-GST Bill', hi: 'कैश / नॉन-GST बिल', hinglish: 'Cash / Non-GST Bill', gu: 'કેશ / નોન-GST બિલ', mr: 'कॅश / नॉन-GST बिल', mwr: 'कैश / नॉन-GST बिल' },
   cashDesc:      { en: 'Regular retail bill, no GST — B2C / unregistered customer.', hi: 'सामान्य रिटेल बिल, GST नहीं — B2C / अनरजिस्टर्ड ग्राहक।', hinglish: 'Normal retail bill, GST nahi — B2C / unregistered customer.', gu: 'સામાન્ય રિટેલ બિલ, GST નહીં — B2C / અનનોંધાયેલ ગ્રાહક.', mr: 'सामान्य रिटेल बिल, GST नाही — B2C / नोंदणी नसलेला ग्राहक.', mwr: 'सामान्य रिटेल बिल, GST कोनी — B2C / अनरजिस्टर्ड ग्राहक।' },
   noGstNote:     { en: 'No GST — cash bill', hi: 'GST नहीं — कैश बिल', hinglish: 'No GST — cash bill', gu: 'GST નહીં — કેશ બિલ', mr: 'GST नाही — कॅश बिल', mwr: 'GST कोनी — कैश बिल' },
+};
+
+// Every Bill To / Ship To field the form owns, with a safe empty value. submit()
+// calls .trim() on these, so the object must ALWAYS carry the full shape: a
+// partial replacement (picking a client used to drop clientPan and the shipTo*
+// fields) made submit throw a TypeError *before* any request was sent, which the
+// catch then reported as a generic "Failed" — no network call, nothing in the
+// server log. Reset and select through this constant so that can't recur.
+const EMPTY_PARTY = {
+  clientId: null, clientName: '', clientPhone: '', clientAddress: '', gstNo: '',
+  clientPan: '',
+  // Ship To defaults to the billing party; only sent when "different" is ticked.
+  shipDifferent: false, shipToName: '', shipToAddress: '',
 };
 
 const TYPE_CARDS = [
@@ -132,10 +150,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
   const [clientQ, setClientQ] = useState('');
   const [clientMatches, setClientMatches] = useState([]);
   const [party, setParty] = useState({
-    clientId: null, clientName: job?.clientName || '', clientPhone: '', clientAddress: '', gstNo: job?.gstNo || '',
-    clientPan: '',
-    // Ship To defaults to the billing party; only sent when "different" is ticked.
-    shipDifferent: false, shipToName: '', shipToAddress: '',
+    ...EMPTY_PARTY,
+    clientName: job?.clientName || '', gstNo: job?.gstNo || '',
   });
   const setP = (k, v) => setParty((p) => ({ ...p, [k]: v }));
 
@@ -199,7 +215,13 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
   }, [clientQ]);
 
   const pickClient = (c) => {
-    setParty({ clientId: c.id, clientName: c.name || '', clientPhone: c.phone || '', clientAddress: c.address || '', gstNo: c.gstNo || '' });
+    // Merge onto the existing party so fields the picker doesn't supply
+    // (clientPan, shipTo*) keep their values instead of vanishing.
+    setParty((p) => ({
+      ...p,
+      clientId: c.id, clientName: c.name || '', clientPhone: c.phone || '',
+      clientAddress: c.address || '', gstNo: c.gstNo || '',
+    }));
     setClientQ('');
   };
 
@@ -259,19 +281,19 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
   };
 
   const submit = async () => {
-    if (!party.clientName.trim()) return showToast('Bill To — client name required', 'error');
+    if (!trim(party.clientName)) return showToast('Bill To — client name required', 'error');
     if (!items.some((it) => it.name.trim() && Number(it.rate) > 0)) return showToast('Add at least one item', 'error');
     setBusy(true);
     try {
       const inv = await accountingApi.createInvoice({
         type,
-        clientId: party.clientId, clientName: party.clientName.trim(),
-        clientPhone: party.clientPhone.trim(), clientAddress: party.clientAddress.trim(),
-        gstNo: party.gstNo.trim(), clientPan: party.clientPan.trim(),
+        clientId: party.clientId, clientName: trim(party.clientName),
+        clientPhone: trim(party.clientPhone), clientAddress: trim(party.clientAddress),
+        gstNo: trim(party.gstNo), clientPan: trim(party.clientPan),
         // Omit when shipping to the billing address — the server then mirrors
         // Bill To into Ship To rather than storing a blank block.
-        shipToName: party.shipDifferent ? party.shipToName.trim() : undefined,
-        shipToAddress: party.shipDifferent ? party.shipToAddress.trim() : undefined,
+        shipToName: party.shipDifferent ? trim(party.shipToName) : undefined,
+        shipToAddress: party.shipDifferent ? trim(party.shipToAddress) : undefined,
         companyLogo: tenantLogo || undefined,
         jobId: job?.id, jobNo: form.jobNo, // server stamps job.billNumber when jobId is set
         date: form.date,
@@ -293,7 +315,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
       showToast(`${inv.invoiceNo} created`, 'success');
       onCreated?.(inv);
       onClose();
-    } catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
+    } catch (e) { showToast(describeError(e, t('failed')), 'error'); }
     finally { setBusy(false); }
   };
 
@@ -316,7 +338,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
               <div className="card" style={{ background: 'var(--surface2)', marginBottom: 8, padding: 12 }}>
                 <div className="flex items-center justify-between">
                   <b>{party.clientName}</b>
-                  <button className="btn btn-ghost btn-xs" onClick={() => setParty({ clientId: null, clientName: '', clientPhone: '', clientAddress: '', gstNo: '' })}>Change</button>
+                  <button className="btn btn-ghost btn-xs" onClick={() => setParty({ ...EMPTY_PARTY })}>Change</button>
                 </div>
                 {party.clientPhone && <div style={{ fontSize: 12.5, color: 'var(--text2)' }}>📞 {party.clientPhone}</div>}
                 {party.clientAddress && <div style={{ fontSize: 12.5, color: 'var(--text2)' }}>📍 {party.clientAddress}</div>}

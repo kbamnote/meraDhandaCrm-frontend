@@ -31,6 +31,33 @@ api.interceptors.response.use(
   }
 );
 
+// Turn an axios failure into something a user can act on — and, crucially, that
+// distinguishes the three cases a bare `data.error` fallback collapses into one
+// generic "Failed":
+//
+//   1. the server answered with our normal { error } JSON  → show that
+//   2. the server answered, but not with our JSON shape    → a gateway/proxy
+//      error page (Cloudflare 502/504/524, an HTML body) — show the status
+//   3. no response at all → request timed out or never reached the API
+//
+// Screens should prefer this over `e.response?.data?.error || 'Failed'`, which
+// silently reports a 30s timeout and a 504 identically to a validation error.
+export function describeError(e, fallback = 'Failed') {
+  const res = e?.response;
+  if (!res) {
+    if (e?.code === 'ECONNABORTED') return 'Server took too long to respond (timed out). Please try again.';
+    // Not an axios failure at all — a bug in the calling screen threw before the
+    // request went out. Saying "check your connection" would send the user
+    // chasing a network problem that doesn't exist, so surface the real message.
+    if (e && !e.isAxiosError && e.message) return `${fallback}: ${e.message}`;
+    return 'Could not reach the server. Check your connection and try again.';
+  }
+  const data = res.data;
+  const serverMsg = typeof data === 'string' ? null : data?.error;
+  if (serverMsg) return serverMsg;
+  return `${fallback} (server returned ${res.status}${res.statusText ? ' ' + res.statusText : ''})`;
+}
+
 // ── Runaway-request safety net ────────────────────────────────────────────────
 // A screen with an unstable useCallback dep (e.g. `t` from useT(), which is a
 // fresh ref every render) re-fires its effect on every render and can hammer one
