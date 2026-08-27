@@ -79,7 +79,7 @@ const DOC_TYPES = [
 const GST_RATES = ['0', '5', '12', '18', '28'];
 const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer'];
 
-export default function CreateInvoiceFlow({ job, onClose, onCreated }) {
+export default function CreateInvoiceFlow({ job, party: forParty, onClose, onCreated }) {
   const t = useT(S);
   const [type, setType] = useState(null); // null = show picker; otherwise show form pre-set to type
 
@@ -149,9 +149,15 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
   // with the selected/typed party editable underneath.
   const [clientQ, setClientQ] = useState('');
   const [clientMatches, setClientMatches] = useState([]);
+  // `party` prop = opened from a specific customer (Parties page), so Bill To is
+  // already known; `job` = opened from Dispatch, prefilled from the job card.
   const [party, setParty] = useState({
     ...EMPTY_PARTY,
-    clientName: job?.clientName || '', gstNo: job?.gstNo || '',
+    clientId: forParty?.id || null,
+    clientName: forParty?.name || job?.clientName || '',
+    clientPhone: forParty?.phone || '',
+    clientAddress: forParty?.address || '',
+    gstNo: forParty?.gstNo || job?.gstNo || '',
   });
   const setP = (k, v) => setParty((p) => ({ ...p, [k]: v }));
 

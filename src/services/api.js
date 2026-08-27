@@ -264,6 +264,12 @@ export const productionTypesApi = {
 // Billing & Accounting — GST/proforma invoices, payments, ledger, P&L, GST report.
 export const accountingApi = {
   invoiceNumber: (type)     => api.get('/accounting/invoice-number', { params: { type } }).then(r => r.data),
+  // Party 360° — profile + transaction feed + item-wise summary + totals, for
+  // the Parties detail pane. type is 'client' (default) or 'vendor'.
+  party: (id, type)         => api.get(`/accounting/party/${id}`, { params: { type } }).then(r => r.data),
+  // Create a customer/supplier. Goes through accounting (not /db/:col) so a
+  // non-zero opening balance posts a real journal against Owner's Capital.
+  createParty: (body)       => api.post('/accounting/party', body).then(r => r.data),
   // Everything the Create Invoice form prefills: next number, bank details,
   // company GSTIN/state, default Terms for this doc type, GST state list.
   invoiceDefaults: (type)   => api.get('/accounting/invoice-defaults', { params: { type } }).then(r => r.data),
