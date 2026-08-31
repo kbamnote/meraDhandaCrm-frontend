@@ -954,7 +954,16 @@ function PartyFormModal({ type, t, onClose, onCreated, party: editing }) {
     try {
       const r = await accountingApi.gstinLookup(form.gstNo.trim().toUpperCase());
       const d = r.data || {};
-      if (r.ok) {
+      if (r.ok && d._matched === false) {
+        // The provider answered, but nothing in its payload looked like a name
+        // or an address. Say so and name the fields it DID send — a silent
+        // "success" with an empty form is the most confusing outcome possible,
+        // and those key names are exactly what's needed to fix the mapping.
+        setGstNote({
+          ok: false,
+          text: `Provider replied but sent no recognisable name or address. Fields received: ${(d._keys || []).join(', ') || 'none'}`,
+        });
+      } else if (r.ok) {
         setForm((f) => ({
           ...f,
           name: f.name.trim() || d.tradeName || d.legalName || '',
@@ -965,7 +974,8 @@ function PartyFormModal({ type, t, onClose, onCreated, party: editing }) {
           ok: true,
           text: `${d.tradeName || d.legalName || 'Found'}`
             + (d.status ? ` · ${d.status}` : '')
-            + (d.registrationType ? ` · ${d.registrationType}` : ''),
+            + (d.registrationType ? ` · ${d.registrationType}` : '')
+            + (d._unmapped && d._unmapped.length ? ` · unused fields: ${d._unmapped.join(', ')}` : ''),
         });
       } else if (!r.configured) {
         // Not an error the user caused — say what's missing and move on.
