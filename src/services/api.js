@@ -273,6 +273,8 @@ export const accountingApi = {
   // Tally-style account groups a party can be filed under (Balance Sheet
   // placement — see the note in posting.js; these do NOT shape the P&L).
   partyGroups: ()           => api.get('/accounting/party-groups').then(r => r.data),
+  // Item-wise report for one party, sales and purchases side by side.
+  partyItems: (id, params) => api.get(`/accounting/party/${id}/items`, { params }).then(r => r.data),
   updateParty: (id, type, body) => api.put(`/accounting/party/${id}`, body, { params: { type } }).then(r => r.data),
   // GSTIN -> business details. Always resolves: an unconfigured or failing
   // provider returns { ok:false, data:<what the GSTIN itself tells us> } so the

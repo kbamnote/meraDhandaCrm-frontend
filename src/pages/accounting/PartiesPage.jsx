@@ -95,7 +95,6 @@ const S = {
   mode:           { en: 'Mode', hi: 'माध्यम', hinglish: 'Mode' },
   dueDate:        { en: 'Due Date', hi: 'देय तिथि', hinglish: 'Due Date' },
   overdue:        { en: 'overdue', hi: 'विलंबित', hinglish: 'overdue' },
-  openingBalance: { en: 'Opening Balance', hi: 'शुरुआती बैलेंस', hinglish: 'Opening Balance' },
   closingBalance: { en: 'Closing Balance', hi: 'अंतिम बैलेंस', hinglish: 'Closing Balance' },
   totalReceivable:{ en: 'Total Receivable', hi: 'कुल प्राप्य', hinglish: 'Total Receivable' },
   totalPayable:   { en: 'Total Payable', hi: 'कुल देय', hinglish: 'Total Payable' },
@@ -110,6 +109,13 @@ const S = {
   times:    { en: 'Times', hi: 'बार', hinglish: 'Times' },
   lastOn:   { en: 'Last On', hi: 'अंतिम', hinglish: 'Last On' },
   noItems:  { en: 'No items billed to this party yet.', hi: 'अभी कोई आइटम नहीं।', hinglish: 'Abhi koi item nahi.' },
+  itemName:       { en: 'Item Name', hi: 'आइटम नाम', hinglish: 'Item Name' },
+  itemCode:       { en: 'Item Code', hi: 'आइटम कोड', hinglish: 'Item Code' },
+  salesQty:       { en: 'Sales Quantity', hi: 'बिक्री मात्रा', hinglish: 'Sales Quantity' },
+  salesAmount:    { en: 'Sales Amount', hi: 'बिक्री राशि', hinglish: 'Sales Amount' },
+  purchaseQty:    { en: 'Purchase Quantity', hi: 'खरीद मात्रा', hinglish: 'Purchase Quantity' },
+  purchaseAmount: { en: 'Purchase Amount', hi: 'खरीद राशि', hinglish: 'Purchase Amount' },
+  total:          { en: 'Total', hi: 'कुल', hinglish: 'Total' },
   // Misc
   loading:  { en: 'Loading…', hi: '…', hinglish: 'Loading…' },
   failed:   { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua' },
@@ -446,7 +452,7 @@ function PartyDetail({ party, t, onBack }) {
               : round2((p && p.openingBalance) || 0)}
           />
         )}
-        {data && tab === 'items' && <ItemsTab items={data.items} t={t} />}
+        {data && tab === 'items' && <ItemsTab party={party} t={t} />}
       </div>
 
       {editingParty && (
@@ -829,36 +835,106 @@ function StatementRow({ cells, cols, bold, muted }) {
 
 /* ───────────────────────────── Item wise ─────────────────────────────── */
 
-function ItemsTab({ items, t }) {
-  if (!items.length) return <div style={{ color: 'var(--text3)', fontSize: 13, padding: 20 }}>{t('noItems')}</div>;
-  const COLS = 'minmax(160px, 1fr) 110px 90px 80px 110px';
-  const total = round2(items.reduce((s, i) => s + (i.amount || 0), 0));
+function ItemsTab({ party, t }) {
+  const [range, setRange] = useState('last365');
+  const [data, setData] = useState(null);
+
+  // Fetched per range rather than filtered client-side: the totals have to be
+  // aggregated over the documents in that window, and doing it on the server
+  // keeps this report agreeing with every other figure on the page.
+  // `t` is a fresh reference each render (useT) and must never be a dependency.
+  useEffect(() => {
+    let cancelled = false;
+    setData(null);
+    const params = {};
+    if (range === 'last365') { const d = new Date(); d.setDate(d.getDate() - 365); params.from = isoDate(d); }
+    else if (range === 'thisMonth') { const d = new Date(); params.from = isoDate(new Date(d.getFullYear(), d.getMonth(), 1)); }
+    else if (range === 'thisFy') params.from = fyStartDate();
+    accountingApi.partyItems(party.id, params)
+      .then((r) => { if (!cancelled) setData(r); })
+      .catch(() => { if (!cancelled) setData({ items: [], totals: {} }); });
+    return () => { cancelled = true; };
+  }, [party.id, range]);
+
+  const qty = (n, unit) => (n ? `${n} ${unit || 'PCS'}` : '-');
+  const amt = (n) => (n ? inr(n) : '-');
+
+  const grid = useMemo(() => ({
+    headers: [t('itemName'), t('itemCode'), t('salesQty'), t('salesAmount'), t('purchaseQty'), t('purchaseAmount')],
+    rows: [
+      ...((data && data.items) || []).map((r) => [
+        r.name, r.sku || '-',
+        qty(r.salesQty, r.unit), amt(r.salesAmount),
+        qty(r.purchaseQty, r.unit), amt(r.purchaseAmount),
+      ]),
+      ...(data && data.items && data.items.length ? [[
+        t('total'), '',
+        qty(data.totals.salesQty, ''), amt(data.totals.salesAmount),
+        qty(data.totals.purchaseQty, ''), amt(data.totals.purchaseAmount),
+      ]] : []),
+    ],
+  }), [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fileBase = `items-${String(party.name || 'party').replace(/[^a-zA-Z0-9]+/g, '-')}`;
+  const docTitle = `${t('tabItems')} - ${party.name || ''}`;
+  const sel = { padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12.5 };
+  const COLS = 'minmax(150px, 1.6fr) 110px 110px 120px 120px 130px';
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <div style={{ minWidth: 580 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '8px 10px', fontSize: 11, textTransform: 'uppercase', color: 'var(--text3)', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>
-          <div>{t('item')}</div><div>HSN</div>
-          <div style={{ textAlign: 'right' }}>{t('qty')}</div>
-          <div style={{ textAlign: 'right' }}>{t('times')}</div>
-          <div style={{ textAlign: 'right' }}>{t('amount')}</div>
-        </div>
-        {items.map((it, i) => (
-          <div key={(it.itemId || it.name) + i} style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '9px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5, alignItems: 'center' }}>
-            <div style={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {it.name}
-              {it.lastDate && <span style={{ display: 'block', fontSize: 11, fontWeight: 400, color: 'var(--text3)' }}>{t('lastOn')} {fmtDate(it.lastDate)}</span>}
-            </div>
-            <div style={{ color: 'var(--text2)' }}>{it.hsn || '—'}</div>
-            <div style={{ textAlign: 'right' }}>{it.qty}{it.unit ? ` ${it.unit}` : ''}</div>
-            <div style={{ textAlign: 'right', color: 'var(--text2)' }}>{it.txns}</div>
-            <div style={{ textAlign: 'right', fontWeight: 700 }}>{inr(it.amount)}</div>
-          </div>
-        ))}
-        <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '10px', fontSize: 13, fontWeight: 800 }}>
-          <div style={{ gridColumn: '1 / 5' }}>{t('amount')}</div>
-          <div style={{ textAlign: 'right' }}>{inr(total)}</div>
+    <div>
+      <div className="flex items-center" style={{ gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <select style={sel} value={range} onChange={(e) => setRange(e.target.value)}>
+          <option value="last365">{t('last365')}</option>
+          <option value="thisMonth">{t('thisMonth')}</option>
+          <option value="thisFy">{t('thisFy')}</option>
+          <option value="all">{t('allTime')}</option>
+        </select>
+        <div className="flex" style={{ gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+          <button className="btn btn-xs btn-ghost" onClick={() => downloadCsv(`${fileBase}.csv`, grid)}>CSV</button>
+          <button className="btn btn-xs btn-ghost" onClick={() => downloadExcel(`${fileBase}.xlsx`, grid)}>Excel</button>
+          <button className="btn btn-xs btn-ghost" onClick={() => downloadPdf(docTitle, grid, `${fileBase}.pdf`)}>PDF</button>
+          <button className="btn btn-xs btn-ghost" onClick={() => printReport(docTitle, grid)}>🖨 {t('print')}</button>
         </div>
       </div>
+
+      {!data && <div style={{ color: 'var(--text3)', fontSize: 13, padding: 20 }}>{t('loading')}</div>}
+      {data && !data.items.length && <div style={{ color: 'var(--text3)', fontSize: 13, padding: 20 }}>{t('noItems')}</div>}
+
+      {data && !!data.items.length && (
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ minWidth: 760 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '9px 10px', fontSize: 11, textTransform: 'uppercase', color: 'var(--text3)', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>
+              <div>{t('itemName')}</div><div>{t('itemCode')}</div>
+              <div style={{ textAlign: 'right' }}>{t('salesQty')}</div>
+              <div style={{ textAlign: 'right' }}>{t('salesAmount')}</div>
+              <div style={{ textAlign: 'right' }}>{t('purchaseQty')}</div>
+              <div style={{ textAlign: 'right' }}>{t('purchaseAmount')}</div>
+            </div>
+
+            {data.items.map((r, i) => (
+              <div key={(r.itemId || r.name) + i} style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '9px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5, alignItems: 'center' }}>
+                <div style={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {r.name}
+                  {r.lastDate && <span style={{ display: 'block', fontSize: 11, fontWeight: 400, color: 'var(--text3)' }}>{t('lastOn')} {fmtDate(r.lastDate)}</span>}
+                </div>
+                <div style={{ color: 'var(--text2)' }}>{r.sku || '-'}</div>
+                <div style={{ textAlign: 'right' }}>{qty(r.salesQty, r.unit)}</div>
+                <div style={{ textAlign: 'right', fontWeight: r.salesAmount ? 700 : 400 }}>{amt(r.salesAmount)}</div>
+                <div style={{ textAlign: 'right', color: 'var(--text2)' }}>{qty(r.purchaseQty, r.unit)}</div>
+                <div style={{ textAlign: 'right', fontWeight: r.purchaseAmount ? 700 : 400, color: r.purchaseAmount ? 'var(--amber, #B45309)' : undefined }}>{amt(r.purchaseAmount)}</div>
+              </div>
+            ))}
+
+            <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '10px', fontSize: 13, fontWeight: 800 }}>
+              <div style={{ gridColumn: '1 / 3' }}>{t('total')}</div>
+              <div style={{ textAlign: 'right' }}>{data.totals.salesQty || '-'}</div>
+              <div style={{ textAlign: 'right' }}>{amt(data.totals.salesAmount)}</div>
+              <div style={{ textAlign: 'right' }}>{data.totals.purchaseQty || '-'}</div>
+              <div style={{ textAlign: 'right' }}>{amt(data.totals.purchaseAmount)}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
