@@ -34,6 +34,7 @@ const S = {
   taxable:  { en: 'Taxable', hi: 'कर योग्य', hinglish: 'Taxable' },
   voidInv:  { en: 'Void invoice', hi: 'इनवॉइस रद्द करें', hinglish: 'Invoice void karein' },
   voidConfirm: { en: 'Void this invoice? It will be kept for history and removed from the ledger.', hi: 'इनवॉइस रद्द करें?', hinglish: 'Invoice void karein?' },
+  edit:     { en: 'Edit', hi: 'बदलें', hinglish: 'Edit' },
   view:     { en: 'View', hi: 'देखें', hinglish: 'View' },
   search:   { en: 'Search invoice no / client…', hi: 'खोजें…', hinglish: 'Search invoice…' },
   failed:   { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua' },
@@ -186,6 +187,7 @@ function InvoiceRow({ inv, t }) {
   const [voiding, setVoiding] = useState(false);
   const [showCrn, setShowCrn] = useState(false);
   const [showDbn, setShowDbn] = useState(false);
+  const [editing, setEditing] = useState(false);
   const due = round2((inv.total || 0) - (inv.paidAmount || 0));
 
   const pay = async () => {
@@ -222,6 +224,13 @@ function InvoiceRow({ inv, t }) {
           <div style={{ fontSize: 11, color: 'var(--text3)' }}>{t('taxable')} {inr(inv.subtotal)} + {inr(inv.taxTotal)} GST</div>
           <div className="flex" style={{ gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
             <button className="btn btn-sm btn-ghost" onClick={() => navigate(`/invoice-view?id=${inv.id}`)}>{t('view')}</button>
+            {/* Editable only while nothing has been received against it. Once a
+                receipt exists the server refuses the edit — a payment is
+                allocated to the old total — so the button is hidden rather than
+                offered and then rejected. */}
+            {inv.status !== 'void' && round2(inv.paidAmount || 0) === 0 && (
+              <button className="btn btn-sm btn-ghost" onClick={() => setEditing(true)}>{t('edit')}</button>
+            )}
             {inv.type !== 'proforma' && inv.status !== 'paid' && inv.status !== 'void' && (
               <button className="btn btn-sm btn-ghost" onClick={pay} disabled={paying}>{t('pay')}</button>
             )}
@@ -237,6 +246,13 @@ function InvoiceRow({ inv, t }) {
           </div>
         </div>
       </div>
+      {editing && (
+        <CreateInvoiceFlow
+          invoice={inv}
+          onClose={() => setEditing(false)}
+          onCreated={() => setEditing(false)}
+        />
+      )}
       {showCrn && <CreditNoteModal invoice={inv} onClose={() => setShowCrn(false)} />}
       {showDbn && <DebitNoteModal invoice={inv} onClose={() => setShowDbn(false)} />}
     </div>

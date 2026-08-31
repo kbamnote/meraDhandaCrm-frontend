@@ -79,9 +79,10 @@ const DOC_TYPES = [
 const GST_RATES = ['0', '5', '12', '18', '28'];
 const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer'];
 
-export default function CreateInvoiceFlow({ job, party: forParty, onClose, onCreated }) {
+export default function CreateInvoiceFlow({ job, party: forParty, invoice, onClose, onCreated }) {
   const t = useT(S);
-  const [type, setType] = useState(null); // null = show picker; otherwise show form pre-set to type
+  // Editing an existing invoice: its type is already decided, so skip the picker.
+  const [type, setType] = useState(invoice ? (invoice.type || 'invoice') : null);
 
   if (!type) {
     return <InvoiceTypePicker t={t} onCancel={onClose} onPick={setType} />;
@@ -92,6 +93,7 @@ export default function CreateInvoiceFlow({ job, party: forParty, onClose, onCre
       initialType={type}
       job={job}
       party={forParty}
+      invoice={invoice}
       onClose={onClose}
       onCreated={onCreated}
     />
@@ -138,7 +140,8 @@ function Row({ label, value, bold, color }) {
   );
 }
 
-function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, party: forParty }) {
+function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, party: forParty, invoice }) {
+  const isEdit = !!invoice;
   const { tenant } = useAuth();
   // Snapshot the branding logo onto the invoice so a reprint keeps the mark the
   // document was issued under, even if branding changes later.
@@ -152,7 +155,21 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const [clientMatches, setClientMatches] = useState([]);
   // `party` prop = opened from a specific customer (Parties page), so Bill To is
   // already known; `job` = opened from Dispatch, prefilled from the job card.
-  const [party, setParty] = useState({
+  const [party, setParty] = useState(invoice ? {
+    ...EMPTY_PARTY,
+    clientId: invoice.clientId || null,
+    clientName: invoice.clientName || '',
+    clientPhone: invoice.clientPhone || '',
+    clientAddress: invoice.clientAddress || '',
+    gstNo: invoice.clientGstNo || '',
+    clientPan: invoice.clientPan || '',
+    // Only treat Ship To as separate when it genuinely differs from Bill To —
+    // the server mirrors them when they match, so a blind copy would tick the
+    // "different address" box on every edit.
+    shipDifferent: !!invoice.shipToAddress && invoice.shipToAddress !== invoice.clientAddress,
+    shipToName: invoice.shipToName || '',
+    shipToAddress: invoice.shipToAddress || '',
+  } : {
     ...EMPTY_PARTY,
     clientId: forParty?.id || null,
     clientName: forParty?.name || job?.clientName || '',
@@ -163,28 +180,41 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const setP = (k, v) => setParty((p) => ({ ...p, [k]: v }));
 
   const [form, setForm] = useState({
-    jobNo: job?.jobNo || '',
-    date: new Date().toISOString().slice(0, 10),
-    ewayBillNo: '', vehicleNo: '', poNumber: '', approvedBy: '',
-    eventType: '', salesPerson: '', deliveryType: '', branchId: '',
-    invoicePrefix: '', invoiceNumber: '',
-    paymentTermDays: '', dueDate: '',
-    placeOfSupply: 'auto',
-    gstRate: '18',
-    discount: '0',
+    jobNo: invoice?.jobNo || job?.jobNo || '',
+    date: invoice?.date || new Date().toISOString().slice(0, 10),
+    ewayBillNo: invoice?.ewayBillNo || '', vehicleNo: invoice?.vehicleNo || '',
+    poNumber: invoice?.poNumber || '', approvedBy: invoice?.approvedBy || '',
+    eventType: invoice?.eventType || '', salesPerson: invoice?.salesPerson || '',
+    deliveryType: invoice?.deliveryType || '', branchId: invoice?.branchId || '',
+    // The number is fixed on an edit — a GST document keeps its identity.
+    invoicePrefix: invoice?.invoicePrefix || '', invoiceNumber: '',
+    paymentTermDays: invoice?.paymentTermDays ?? '', dueDate: invoice?.dueDate || '',
+    placeOfSupply: invoice?.placeOfSupply || 'auto',
+    gstRate: invoice?.gstRate != null ? String(invoice.gstRate) : '18',
+    discount: invoice?.discount != null ? String(invoice.discount) : '0',
+    // Payment capture belongs to creation only — the edit endpoint refuses any
+    // invoice that already has a receipt against it.
     markFullyPaid: false,
     amountReceived: '0',
     paymentMode: 'Cash',
-    sendPaymentLink: true, // queue the payment-link WhatsApp message on create
-    notes: '', showNotes: false,
-    terms: '', editingTerms: false,
+    sendPaymentLink: !invoice, // don't re-queue the WhatsApp link on an edit
+    notes: invoice?.notes || '', showNotes: !!invoice?.notes,
+    terms: invoice?.terms || '', editingTerms: false,
   });
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  const [items, setItems] = useState([
-    job ? { ...blankItem(), name: job.work || '' } : blankItem(),
-  ]);
-  const [attachments, setAttachments] = useState([]);
+  const [items, setItems] = useState(
+    invoice && Array.isArray(invoice.items) && invoice.items.length
+      ? invoice.items.map((it) => ({
+        ...blankItem(),
+        name: it.name || '', hsn: it.hsn || '',
+        qty: it.qty != null ? String(it.qty) : '',
+        rate: it.rate != null ? String(it.rate) : '',
+        itemId: it.itemId || null,
+      }))
+      : [job ? { ...blankItem(), name: job.work || '' } : blankItem()]
+  );
+  const [attachments, setAttachments] = useState(invoice?.attachments || []);
   const [uploading, setUploading] = useState(false);
   const [defaults, setDefaults] = useState(null); // GET /invoice-defaults result
   const [busy, setBusy] = useState(false);
@@ -295,7 +325,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     if (!items.some((it) => it.name.trim() && Number(it.rate) > 0)) return showToast('Add at least one item', 'error');
     setBusy(true);
     try {
-      const inv = await accountingApi.createInvoice({
+      const body = {
         type,
         // Set only after the user confirms the credit-limit warning below.
         overrideCreditLimit: overrideCreditLimit || undefined,
@@ -323,8 +353,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         sendPaymentLink: form.sendPaymentLink,
         notes: form.notes, terms: form.terms, attachments,
         items: items.filter((it) => it.name.trim()).map((it) => ({ name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate), itemId: it.itemId || null })),
-      });
-      showToast(`${inv.invoiceNo} created`, 'success');
+      };
+      const inv = isEdit
+        ? await accountingApi.updateInvoice(invoice.id, body)
+        : await accountingApi.createInvoice(body);
+      showToast(`${inv.invoiceNo} ${isEdit ? 'updated' : 'created'}`, 'success');
       onCreated?.(inv);
       onClose();
     } catch (e) {
@@ -344,14 +377,28 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div className="card" style={{ maxWidth: 980, width: '100%', maxHeight: '94vh', overflow: 'auto', padding: 20 }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
-          <h3 style={{ margin: 0 }}>Create Sales Invoice</h3>
+          <h3 style={{ margin: 0 }}>
+            {isEdit ? `Edit Invoice ${invoice.invoiceNo || ''}` : 'Create Sales Invoice'}
+          </h3>
           <div className="flex gap-2">
             <button className="btn btn-ghost" onClick={onClose} disabled={busy}>{t('cancel')}</button>
             {/* Must be wrapped: passing `submit` directly hands the click event
                 in as overrideCreditLimit, which is truthy. */}
-            <button className="btn btn-primary" onClick={() => submit(false)} disabled={busy}>{busy ? '…' : 'Save'}</button>
+            <button className="btn btn-primary" onClick={() => submit(false)} disabled={busy}>
+              {busy ? '…' : (isEdit ? 'Save changes' : 'Save')}
+            </button>
           </div>
         </div>
+
+        {isEdit && (
+          <div style={{ marginBottom: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(245,158,11,.12)', color: 'var(--amber, #B45309)', fontSize: 12.5 }}>
+            ⚠️ Saving replaces this invoice's ledger entry and re-applies its stock
+            deduction. The invoice number stays the same and the previous version is
+            kept in its revision history.
+            {Array.isArray(invoice.revisions) && invoice.revisions.length > 0
+              && ` Edited ${invoice.revisions.length} time${invoice.revisions.length > 1 ? 's' : ''} already.`}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
           {/* ── LEFT COLUMN ── */}

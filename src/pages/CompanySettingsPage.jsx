@@ -23,6 +23,8 @@ const EMPTY = {
   // Default Terms & Conditions per document type — prefilled on every new
   // invoice of that type, still editable per invoice via "Edit Terms".
   termsProforma: '', termsInvoice: '', termsCash: '',
+  // What happens when an invoice would take an item below zero.
+  negativeStockPolicy: 'clamp',
 };
 
 const S = {
@@ -371,6 +373,23 @@ export default function CompanySettingsPage() {
           <div className="form-group" style={{ flex: 1 }}>
             <label>UPI ID (payment QR on invoice)</label>
             <input className="input" placeholder="yourbusiness@bank" value={form.upiId} onChange={(e) => setField('upiId', e.target.value)} disabled={!canEdit} />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>When an invoice would take stock below zero</label>
+          <select className="input" value={form.negativeStockPolicy || 'clamp'}
+            onChange={(e) => setField('negativeStockPolicy', e.target.value)} disabled={!canEdit}>
+            <option value="clamp">Stop at zero (current behaviour)</option>
+            <option value="allow">Allow negative stock — show the shortfall</option>
+            <option value="block">Block the invoice until stock is entered</option>
+          </select>
+          <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 4 }}>
+            <b>Stop at zero</b> silently loses the shortfall: billing 10 of an item you
+            have 4 of leaves 0, not −6, so nothing records that you were 6 short.
+            <b> Allow</b> keeps that visible until a purchase corrects it.
+            <b> Block</b> refuses the invoice — safest for books, but it stops billing
+            when someone simply hasn't entered a delivery yet.
           </div>
         </div>
 
