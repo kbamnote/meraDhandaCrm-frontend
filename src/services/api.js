@@ -276,6 +276,9 @@ export const accountingApi = {
   // Bulk party import. ALWAYS call with dryRun:true first — the response is the
   // exact impact report, and nothing is written until you call again without it.
   importParties: (body)     => api.post('/accounting/import/parties', body).then(r => r.data),
+  // Historical sales import. Always dry-run first. Imported invoices never move
+  // stock, and existing invoice numbers are skipped rather than overwritten.
+  importTransactions: (body) => api.post('/accounting/import/transactions', body).then(r => r.data),
   // Per-job (cost-centre) profitability. NOTE the margin is MATERIAL-only —
   // nothing records labour or machine time against a job.
   jobProfit: (params)       => api.get('/accounting/job-profit', { params }).then(r => r.data),

@@ -11,6 +11,7 @@ import { accountingApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from '../../components/common/toast';
 import CreateInvoiceFlow from '../../components/common/CreateInvoiceFlow';
+import TransactionBulkUpload from '../../components/common/TransactionBulkUpload';
 import CreditNoteModal from '../../components/common/CreditNoteModal';
 import DebitNoteModal from '../../components/common/DebitNoteModal';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
@@ -56,6 +57,7 @@ export default function SalesInvoicesPage() {
   const [pageView, setPageView] = useState('invoices'); // 'invoices' | 'creditNotes'
   const [creditNotes, setCreditNotes] = useState([]);
   const [crnLoading, setCrnLoading] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   useEffect(() => { const u = onValue(ref(db, 'mpw/invoices'), (s) => setInvoices(s.val() || {})); return () => u(); }, []);
 
@@ -92,8 +94,21 @@ export default function SalesInvoicesPage() {
     <div>
       <div className="flex items-center justify-between mb-4" style={{ flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>{t('newInv')}</button>
+        <div className="flex" style={{ gap: 6 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowImport((v) => !v)}>⬆️ Import history</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>{t('newInv')}</button>
+        </div>
       </div>
+
+      {showImport && (
+        <div className="card" style={{ padding: 14, marginBottom: 12 }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>Import historical invoices</h3>
+            <button className="btn btn-xs btn-ghost" onClick={() => setShowImport(false)}>✕</button>
+          </div>
+          <TransactionBulkUpload onImported={() => setShowImport(false)} />
+        </div>
+      )}
 
       {/* Sub-tabs: Invoices | Credit Notes */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 16 }}>
