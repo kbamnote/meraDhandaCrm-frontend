@@ -44,6 +44,7 @@ const S = {
   sendReminder: { en: 'Send Reminder', hi: 'रिमाइंडर भेजें', hinglish: 'Send Reminder' },
   createInvoice:{ en: 'Create Sales Invoice', hi: 'सेल्स इनवॉइस बनाएं', hinglish: 'Create Sales Invoice' },
   paymentIn:    { en: 'Payment In', hi: 'भुगतान प्राप्त', hinglish: 'Payment In' },
+  onAccountTile:{ en: 'On Account', hi: 'खाते में जमा', hinglish: 'On Account' },
   paymentOut:   { en: 'Payment Out', hi: 'भुगतान किया', hinglish: 'Payment Out' },
   recordPayment:{ en: 'Record Payment', hi: 'भुगतान दर्ज करें', hinglish: 'Payment record karein' },
   amountRecv:   { en: 'Amount received', hi: 'प्राप्त राशि', hinglish: 'Amount received' },
@@ -358,6 +359,12 @@ function PartyDetail({ party, t, onBack }) {
   const [invoiceFor, setInvoiceFor] = useState(null);
   const [editingParty, setEditingParty] = useState(null);
   const [paying, setPaying] = useState(false);
+  // Advance held by this party, surfaced so an unapplied receipt is visible
+  // rather than just quietly lowering the balance.
+  const advance = useMemo(
+    () => round2((data?.transactions || []).reduce((s, r) => s + (Number(r.onAccount) || 0), 0)),
+    [data]
+  );
 
   // NOTE: `t` is a fresh reference on every render (useT), so it must never be a
   // dependency here — that turns this into an infinite fetch loop.
@@ -435,6 +442,9 @@ function PartyDetail({ party, t, onBack }) {
             />
             <Tile label={isClient ? t('totalSales') : t('totalPurchased')} value={inr(isClient ? sum.invoiced : sum.purchased)} />
             <Tile label={isClient ? t('totalPaid') : t('totalExpensed')} value={inr(isClient ? sum.paid : sum.expensed)} />
+            {isClient && advance > 0 && (
+              <Tile label={t('onAccountTile')} value={inr(advance)} color="var(--blue, #2563EB)" />
+            )}
             {isClient && sum.credited > 0 && <Tile label="Credit Notes" value={inr(sum.credited)} />}
             {isClient && sum.debited > 0 && <Tile label="Debit Notes" value={inr(sum.debited)} />}
           </div>

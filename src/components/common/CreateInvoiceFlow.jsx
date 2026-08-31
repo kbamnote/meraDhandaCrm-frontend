@@ -223,6 +223,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   // MUST stay below `defaults` — reading a const before its declaration is a
   // temporal-dead-zone ReferenceError, which crashed the whole invoice form.
   const isComposition = defaults?.gstScheme === 'composition';
+  // Unapplied advance this customer is holding, if any.
+  const [advance, setAdvance] = useState(null);
+  const [useAdvance, setUseAdvance] = useState(false);
   const [busy, setBusy] = useState(false);
   // Set from the server's 409 when this invoice would breach the customer's
   // credit limit; holds { creditLimit, outstanding, invoiceTotal, projected }.
@@ -324,6 +327,24 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     return { subtotal, taxTotal, cgst, sgst, igst, discount, rawTotal, roundOff, total, received, balance };
   }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview, defaults]);
 
+  // Look up the customer's advance when one is selected. Not for an edit: the
+  // edit endpoint refuses any invoice that already has money against it, so
+  // there is nothing an advance could be applied to.
+  useEffect(() => {
+    if (!party.clientId || isEdit) { setAdvance(null); setUseAdvance(false); return; }
+    let cancelled = false;
+    accountingApi.partyAdvance(party.clientId)
+      .then((r) => {
+        if (cancelled) return;
+        setAdvance(r);
+        // Offered, never automatic — applying a customer's advance without
+        // being asked is the kind of surprise that costs trust.
+        setUseAdvance(false);
+      })
+      .catch(() => { if (!cancelled) setAdvance(null); });
+    return () => { cancelled = true; };
+  }, [party.clientId, isEdit]);
+
   const addAttachment = async (e) => {
     const f = e.target.files && e.target.files[0];
     e.target.value = '';
@@ -365,6 +386,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         reverseCharge: !!form.reverseCharge,
         discount: totals.discount,
         markFullyPaid: form.markFullyPaid,
+        applyAdvance: useAdvance || undefined,
         amountReceived: form.markFullyPaid ? undefined : Number(form.amountReceived) || 0,
         paymentMode: form.paymentMode,
         sendPaymentLink: form.sendPaymentLink,
@@ -374,7 +396,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
       const inv = isEdit
         ? await accountingApi.updateInvoice(invoice.id, body)
         : await accountingApi.createInvoice(body);
-      showToast(`${inv.invoiceNo} ${isEdit ? 'updated' : 'created'}`, 'success');
+      showToast(
+        `${inv.invoiceNo} ${isEdit ? 'updated' : 'created'}`
+        + (inv.advanceApplied > 0 ? ` · ${inr(inv.advanceApplied)} advance applied` : ''),
+        'success'
+      );
       onCreated?.(inv);
       onClose();
     } catch (e) {
@@ -719,7 +745,33 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                 </div>
               </div>
             )}
-            <Row label="Balance Amount" value={inr(totals.balance)} bold color={totals.balance > 0 ? 'var(--red, #DC2626)' : 'var(--green, #16A34A)'} />
+            {/* Advance the customer is already holding. Offered, never applied
+                automatically — silently consuming someone's advance is exactly
+                the kind of surprise that costs trust in the numbers. */}
+            {advance && advance.available > 0 && (
+              <div style={{ padding: '9px 10px', margin: '6px 0', borderRadius: 8, background: 'rgba(37,99,235,.10)', fontSize: 12.5 }}>
+                <label className="flex items-center" style={{ gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={useAdvance} onChange={(e) => setUseAdvance(e.target.checked)} />
+                  <span>
+                    Apply advance — <b>{inr(advance.available)}</b> on account
+                    <span style={{ display: 'block', color: 'var(--text3)', fontSize: 11.5 }}>
+                      {useAdvance
+                        ? `${inr(Math.min(advance.available, totals.balance))} will settle this invoice`
+                        : 'Received earlier with no bill against it'}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
+
+            <Row
+              label="Balance Amount"
+              value={inr(useAdvance && advance
+                ? Math.max(0, round2(totals.balance - Math.min(advance.available, totals.balance)))
+                : totals.balance)}
+              bold
+              color={totals.balance > 0 ? 'var(--red, #DC2626)' : 'var(--green, #16A34A)'}
+            />
 
             <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 14, textAlign: 'right' }}>
               Authorized signatory for<br /><b style={{ color: 'var(--text2)' }}>{defaults?.authorizedSignatory || ''}</b>

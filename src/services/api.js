@@ -277,6 +277,11 @@ export const accountingApi = {
   // Record money received from / paid to a party without starting from an
   // invoice. Allocates oldest-first across unpaid invoices; any excess is held
   // on account.
+  // Unapplied advance a party is holding. Applying it is a document allocation,
+  // not a new posting — the cash already hit the ledger when it was received.
+  partyAdvance: (id) => api.get(`/accounting/party/${id}/advance`).then(r => r.data),
+  applyAdvance: (invoiceId, amount) =>
+    api.post(`/accounting/invoice/${invoiceId}/apply-advance`, amount != null ? { amount } : {}).then(r => r.data),
   partyPayment: (id, body) => api.post(`/accounting/party/${id}/payment`, body).then(r => r.data),
   partyItems: (id, params) => api.get(`/accounting/party/${id}/items`, { params }).then(r => r.data),
   updateParty: (id, type, body) => api.put(`/accounting/party/${id}`, body, { params: { type } }).then(r => r.data),
