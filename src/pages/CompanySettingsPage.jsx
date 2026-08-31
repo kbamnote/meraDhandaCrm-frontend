@@ -25,6 +25,8 @@ const EMPTY = {
   termsProforma: '', termsInvoice: '', termsCash: '',
   // What happens when an invoice would take an item below zero.
   negativeStockPolicy: 'clamp',
+  // 'regular' or 'composition' — a composition dealer may not collect GST.
+  gstScheme: 'regular',
 };
 
 const S = {
@@ -373,6 +375,21 @@ export default function CompanySettingsPage() {
           <div className="form-group" style={{ flex: 1 }}>
             <label>UPI ID (payment QR on invoice)</label>
             <input className="input" placeholder="yourbusiness@bank" value={form.upiId} onChange={(e) => setField('upiId', e.target.value)} disabled={!canEdit} />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>GST scheme</label>
+          <select className="input" value={form.gstScheme || 'regular'}
+            onChange={(e) => setField('gstScheme', e.target.value)} disabled={!canEdit}>
+            <option value="regular">Regular — collect GST on invoices</option>
+            <option value="composition">Composition — cannot collect GST</option>
+          </select>
+          <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 4 }}>
+            Under composition every invoice is issued as a <b>Bill of Supply</b> with no
+            tax charged, carrying the declaration the law requires. Switching this
+            affects NEW invoices only — documents already issued keep the scheme they
+            were raised under.
           </div>
         </div>
 

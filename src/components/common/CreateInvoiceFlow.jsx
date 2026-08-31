@@ -148,6 +148,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const tenantLogo = tenant?.settings?.branding?.logo || '';
   const [type, setType] = useState(initialType);
   const isCash = type === 'cash';
+  // Composition dealers cannot collect GST (CGST Act s.10); reverse charge moves
+  // the liability to the recipient. Either way this invoice carries no tax.
+  const isComposition = defaults?.gstScheme === 'composition';
 
   // Bill To — search-and-select (same pattern as the Job Cards client picker),
   // with the selected/typed party editable underneath.
@@ -190,6 +193,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     invoicePrefix: invoice?.invoicePrefix || '', invoiceNumber: '',
     paymentTermDays: invoice?.paymentTermDays ?? '', dueDate: invoice?.dueDate || '',
     placeOfSupply: invoice?.placeOfSupply || 'auto',
+    reverseCharge: !!invoice?.reverseCharge,
     gstRate: invoice?.gstRate != null ? String(invoice.gstRate) : '18',
     discount: invoice?.discount != null ? String(invoice.discount) : '0',
     // Payment capture belongs to creation only — the edit endpoint refuses any
@@ -296,7 +300,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     let st = 0;
     items.forEach((it) => { st += (Number(it.qty) || 0) * (Number(it.rate) || 0); });
     const subtotal = round2(st);
-    const rate = isCash ? 0 : (Number(form.gstRate) || 0);
+    const rate = (isCash || isComposition || form.reverseCharge) ? 0 : (Number(form.gstRate) || 0);
     const taxTotal = round2((subtotal * rate) / 100);
     const cgst = interStatePreview ? 0 : round2(taxTotal / 2);
     const sgst = interStatePreview ? 0 : round2(taxTotal / 2);
@@ -306,7 +310,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const received = form.markFullyPaid ? total : round2(Number(form.amountReceived) || 0);
     const balance = round2(Math.max(0, total - Math.min(received, total)));
     return { subtotal, taxTotal, cgst, sgst, igst, discount, total, received, balance };
-  }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, interStatePreview]);
+  }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview]);
 
   const addAttachment = async (e) => {
     const f = e.target.files && e.target.files[0];
@@ -345,7 +349,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         invoicePrefix: form.invoicePrefix, invoiceNumber: form.invoiceNumber,
         paymentTermDays: form.paymentTermDays, dueDate: form.dueDate,
         placeOfSupply: form.placeOfSupply,
-        gstRate: isCash ? 0 : Number(form.gstRate) || 0,
+        gstRate: (isCash || isComposition || form.reverseCharge) ? 0 : Number(form.gstRate) || 0,
+        reverseCharge: !!form.reverseCharge,
         discount: totals.discount,
         markFullyPaid: form.markFullyPaid,
         amountReceived: form.markFullyPaid ? undefined : Number(form.amountReceived) || 0,
@@ -630,7 +635,29 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
 
             <div className="card" style={{ background: 'var(--surface2)', marginTop: 8 }}>
               <Row label="Subtotal" value={inr(totals.subtotal)} />
-              {!isCash && (
+              {/* A composition dealer may not collect GST at all — the rate
+                  picker is hidden rather than shown and ignored. */}
+              {isComposition && (
+                <div style={{ padding: '6px 0', fontSize: 11.5, color: 'var(--amber, #B45309)' }}>
+                  Bill of Supply — composition scheme, no tax collected.
+                </div>
+              )}
+              {!isCash && !isComposition && (
+                <>
+                  <label className="flex items-center" style={{ gap: 6, padding: '4px 0', fontSize: 12.5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!form.reverseCharge}
+                      onChange={(e) => setF('reverseCharge', e.target.checked)} />
+                    Reverse charge (recipient pays the GST)
+                  </label>
+                  {form.reverseCharge && (
+                    <div style={{ padding: '2px 0 6px', fontSize: 11.5, color: 'var(--amber, #B45309)' }}>
+                      No tax is charged on this invoice; it must state that tax is
+                      payable under reverse charge.
+                    </div>
+                  )}
+                </>
+              )}
+              {!isCash && !isComposition && !form.reverseCharge && (
                 <>
                   <div className="flex items-center justify-between" style={{ padding: '3px 0' }}>
                     <span>GST Rate</span>

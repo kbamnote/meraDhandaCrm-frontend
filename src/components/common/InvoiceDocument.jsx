@@ -78,7 +78,12 @@ export default function InvoiceDocument({ invoice }) {
   const co = inv.company || {};
   const bank = inv.bank || {};
 
-  const title = inv.type === 'proforma' ? 'PROFORMA INVOICE' : isCash ? 'BILL OF SUPPLY' : 'TAX INVOICE';
+  // The server decides the legal title at issue time and snapshots it, so a
+  // reprint keeps the title the document was issued under even if the company
+  // later leaves (or joins) the composition scheme. Older invoices predate the
+  // field, hence the fallback.
+  const title = inv.docTitle
+    || (inv.type === 'proforma' ? 'PROFORMA INVOICE' : isCash ? 'BILL OF SUPPLY' : 'TAX INVOICE');
   // A cash / non-GST bill has no statutory copy set — print it once.
   const copies = isCash ? [null] : COPIES;
 
@@ -124,6 +129,14 @@ export default function InvoiceDocument({ invoice }) {
               <span className="inv-title">{title}</span>
               {copy && <span className="inv-copy">{copy}</span>}
             </div>
+            {/* Statutory declaration — a composition dealer must state that it
+                cannot collect tax; a reverse-charge supply must say the recipient
+                pays it. Both are required wording on the document itself. */}
+            {inv.taxNote && (
+              <div style={{ fontSize: 9.5, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .2 }}>
+                {inv.taxNote}
+              </div>
+            )}
 
             {/* Seller header + invoice meta */}
             <table className="inv-t">
