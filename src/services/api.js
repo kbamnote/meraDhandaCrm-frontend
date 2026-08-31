@@ -274,6 +274,10 @@ export const accountingApi = {
   // placement — see the note in posting.js; these do NOT shape the P&L).
   partyGroups: ()           => api.get('/accounting/party-groups').then(r => r.data),
   // Item-wise report for one party, sales and purchases side by side.
+  // Record money received from / paid to a party without starting from an
+  // invoice. Allocates oldest-first across unpaid invoices; any excess is held
+  // on account.
+  partyPayment: (id, body) => api.post(`/accounting/party/${id}/payment`, body).then(r => r.data),
   partyItems: (id, params) => api.get(`/accounting/party/${id}/items`, { params }).then(r => r.data),
   updateParty: (id, type, body) => api.put(`/accounting/party/${id}`, body, { params: { type } }).then(r => r.data),
   // GSTIN -> business details. Always resolves: an unconfigured or failing
