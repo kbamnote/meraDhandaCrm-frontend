@@ -276,10 +276,17 @@ export const accountingApi = {
   // Bulk party import. ALWAYS call with dryRun:true first — the response is the
   // exact impact report, and nothing is written until you call again without it.
   importParties: (body)     => api.post('/accounting/import/parties', body).then(r => r.data),
+  // Per-job (cost-centre) profitability. NOTE the margin is MATERIAL-only —
+  // nothing records labour or machine time against a job.
+  jobProfit: (params)       => api.get('/accounting/job-profit', { params }).then(r => r.data),
   // Everything the Create Invoice form prefills: next number, bank details,
   // company GSTIN/state, default Terms for this doc type, GST state list.
   invoiceDefaults: (type)   => api.get('/accounting/invoice-defaults', { params: { type } }).then(r => r.data),
   createInvoice: (body)     => api.post('/accounting/invoice', body).then(r => r.data),
+  // Correct an invoice in place, keeping its number. Refused (409) once money
+  // has been received against it — use a credit/debit note then — or if the
+  // financial year is closed. The prior version is kept in `revisions`.
+  updateInvoice: (id, body) => api.put(`/accounting/invoice/${id}`, body).then(r => r.data),
   recordPayment: (id, body) => api.post(`/accounting/invoice/${id}/payment`, body).then(r => r.data),
   voidInvoice:   (id)       => api.post(`/accounting/invoice/${id}/void`).then(r => r.data),
   // Payment links (Phase 4B-1) — status (no mint) and mint-if-missing.

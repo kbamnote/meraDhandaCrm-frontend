@@ -91,6 +91,7 @@ export default function CreateInvoiceFlow({ job, party: forParty, onClose, onCre
       t={t}
       initialType={type}
       job={job}
+      party={forParty}
       onClose={onClose}
       onCreated={onCreated}
     />
@@ -137,7 +138,7 @@ function Row({ label, value, bold, color }) {
   );
 }
 
-function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }) {
+function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, party: forParty }) {
   const { tenant } = useAuth();
   // Snapshot the branding logo onto the invoice so a reprint keeps the mark the
   // document was issued under, even if branding changes later.
