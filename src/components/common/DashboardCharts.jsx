@@ -3,7 +3,32 @@
  * dashboards: KPI cards, a labeled horizontal bar list, and a vertical column
  * chart. All use the app's CSS variables so dark mode + branding apply.
  */
+/**
+ * Money, in full, with Indian grouping: ₹4,900 — never ₹4.9k.
+ *
+ * This used to abbreviate above a thousand, which is fine on a chart axis and
+ * wrong everywhere money is being checked: ₹4.9k could be ₹4,850 or ₹4,949, and
+ * an invoice line, a balance or a statement has to show the actual figure. The
+ * rounding also made totals look like they didn't add up.
+ *
+ * Paise are shown only when there are any, so ₹28.98 keeps its paise while
+ * ₹4,900 doesn't gain a pointless ".00".
+ */
 export function inr(n) {
+  const v = Number(n) || 0;
+  const hasPaise = Math.round(v * 100) % 100 !== 0;
+  return '₹' + v.toLocaleString('en-IN', {
+    minimumFractionDigits: hasPaise ? 2 : 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+/**
+ * Abbreviated form — ₹4.9k / ₹1.20 L / ₹1.05 Cr — for chart axes and tiles
+ * where the exact figure is not the point and the space genuinely will not take
+ * it. Never use it where someone might reconcile the number against a document.
+ */
+export function inrCompact(n) {
   const v = Number(n) || 0;
   if (Math.abs(v) >= 1e7) return '₹' + (v / 1e7).toFixed(2) + ' Cr';
   if (Math.abs(v) >= 1e5) return '₹' + (v / 1e5).toFixed(2) + ' L';

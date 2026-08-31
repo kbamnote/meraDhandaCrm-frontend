@@ -224,6 +224,10 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   // temporal-dead-zone ReferenceError, which crashed the whole invoice form.
   const isComposition = defaults?.gstScheme === 'composition';
   // Unapplied advance this customer is holding, if any.
+  // What /invoice-defaults prefilled the number as. Sending an UNTOUCHED
+  // prefill back made the server treat it as a hand-edit and skip the counter,
+  // so every invoice was issued with the same number.
+  const [prefilledNumber, setPrefilledNumber] = useState('');
   const [advance, setAdvance] = useState(null);
   const [useAdvance, setUseAdvance] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -248,6 +252,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   useEffect(() => {
     accountingApi.invoiceDefaults(type).then((d) => {
       setDefaults(d);
+      setPrefilledNumber(d.invoiceNumber);
       setForm((f) => ({ ...f, invoicePrefix: d.invoicePrefix, invoiceNumber: d.invoiceNumber, terms: f.terms || d.terms }));
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -379,7 +384,10 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         ewayBillNo: form.ewayBillNo, vehicleNo: form.vehicleNo, poNumber: form.poNumber, approvedBy: form.approvedBy,
         eventType: form.eventType, salesPerson: form.salesPerson, deliveryType: form.deliveryType,
         branchId: form.branchId || undefined,
-        invoicePrefix: form.invoicePrefix, invoiceNumber: form.invoiceNumber,
+        invoicePrefix: form.invoicePrefix,
+        // Only send it when the user actually changed it; otherwise let the
+        // server allocate the next number.
+        invoiceNumber: form.invoiceNumber !== prefilledNumber ? form.invoiceNumber : undefined,
         paymentTermDays: form.paymentTermDays, dueDate: form.dueDate,
         placeOfSupply: form.placeOfSupply,
         gstRate: (isCash || isComposition || form.reverseCharge) ? 0 : Number(form.gstRate) || 0,
