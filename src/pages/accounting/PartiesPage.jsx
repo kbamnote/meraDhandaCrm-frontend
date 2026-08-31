@@ -15,12 +15,15 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../../services/realtime';
-import { accountingApi, ledgerApi, describeError } from '../../services/api';
+import { accountingApi, describeError } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from '../../components/common/toast';
 import { inr } from '../../components/common/DashboardCharts';
 import CreateInvoiceFlow from '../../components/common/CreateInvoiceFlow';
 import PartyBulkUpload from '../../components/common/PartyBulkUpload';
+// Reuse the report exporters so a party statement downloads in the same shapes
+// as every other report, instead of a second CSV/PDF implementation.
+import { downloadCsv, downloadExcel, downloadPdf, printReport } from './ReportsPage';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -86,6 +89,21 @@ const S = {
   debit:    { en: 'Debit', hi: 'डेबिट', hinglish: 'Debit' },
   credit:   { en: 'Credit', hi: 'क्रेडिट', hinglish: 'Credit' },
   empty:    { en: 'No ledger activity yet.', hi: 'कोई लेन-देन नहीं।', hinglish: 'No activity yet.' },
+  statement:      { en: 'Statement', hi: 'स्टेटमेंट', hinglish: 'Statement' },
+  voucher:        { en: 'Voucher', hi: 'वाउचर', hinglish: 'Voucher' },
+  vchNo:          { en: 'Voucher No', hi: 'वाउचर नं', hinglish: 'Voucher No' },
+  mode:           { en: 'Mode', hi: 'माध्यम', hinglish: 'Mode' },
+  dueDate:        { en: 'Due Date', hi: 'देय तिथि', hinglish: 'Due Date' },
+  overdue:        { en: 'overdue', hi: 'विलंबित', hinglish: 'overdue' },
+  openingBalance: { en: 'Opening Balance', hi: 'शुरुआती बैलेंस', hinglish: 'Opening Balance' },
+  closingBalance: { en: 'Closing Balance', hi: 'अंतिम बैलेंस', hinglish: 'Closing Balance' },
+  totalReceivable:{ en: 'Total Receivable', hi: 'कुल प्राप्य', hinglish: 'Total Receivable' },
+  totalPayable:   { en: 'Total Payable', hi: 'कुल देय', hinglish: 'Total Payable' },
+  overdueAmount:  { en: 'Overdue Amount', hi: 'विलंबित राशि', hinglish: 'Overdue Amount' },
+  totalInvoiced:  { en: 'Total Invoiced', hi: 'कुल इनवॉइस', hinglish: 'Total Invoiced' },
+  totalReceived:  { en: 'Total Received', hi: 'कुल प्राप्त', hinglish: 'Total Received' },
+  last365:        { en: 'Last 365 days', hi: 'पिछले 365 दिन', hinglish: 'Last 365 days' },
+  print:          { en: 'Print', hi: 'प्रिंट', hinglish: 'Print' },
   // Item wise
   item:     { en: 'Item', hi: 'आइटम', hinglish: 'Item' },
   qty:      { en: 'Qty', hi: 'मात्रा', hinglish: 'Qty' },
@@ -153,6 +171,9 @@ const S = {
   stateFromGst: { en: 'State', hi: 'राज्य', hinglish: 'State' },
   savedNew:     { en: 'Saved — add the next one', hi: 'सेव हुआ — अगला जोड़ें', hinglish: 'Save hua — agla add karein' },
 };
+
+const isoDate = (d) => d.toISOString().slice(0, 10);
+const fyStartDate = () => { const d = new Date(); const y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; return `${y}-04-01`; };
 
 const partyName = (p) => p.name || p.company || p.title || '—';
 const partyPhone = (p) => p.phone || p.mobile || p.contact || p.email || '';
@@ -416,7 +437,15 @@ function PartyDetail({ party, t, onBack }) {
         {!data && !err && <div style={{ color: 'var(--text3)', fontSize: 13, padding: 24 }}>{t('loading')}</div>}
         {data && tab === 'txns' && <TransactionsTab rows={data.transactions} t={t} />}
         {data && tab === 'profile' && <ProfileTab p={p} t={t} />}
-        {data && tab === 'ledger' && <LedgerTab party={party} t={t} />}
+        {data && tab === 'ledger' && (
+          <LedgerTab
+            party={party} t={t}
+            feed={data.transactions}
+            openingBalance={p && p.openingBalanceType === 'to_pay'
+              ? -round2(p.openingBalance || 0)
+              : round2((p && p.openingBalance) || 0)}
+          />
+        )}
         {data && tab === 'items' && <ItemsTab items={data.items} t={t} />}
       </div>
 
@@ -644,44 +673,156 @@ function ProfileTab({ p, t }) {
 
 /* ──────────────────────── Ledger (double entry) ──────────────────────── */
 
-function LedgerTab({ party, t }) {
-  const [data, setData] = useState(null);
-  useEffect(() => {
-    ledgerApi.party(party.id, party.type).then(setData).catch(() => setData({ entries: [], balance: 0 }));
-  }, [party.id, party.type]);
+function LedgerTab({ party, t, feed, openingBalance }) {
+  const [range, setRange] = useState('all');
 
-  if (!data) return <div style={{ color: 'var(--text3)', fontSize: 13, padding: 20 }}>{t('loading')}</div>;
-  if (!data.entries.length) return <div style={{ color: 'var(--text3)', fontSize: 13, padding: 20 }}>{t('empty')}</div>;
+  // Built from the DOCUMENT feed rather than the journal, because a customer
+  // statement has to show voucher numbers and payment modes — a journal line
+  // knows only which account it hit. The double-entry view of the same facts is
+  // the Reports > Ledger page; this is what you hand a customer who asks
+  // "what do I owe you?".
+  const isClient = party.type !== 'vendor';
 
-  const COLS = '100px 130px minmax(140px, 1fr) 110px 110px';
-  // Running balance makes the statement actually reconcilable by eye.
-  let running = 0;
+  const rows = useMemo(() => {
+    let from = null;
+    if (range === 'thisMonth') { const d = new Date(); from = isoDate(new Date(d.getFullYear(), d.getMonth(), 1)); }
+    else if (range === 'thisFy') from = fyStartDate();
+    else if (range === 'last365') { const d = new Date(); d.setDate(d.getDate() - 365); from = isoDate(d); }
+
+    // Oldest first — a running balance only reads correctly forwards.
+    const list = [...(feed || [])]
+      .filter((r) => !from || (r.date && r.date >= from))
+      .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+
+    // For a customer an invoice or debit note DEBITS them (they owe more) and a
+    // receipt or credit note CREDITS them. A supplier is the mirror.
+    const debitTypes = isClient ? ['invoice', 'cash', 'debit_note'] : ['payment_in', 'expense'];
+    const today = isoDate(new Date());
+
+    let balance = round2(openingBalance || 0);
+    const out = list.map((r) => {
+      const isDebit = debitTypes.includes(r.docType);
+      const amt = round2(r.amount || 0);
+      balance = round2(balance + (isDebit ? amt : -amt));
+      const overdueBy = r.dueDate && r.unpaid > 0 && r.dueDate < today
+        ? Math.floor((new Date(today) - new Date(r.dueDate)) / 86400000)
+        : 0;
+      return { ...r, debit: isDebit ? amt : 0, credit: isDebit ? 0 : amt, balance, overdueBy };
+    });
+    return { list: out, closing: balance };
+  }, [feed, range, openingBalance, isClient]);
+
+  const totals = useMemo(() => ({
+    invoiced: round2(rows.list.filter((r) => ['invoice', 'cash'].includes(r.docType)).reduce((s, r) => s + r.amount, 0)),
+    received: round2(rows.list.filter((r) => r.docType === 'payment_in').reduce((s, r) => s + r.amount, 0)),
+    overdue: round2(rows.list.reduce((s, r) => s + (r.overdueBy > 0 ? r.unpaid : 0), 0)),
+    receivable: round2(Math.max(0, rows.closing)),
+  }), [rows]);
+
+  // The exact grid handed to the export helpers, so what downloads is what is on
+  // screen rather than a second implementation that can drift from it.
+  const grid = useMemo(() => ({
+    headers: [t('date'), t('voucher'), t('vchNo'), t('mode'), t('debit'), t('credit'), t('balance'), t('dueDate')],
+    rows: [
+      ['', t('openingBalance'), '', '', '', '', inr(openingBalance || 0), ''],
+      ...rows.list.map((r) => [
+        fmtDate(r.date), r.label, r.number || '', r.mode || '',
+        r.debit ? inr(r.debit) : '', r.credit ? inr(r.credit) : '', inr(r.balance),
+        r.dueDate ? (r.overdueBy > 0 ? `${fmtDate(r.dueDate)} (${r.overdueBy}d overdue)` : fmtDate(r.dueDate)) : '',
+      ]),
+      ['', t('closingBalance'), '', '', '', '', inr(rows.closing), ''],
+    ],
+  }), [rows, openingBalance]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fileBase = `statement-${String(party.name || 'party').replace(/[^a-zA-Z0-9]+/g, '-')}`;
+  const docTitle = `${t('statement')} - ${party.name || ''}`;
+  const sel = { padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12.5 };
+  const COLS = '95px minmax(110px, 1fr) minmax(120px, 1fr) 90px 105px 105px 115px 130px';
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <div style={{ minWidth: 620 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '8px 10px', fontSize: 11, textTransform: 'uppercase', color: 'var(--text3)', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>
-          <div>{t('date')}</div><div>{t('type')}</div><div>{t('ref')}</div>
-          <div style={{ textAlign: 'right' }}>{t('debit')}</div><div style={{ textAlign: 'right' }}>{t('credit')}</div>
-        </div>
-        {data.entries.map((e, i) => {
-          running = round2(running + (e.dr || 0) - (e.cr || 0));
-          return (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
-              <div style={{ color: 'var(--text2)' }}>{fmtDate(e.date)}</div>
-              <div style={{ textTransform: 'capitalize' }}>{String(e.type || '').replace(/[-_]/g, ' ')}</div>
-              <div style={{ color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {e.ref ? e.ref.collection : '—'}
-              </div>
-              <div style={{ textAlign: 'right' }}>{e.dr ? inr(e.dr) : ''}</div>
-              <div style={{ textAlign: 'right', color: 'var(--green, #059669)' }}>{e.cr ? inr(e.cr) : ''}</div>
-            </div>
-          );
-        })}
-        <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '10px', fontSize: 13, fontWeight: 800 }}>
-          <div style={{ gridColumn: '1 / 4' }}>{t('balance')}</div>
-          <div style={{ gridColumn: '4 / 6', textAlign: 'right' }}>{inr(Math.abs(data.balance))}</div>
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginBottom: 14 }}>
+        <Tile
+          label={isClient ? t('totalReceivable') : t('totalPayable')}
+          value={inr(totals.receivable)}
+          color={totals.receivable > 0 ? (isClient ? 'var(--green, #059669)' : 'var(--red, #DC2626)') : 'var(--text2)'}
+        />
+        <Tile label={t('overdueAmount')} value={inr(totals.overdue)}
+          color={totals.overdue > 0 ? 'var(--red, #DC2626)' : 'var(--text2)'} />
+        <Tile label={t('totalInvoiced')} value={inr(totals.invoiced)} />
+        <Tile label={t('totalReceived')} value={inr(totals.received)} />
+      </div>
+
+      <div className="flex items-center" style={{ gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <select style={sel} value={range} onChange={(e) => setRange(e.target.value)}>
+          <option value="all">{t('allTime')}</option>
+          <option value="last365">{t('last365')}</option>
+          <option value="thisMonth">{t('thisMonth')}</option>
+          <option value="thisFy">{t('thisFy')}</option>
+        </select>
+        <div className="flex" style={{ gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+          <button className="btn btn-xs btn-ghost" onClick={() => downloadCsv(`${fileBase}.csv`, grid)}>CSV</button>
+          <button className="btn btn-xs btn-ghost" onClick={() => downloadExcel(`${fileBase}.xlsx`, grid)}>Excel</button>
+          <button className="btn btn-xs btn-ghost" onClick={() => downloadPdf(docTitle, grid, `${fileBase}.pdf`)}>PDF</button>
+          <button className="btn btn-xs btn-ghost" onClick={() => printReport(docTitle, grid)}>🖨 {t('print')}</button>
         </div>
       </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ minWidth: 900 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '8px 10px', fontSize: 11, textTransform: 'uppercase', color: 'var(--text3)', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>
+            <div>{t('date')}</div><div>{t('voucher')}</div><div>{t('vchNo')}</div><div>{t('mode')}</div>
+            <div style={{ textAlign: 'right' }}>{t('debit')}</div>
+            <div style={{ textAlign: 'right' }}>{t('credit')}</div>
+            <div style={{ textAlign: 'right' }}>{t('balance')}</div>
+            <div>{t('dueDate')}</div>
+          </div>
+
+          <StatementRow cols={COLS} bold muted
+            cells={['', t('openingBalance'), '', '', '', '', inr(openingBalance || 0), '']} />
+
+          {!rows.list.length && (
+            <div style={{ padding: 26, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>{t('empty')}</div>
+          )}
+
+          {rows.list.map((r) => (
+            <div key={r.collectionName + r.id} style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '9px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5, alignItems: 'center' }}>
+              <div style={{ color: 'var(--text2)' }}>{fmtDate(r.date)}</div>
+              <div style={{ fontWeight: 600 }}>{r.label}</div>
+              <div style={{ color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.number || '—'}</div>
+              <div style={{ color: 'var(--text3)' }}>{r.mode || ''}</div>
+              <div style={{ textAlign: 'right', fontWeight: r.debit ? 600 : 400 }}>{r.debit ? inr(r.debit) : ''}</div>
+              <div style={{ textAlign: 'right', fontWeight: r.credit ? 600 : 400, color: r.credit ? 'var(--green, #059669)' : undefined }}>{r.credit ? inr(r.credit) : ''}</div>
+              <div style={{ textAlign: 'right', fontWeight: 700 }}>{inr(r.balance)}</div>
+              <div style={{ fontSize: 11.5 }}>
+                {r.dueDate && (r.overdueBy > 0
+                  ? <span style={{ color: 'var(--red, #DC2626)' }}>{fmtDate(r.dueDate)} · {r.overdueBy}d {t('overdue')}</span>
+                  : <span style={{ color: 'var(--text3)' }}>{fmtDate(r.dueDate)}</span>)}
+              </div>
+            </div>
+          ))}
+
+          <StatementRow cols={COLS} bold
+            cells={['', t('closingBalance'), '', '', '', '', inr(rows.closing), '']} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Opening / Closing lines, rendered from the same plain arrays the export grid
+// uses so the two cannot drift apart.
+function StatementRow({ cells, cols, bold, muted }) {
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: cols, gap: 8, padding: '9px 10px',
+      borderBottom: '1px solid var(--border)', fontSize: 12.5,
+      fontWeight: bold ? 700 : 400,
+      background: muted ? 'var(--surface2)' : undefined,
+    }}>
+      {cells.map((c, i) => (
+        <div key={i} style={{ textAlign: i >= 4 && i <= 6 ? 'right' : 'left' }}>{c}</div>
+      ))}
     </div>
   );
 }
