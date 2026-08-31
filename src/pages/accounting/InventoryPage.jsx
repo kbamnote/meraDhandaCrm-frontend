@@ -43,7 +43,6 @@ const S = {
   average:  { en: 'Average cost', hi: 'औसत लागत', hinglish: 'Average' },
   fifo:     { en: 'FIFO', hinglish: 'FIFO' },
   fefo:     { en: 'FEFO', hinglish: 'FEFO' },
-  valueH:   { en: 'Value', hi: 'मूल्य', hinglish: 'Value' },
 };
 
 const TABS = ['valuation', 'batches', 'movements'];

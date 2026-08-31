@@ -1,0 +1,131 @@
+/**
+ * Screen smoke tests — does every page actually RENDER?
+ *
+ * Written after three crashes reached production that every other check passed:
+ *
+ *   1. `forParty` read from the wrong function scope   → ReferenceError
+ *   2. `defaults` read before its const declaration    → TDZ ReferenceError
+ *   3. MODULE_LABELS['tds'] missing, then dereferenced → TypeError
+ *
+ * All three parse cleanly, build green, and only fail when React renders. Unit
+ * tests on the business logic could never have caught them, because none of that
+ * logic was wrong — the components simply never mounted.
+ *
+ * So this asserts the one thing those bugs all broke: the screen appears. It
+ * does not assert what's on it. A screen that renders empty passes here and is
+ * caught by the logic suites instead; a screen that throws fails here, loudly,
+ * naming itself.
+ */
+import { describe, it, expect } from 'vitest';
+import { tryRender, OWNER, STAFF } from './renderScreen.jsx';
+
+// Every accounting screen, plus the two that crashed outside accounting.
+const SCREENS = {
+  // — the ones that actually broke —
+  PermissionsPage:      () => import('../src/pages/PermissionsPage.jsx'),
+  PartiesPage:          () => import('../src/pages/accounting/PartiesPage.jsx'),
+  CreateInvoiceFlow:    () => import('../src/components/common/CreateInvoiceFlow.jsx'),
+  // — accounting —
+  AccountingDashboard:  () => import('../src/pages/accounting/AccountingDashboardPage.jsx'),
+  SalesInvoicesPage:    () => import('../src/pages/accounting/SalesInvoicesPage.jsx'),
+  ReportsPage:          () => import('../src/pages/accounting/ReportsPage.jsx'),
+  GstPage:              () => import('../src/pages/accounting/GstPage.jsx'),
+  EntriesPage:          () => import('../src/pages/accounting/EntriesPage.jsx'),
+  DayBookPage:          () => import('../src/pages/accounting/DayBookPage.jsx'),
+  ProfitPage:           () => import('../src/pages/accounting/ProfitPage.jsx'),
+  JobProfitPage:        () => import('../src/pages/accounting/JobProfitPage.jsx'),
+  YearEndPage:          () => import('../src/pages/accounting/YearEndPage.jsx'),
+  CashBankPage:         () => import('../src/pages/accounting/CashBankPage.jsx'),
+  ReconPage:            () => import('../src/pages/accounting/ReconPage.jsx'),
+  TdsPage:              () => import('../src/pages/accounting/TdsPage.jsx'),
+  InventoryPage:        () => import('../src/pages/accounting/InventoryPage.jsx'),
+  PurchasesPage:        () => import('../src/pages/accounting/PurchasesPage.jsx'),
+  ExpensesPage:         () => import('../src/pages/accounting/ExpensesPage.jsx'),
+  CreditNotesPage:      () => import('../src/pages/accounting/CreditNotesPage.jsx'),
+  DebitNotesPage:       () => import('../src/pages/accounting/DebitNotesPage.jsx'),
+  DeliveryChallansPage: () => import('../src/pages/accounting/DeliveryChallansPage.jsx'),
+  RecurringInvoices:    () => import('../src/pages/accounting/RecurringInvoicesPage.jsx'),
+  BranchesPage:         () => import('../src/pages/accounting/BranchesPage.jsx'),
+  ClientLedgerPage:     () => import('../src/pages/accounting/ClientLedgerPage.jsx'),
+  SearchPage:           () => import('../src/pages/accounting/SearchPage.jsx'),
+  // — high-traffic screens outside accounting —
+  CompanySettingsPage:  () => import('../src/pages/CompanySettingsPage.jsx'),
+  InvoiceViewPage:      () => import('../src/pages/InvoiceViewPage.jsx'),
+  JobCardsPage:         () => import('../src/pages/JobCardsPage.jsx'),
+  Sidebar:              () => import('../src/components/layout/Sidebar.jsx'),
+};
+
+// Props for the few components that are not standalone pages.
+const PROPS = {
+  CreateInvoiceFlow: { onClose: () => {}, onCreated: () => {} },
+  Sidebar: { open: true, onClose: () => {} },
+};
+
+describe('every screen renders without throwing', () => {
+  for (const [name, load] of Object.entries(SCREENS)) {
+    it(name, async () => {
+      const mod = await load();
+      const Component = mod.default;
+      expect(Component, `${name} has no default export`).toBeTypeOf('function');
+      const err = tryRender(Component, { props: PROPS[name] || {} });
+      if (err) {
+        throw new Error(`${name} crashed on render: ${err.message}`);
+      }
+    });
+  }
+});
+
+describe('screens render for a non-privileged role too', () => {
+  // Permission-gated branches only execute for a non-admin, and admins skip
+  // every access check — so an owner-only pass would miss anything that reads
+  // a permission map.
+  const GATED = ['PermissionsPage', 'PartiesPage', 'ReportsPage', 'Sidebar', 'JobCardsPage'];
+  for (const name of GATED) {
+    it(`${name} (staff)`, async () => {
+      const mod = await SCREENS[name]();
+      const err = tryRender(mod.default, { auth: STAFF, props: PROPS[name] || {} });
+      if (err) throw new Error(`${name} crashed for staff: ${err.message}`);
+    });
+  }
+});
+
+describe('the specific bugs that shipped stay fixed', () => {
+  it('CreateInvoiceFlow mounts when opened from a party (TDZ regression)', async () => {
+    const mod = await import('../src/components/common/CreateInvoiceFlow.jsx');
+    const err = tryRender(mod.default, {
+      props: {
+        party: { id: 'c1', name: 'Sharma Traders', phone: '9876543210', gstNo: '23AAAAA0000A1Z5' },
+        onClose: () => {}, onCreated: () => {},
+      },
+    });
+    if (err) throw new Error(`crashed: ${err.message}`);
+  });
+
+  it('CreateInvoiceFlow mounts in edit mode', async () => {
+    const mod = await import('../src/components/common/CreateInvoiceFlow.jsx');
+    const err = tryRender(mod.default, {
+      props: {
+        invoice: {
+          id: 'i1', invoiceNo: 'MPW-001', type: 'invoice', date: '2026-08-01',
+          clientName: 'Sharma Traders', clientGstNo: '23AAAAA0000A1Z5',
+          items: [{ name: 'Cards', qty: 1000, rate: 6, amount: 6000 }],
+          subtotal: 6000, gstRate: 18, discount: 0, total: 7080,
+        },
+        onClose: () => {}, onCreated: () => {},
+      },
+    });
+    if (err) throw new Error(`crashed: ${err.message}`);
+  });
+
+  it('every PERMISSION_CATALOG feature has a label (missing one crashed the dialog)', async () => {
+    const { PERMISSION_CATALOG } = await import('../src/config/access.js');
+    // Read from the project root: under vitest the module URL is a transformed
+    // virtual path, so new URL(..., import.meta.url) is not a real file.
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('src/pages/PermissionsPage.jsx', 'utf8');
+    const labelBlock = src.slice(src.indexOf('const MODULE_LABELS = {'), src.indexOf('\n};', src.indexOf('const MODULE_LABELS = {')));
+    const labelled = new Set([...labelBlock.matchAll(/^\s{2}'?([a-zA-Z0-9_.-]+)'?\s*:/gm)].map((m) => m[1]));
+    const missing = PERMISSION_CATALOG.flatMap((g) => g.features).map((f) => f.key).filter((k) => !labelled.has(k));
+    expect(missing, `features with no MODULE_LABELS entry: ${missing.join(', ')}`).toEqual([]);
+  });
+});

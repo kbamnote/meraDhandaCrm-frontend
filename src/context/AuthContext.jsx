@@ -2,7 +2,10 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { authApi, tenantApi, getToken, setToken, clearToken } from '../services/api';
 import { authSocket } from '../services/realtime';
 
-const AuthContext = createContext(null);
+// Exported so tests can mount a screen with a ready-made profile. AuthProvider
+// fetches on mount, so a test using it would race the request and every screen
+// would render its logged-out branch instead of the one users actually see.
+export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);       // { uid, email }
