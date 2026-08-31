@@ -104,6 +104,11 @@ const S = {
   back:     { en: 'Back', hi: 'वापस', hinglish: 'Back' },
   // ── Create Party form ──
   createParty:  { en: 'Create Party', hi: 'पार्टी बनाएं', hinglish: 'Create Party' },
+  editParty:    { en: 'Edit Party', hi: 'पार्टी संपादित करें', hinglish: 'Party Edit karein' },
+  editDetails:  { en: 'Edit details', hi: 'विवरण बदलें', hinglish: 'Edit details' },
+  partySaved:   { en: 'Party updated', hi: 'पार्टी अपडेट हुई', hinglish: 'Party update hui' },
+  getDetails:   { en: 'Get Details', hi: 'विवरण लाएं', hinglish: 'Get Details' },
+  fetching:     { en: 'Fetching…', hi: 'ला रहे हैं…', hinglish: 'Fetching…' },
   generalDetails:{ en: 'General Details', hi: 'सामान्य विवरण', hinglish: 'General Details' },
   partyName:    { en: 'Party Name', hi: 'पार्टी का नाम', hinglish: 'Party Name' },
   mobile:       { en: 'Mobile Number', hi: 'मोबाइल नंबर', hinglish: 'Mobile Number' },
@@ -310,6 +315,7 @@ function PartyDetail({ party, t, onBack }) {
   const [err, setErr] = useState('');
   const [tab, setTab] = useState('txns');
   const [invoiceFor, setInvoiceFor] = useState(null);
+  const [editingParty, setEditingParty] = useState(null);
 
   // NOTE: `t` is a fresh reference on every render (useT), so it must never be a
   // dependency here — that turns this into an infinite fetch loop.
@@ -362,6 +368,9 @@ function PartyDetail({ party, t, onBack }) {
                 💬 {t('sendReminder')}
               </button>
             )}
+            <button className="btn btn-sm btn-ghost" onClick={() => setEditingParty(p)}>
+              ✏️ {t('editDetails')}
+            </button>
             {isClient && (
               <button className="btn btn-primary btn-sm" onClick={() => setInvoiceFor(p)}>
                 🧾 {t('createInvoice')}
@@ -411,6 +420,15 @@ function PartyDetail({ party, t, onBack }) {
         {data && tab === 'items' && <ItemsTab items={data.items} t={t} />}
       </div>
 
+      {editingParty && (
+        <PartyFormModal
+          t={t}
+          type={editingParty.type === 'vendor' ? 'vendor' : 'client'}
+          party={editingParty}
+          onClose={() => setEditingParty(null)}
+          onCreated={() => { setEditingParty(null); load(); }}
+        />
+      )}
       {invoiceFor && (
         <CreateInvoiceFlow
           party={invoiceFor}
@@ -736,10 +754,36 @@ function Section({ title, children, right }) {
 
 const gridCols = (min = 200) => ({ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, gap: 12 });
 
-function PartyFormModal({ type, t, onClose, onCreated }) {
-  const [form, setForm] = useState(() => blankPartyForm(type));
+function PartyFormModal({ type, t, onClose, onCreated, party: editing }) {
+  const isEdit = !!editing;
+  const [form, setForm] = useState(() => (editing
+    ? {
+      ...blankPartyForm(editing.type === 'vendor' ? 'vendor' : 'client'),
+      name: editing.name || '', phone: editing.phone || '', email: editing.email || '',
+      openingBalance: editing.openingBalance != null ? String(editing.openingBalance) : '',
+      openingBalanceType: editing.openingBalanceType || 'to_collect',
+      gstNo: editing.gstNo || '', pan: editing.pan || '',
+      partyType: editing.type === 'vendor' ? 'vendor' : 'client',
+      accountGroup: editing.accountGroup || (editing.type === 'vendor' ? 'sundry_creditors' : 'sundry_debtors'),
+      category: editing.category || '',
+      billingAddress: editing.billingAddress || editing.address || '',
+      shippingAddress: editing.shippingAddress || '',
+      // Only "same as billing" when they genuinely match — otherwise editing
+      // would tick the box and overwrite a real shipping address on save.
+      shippingSameAsBilling: !editing.shippingAddress
+        || editing.shippingAddress === (editing.billingAddress || editing.address),
+      creditPeriodDays: editing.creditPeriodDays ?? '',
+      creditLimit: editing.creditLimit ?? '',
+      contactPersonName: editing.contactPersonName || '',
+      dateOfBirth: editing.dateOfBirth || '',
+      bankAccounts: Array.isArray(editing.bankAccounts) ? editing.bankAccounts : [],
+      customFields: Array.isArray(editing.customFields) ? editing.customFields : [],
+    }
+    : blankPartyForm(type)));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [gstBusy, setGstBusy] = useState(false);
+  const [gstNote, setGstNote] = useState(null);
   const [states, setStates] = useState([]);
   const [groups, setGroups] = useState([]);
 
@@ -760,6 +804,40 @@ function PartyFormModal({ type, t, onClose, onCreated }) {
 
   const isClient = form.partyType === 'client';
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Pull the party's details from their GSTIN. Only fills fields that are still
+  // EMPTY — a lookup must never overwrite something the user typed, and on an
+  // edit it must not quietly replace details they corrected by hand.
+  const fetchGstin = async () => {
+    setGstBusy(true); setGstNote(null);
+    try {
+      const r = await accountingApi.gstinLookup(form.gstNo.trim().toUpperCase());
+      const d = r.data || {};
+      if (r.ok) {
+        setForm((f) => ({
+          ...f,
+          name: f.name.trim() || d.tradeName || d.legalName || '',
+          billingAddress: f.billingAddress.trim() || d.address || '',
+          pan: f.pan.trim() || (form.gstNo.slice(2, 12) || ''),
+        }));
+        setGstNote({
+          ok: true,
+          text: `${d.tradeName || d.legalName || 'Found'}`
+            + (d.status ? ` · ${d.status}` : '')
+            + (d.registrationType ? ` · ${d.registrationType}` : ''),
+        });
+      } else if (!r.configured) {
+        // Not an error the user caused — say what's missing and move on.
+        setGstNote({ ok: false, text: 'Auto-fetch is not set up yet — enter the details below.' });
+      } else {
+        setGstNote({ ok: false, text: r.error || 'Could not fetch details.' });
+      }
+      // The PAN sits inside the GSTIN whether or not a provider answered.
+      if (r.valid) setForm((f) => ({ ...f, pan: f.pan.trim() || form.gstNo.slice(2, 12) }));
+    } catch (e) {
+      setGstNote({ ok: false, text: describeError(e, 'Could not fetch details.') });
+    } finally { setGstBusy(false); }
+  };
 
   const setBank = (i, k, v) => setForm((f) => ({
     ...f, bankAccounts: f.bankAccounts.map((b, idx) => (idx === i ? { ...b, [k]: v } : b)),
@@ -806,12 +884,15 @@ function PartyFormModal({ type, t, onClose, onCreated }) {
     setSaving(true);
     setError('');
     try {
-      const created = await accountingApi.createParty(build());
+      const created = isEdit
+        ? await accountingApi.updateParty(editing.id, form.partyType, build())
+        : await accountingApi.createParty(build());
+      if (created && created.groupChangeBlocked) showToast(created.groupChangeBlocked, 'error');
       if (andNew) {
         showToast('✅ ' + t('savedNew'), 'success');
         setForm(blankPartyForm(form.partyType));
       } else {
-        showToast('✅ ' + (isClient ? t('addCustomer') : t('addSupplier')), 'success');
+        showToast('✅ ' + (isEdit ? t('partySaved') : (isClient ? t('addCustomer') : t('addSupplier'))), 'success');
         onCreated(created, form.partyType);
       }
     } catch (err) {
@@ -832,12 +913,14 @@ function PartyFormModal({ type, t, onClose, onCreated }) {
           style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 2, flexWrap: 'wrap', gap: 8 }}>
           <div className="flex items-center" style={{ gap: 10 }}>
             <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} style={{ padding: '2px 8px' }}>←</button>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{t('createParty')}</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{isEdit ? t('editParty') : t('createParty')}</h3>
           </div>
           <div className="flex" style={{ gap: 8 }}>
             <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>{t('cancel')}</button>
-            <button type="button" className="btn btn-sm" onClick={() => save(true)} disabled={saving}
-              style={{ border: '1px solid var(--border)' }}>{t('saveAndNew')}</button>
+            {!isEdit && (
+              <button type="button" className="btn btn-sm" onClick={() => save(true)} disabled={saving}
+                style={{ border: '1px solid var(--border)' }}>{t('saveAndNew')}</button>
+            )}
             <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>{saving ? t('adding') : t('save')}</button>
           </div>
         </div>
@@ -872,8 +955,20 @@ function PartyFormModal({ type, t, onClose, onCreated }) {
             </div>
             <div>
               <label style={lbl}>{t('gstin')}</label>
-              <input className="input" value={form.gstNo} onChange={(e) => set('gstNo', e.target.value.toUpperCase())} placeholder="ex. 29XXXXXXXXXXXZX" />
+              <div className="flex" style={{ gap: 6 }}>
+                <input className="input" style={{ flex: 1, minWidth: 0 }} value={form.gstNo}
+                  onChange={(e) => set('gstNo', e.target.value.toUpperCase())} placeholder="ex. 29XXXXXXXXXXXZX" />
+                <button type="button" className="btn btn-sm" style={{ border: '1px solid var(--border)', whiteSpace: 'nowrap' }}
+                  onClick={fetchGstin} disabled={gstBusy || form.gstNo.length !== 15}>
+                  {gstBusy ? t('fetching') : t('getDetails')}
+                </button>
+              </div>
               {gstState && <div style={{ fontSize: 11, color: 'var(--green, #059669)', marginTop: 3 }}>✓ {t('stateFromGst')}: {gstState}</div>}
+              {gstNote && (
+                <div style={{ fontSize: 11, marginTop: 3, color: gstNote.ok ? 'var(--green, #059669)' : 'var(--amber, #B45309)' }}>
+                  {gstNote.text}
+                </div>
+              )}
             </div>
             <div>
               <label style={lbl}>{t('panNumber')}</label>
