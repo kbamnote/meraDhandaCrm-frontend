@@ -558,7 +558,7 @@ function ProfileTab({ p, t }) {
       [t('partyName'), p.name],
       [t('partyType'), p.type === 'client' ? t('customer') : t('supplier')],
       [t('category'), p.category],
-      [t('accountGroup'), p.accountGroup ? p.accountGroup.replace(/_/g, ' ').replace(/\w/g, (ch) => ch.toUpperCase()) : null],
+      [t('accountGroup'), p.accountGroup ? p.accountGroup.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()) : null],
       [t('mobile'), p.phone],
       [t('email'), p.email],
       [t('gstin'), p.gstNo],
