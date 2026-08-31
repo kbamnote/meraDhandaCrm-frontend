@@ -265,6 +265,18 @@ export default function InvoiceDocument({ invoice }) {
                   </tr>
                 )}
 
+                {/* Without this line the invoice doesn't add up: TOTAL is the
+                    rounded figure, while the taxable value and tax above sum to
+                    the exact one. Shown with its sign so the reader can check it. */}
+                {Number(inv.roundOff) !== 0 && inv.roundOff != null && (
+                  <tr>
+                    <td colSpan={5} className="inv-r"><i>Round Off</i></td>
+                    <td className="inv-r">
+                      {Number(inv.roundOff) > 0 ? '+ ' : '− '}{plain(Math.abs(Number(inv.roundOff)))}
+                    </td>
+                  </tr>
+                )}
+
                 <tr style={{ background: '#e8f0e4', fontWeight: 700 }}>
                   <td colSpan={3} className="inv-r">TOTAL</td>
                   <td className="inv-c">{plain(qtyTotal)}</td>

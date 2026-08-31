@@ -306,11 +306,21 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const sgst = interStatePreview ? 0 : round2(taxTotal / 2);
     const igst = interStatePreview ? taxTotal : 0;
     const discount = round2(Number(form.discount) || 0);
-    const total = round2(Math.max(0, subtotal + taxTotal - discount));
+    const rawTotal = round2(Math.max(0, subtotal + taxTotal - discount));
+    // Mirror the server's rounding so the figure on screen IS the figure that
+    // gets saved. The server recomputes authoritatively; this is display only.
+    const mode = defaults?.invoiceRounding || 'nearest';
+    const total = round2(
+      mode === 'nearest' ? Math.round(rawTotal)
+        : mode === 'up' ? Math.ceil(rawTotal)
+          : mode === 'down' ? Math.floor(rawTotal)
+            : rawTotal
+    );
+    const roundOff = round2(total - rawTotal);
     const received = form.markFullyPaid ? total : round2(Number(form.amountReceived) || 0);
     const balance = round2(Math.max(0, total - Math.min(received, total)));
-    return { subtotal, taxTotal, cgst, sgst, igst, discount, total, received, balance };
-  }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview]);
+    return { subtotal, taxTotal, cgst, sgst, igst, discount, rawTotal, roundOff, total, received, balance };
+  }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview, defaults]);
 
   const addAttachment = async (e) => {
     const f = e.target.files && e.target.files[0];
@@ -680,6 +690,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                 <input className="input" type="number" style={{ width: 90, textAlign: 'right' }} value={form.discount} onChange={(e) => setF('discount', e.target.value)} />
               </div>
               <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+              {totals.roundOff !== 0 && (
+                <Row label="Round Off" value={`${totals.roundOff > 0 ? '+' : '−'} ${inr(Math.abs(totals.roundOff))}`} />
+              )}
               <Row label="Total Amount" value={inr(totals.total)} bold />
             </div>
 

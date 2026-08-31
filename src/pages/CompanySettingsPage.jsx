@@ -27,6 +27,8 @@ const EMPTY = {
   negativeStockPolicy: 'clamp',
   // 'regular' or 'composition' — a composition dealer may not collect GST.
   gstScheme: 'regular',
+  // Round the invoice total to a whole rupee.
+  invoiceRounding: 'nearest',
 };
 
 const S = {
@@ -390,6 +392,22 @@ export default function CompanySettingsPage() {
             tax charged, carrying the declaration the law requires. Switching this
             affects NEW invoices only — documents already issued keep the scheme they
             were raised under.
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Invoice total rounding</label>
+          <select className="input" value={form.invoiceRounding || 'nearest'}
+            onChange={(e) => setField('invoiceRounding', e.target.value)} disabled={!canEdit}>
+            <option value="nearest">Round to the nearest rupee</option>
+            <option value="up">Always round up</option>
+            <option value="down">Always round down</option>
+            <option value="none">No rounding — exact paise</option>
+          </select>
+          <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 4 }}>
+            The difference prints as a <b>Round Off</b> line on the invoice and posts to
+            the Round Off account, so the document still adds up and the books stay
+            balanced to the paisa.
           </div>
         </div>
 
