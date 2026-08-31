@@ -35,6 +35,12 @@ const S = {
   income:   { en: 'Income', hi: 'आय', hinglish: 'Income' },
   expense:  { en: 'Expenses', hi: 'खर्च', hinglish: 'Expenses' },
   profit:   { en: 'Profit', hi: 'लाभ', hinglish: 'Profit' },
+  directIncome:   { en: 'Direct Income',    hi: 'प्रत्यक्ष आय',   hinglish: 'Direct Income' },
+  indirectIncome: { en: 'Indirect Income',  hi: 'अप्रत्यक्ष आय',  hinglish: 'Indirect Income' },
+  directExpense:  { en: 'Direct Expense',   hi: 'प्रत्यक्ष व्यय', hinglish: 'Direct Expense' },
+  indirectExpense:{ en: 'Indirect Expense', hi: 'अप्रत्यक्ष व्यय',hinglish: 'Indirect Expense' },
+  grossProfit:    { en: 'GROSS PROFIT',     hi: 'सकल लाभ',        hinglish: 'GROSS PROFIT' },
+  netProfit:      { en: 'NET PROFIT',       hi: 'शुद्ध लाभ',      hinglish: 'NET PROFIT' },
   loss:     { en: 'Loss', hi: 'घाटा', hinglish: 'Loss' },
   assets:   { en: 'Assets', hi: 'संपत्ति', hinglish: 'Assets' },
   liabilities: { en: 'Liabilities', hi: 'देनदारियाँ', hinglish: 'Liabilities' },
@@ -212,13 +218,24 @@ export default function ReportsPage() {
 
   if (tab === 'pnl' && pnl) {
     title = t('pnl');
+    // Tally layout: Direct income and expense settle to GROSS PROFIT, then
+    // indirect income and overheads carry it down to NET PROFIT. Two figures,
+    // because "is the work profitable" and "is the business profitable" are
+    // different questions.
+    //
+    // NOTE the previous version wrote `[pnl.income || []].map(...)` — the array
+    // wrapped in another array — so every line item rendered blank and only the
+    // totals were readable.
+    const section = (label, list) => (list || []).map((r) => [label, r.name, '', money(r.amount)]);
     const rows = [
-      ...[pnl.income || []].map((r) => [t('income'), r.name, '', money(r.amount)]),
-      ...[pnl.expense || []].map((r) => [t('expense'), r.name, '', money(r.amount)]),
+      ...section(t('directIncome'), pnl.directIncome),
+      ...section(t('directExpense'), pnl.directExpense),
+      ['— ' + t('grossProfit'), pnl.grossMarginPct != null ? `${pnl.grossMarginPct}%` : '', '', money(pnl.grossProfit)],
+      ...section(t('indirectIncome'), pnl.indirectIncome),
+      ...section(t('indirectExpense'), pnl.indirectExpense),
+      ['— ' + (pnl.netProfit >= 0 ? t('netProfit') : t('loss')),
+        pnl.netMarginPct != null ? `${pnl.netMarginPct}%` : '', '', money(Math.abs(pnl.netProfit))],
     ];
-    rows.push([t('total') + ' ' + t('income'), '', '', money(pnl.totalIncome)]);
-    rows.push([t('total') + ' ' + t('expense'), '', '', money(pnl.totalExpense)]);
-    rows.push([pnl.profit >= 0 ? t('profit') : t('loss'), '', '', money(Math.abs(pnl.profit))]);
     grid = { headers: [t('type'), t('name'), '', 'Amount'], rows };
     rightCols = [false, false, false, true];
   }
