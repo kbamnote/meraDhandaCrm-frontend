@@ -148,9 +148,6 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const tenantLogo = tenant?.settings?.branding?.logo || '';
   const [type, setType] = useState(initialType);
   const isCash = type === 'cash';
-  // Composition dealers cannot collect GST (CGST Act s.10); reverse charge moves
-  // the liability to the recipient. Either way this invoice carries no tax.
-  const isComposition = defaults?.gstScheme === 'composition';
 
   // Bill To — search-and-select (same pattern as the Job Cards client picker),
   // with the selected/typed party editable underneath.
@@ -221,6 +218,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const [attachments, setAttachments] = useState(invoice?.attachments || []);
   const [uploading, setUploading] = useState(false);
   const [defaults, setDefaults] = useState(null); // GET /invoice-defaults result
+  // Composition dealers cannot collect GST (CGST Act s.10); reverse charge moves
+  // the liability to the recipient. Either way this invoice carries no tax.
+  // MUST stay below `defaults` — reading a const before its declaration is a
+  // temporal-dead-zone ReferenceError, which crashed the whole invoice form.
+  const isComposition = defaults?.gstScheme === 'composition';
   const [busy, setBusy] = useState(false);
   // Set from the server's 409 when this invoice would breach the customer's
   // credit limit; holds { creditLimit, outstanding, invoiceTotal, projected }.

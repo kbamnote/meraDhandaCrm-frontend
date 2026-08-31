@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unbound-identifier check.
+ * Scope check: unbound identifiers AND temporal-dead-zone reads.
  *
  * Exists because a real bug shipped to production that every other check passed:
  * `NewInvoiceModal` read `forParty`, a parameter of the OUTER `CreateInvoiceFlow`
@@ -9,8 +9,14 @@
  *
  * That is valid syntax. `@babel/parser`, `node --check` and a successful Vite
  * build all accept it — the failure only appears when the component renders.
- * This walks the scope chain instead and reports any identifier that is
- * referenced but never bound anywhere above it.
+ * It walks the scope chain and reports two runtime failures that every other
+ * check accepts:
+ *   UNBOUND  an identifier referenced but never bound anywhere above it
+ *   TDZ      a const/let read BEFORE its declaration in the same function —
+ *            "Cannot access 'x' before initialization". A React component that
+ *            derives a value from a useState declared further down crashes on
+ *            every render; both of those shipped to production before this
+ *            script existed.
  *
  *   node scripts/scopecheck.cjs                # every .js/.jsx under src
  *   node scripts/scopecheck.cjs path/to/file   # specific files
@@ -61,19 +67,41 @@ for (const file of files) {
     console.log(`  PARSE ERROR  ${file}  ${e.message}`);
     continue;
   }
+  const rel = path.relative(process.cwd(), file);
   traverse(ast, {
     ReferencedIdentifier(p) {
       const name = p.node.name;
       if (GLOBALS.has(name)) return;
       // `true` walks the whole scope chain, not just the local scope.
-      if (p.scope.hasBinding(name, true)) return;
+      if (!p.scope.hasBinding(name, true)) {
+        problems++;
+        console.log(`  UNBOUND  ${rel}:${p.node.loc.start.line}  ${name}`);
+        return;
+      }
+
+      // Temporal dead zone: reading a const/let/class BEFORE its declaration
+      // throws "Cannot access 'x' before initialization" at runtime. It parses,
+      // the name is bound, and a production build accepts it — so nothing else
+      // here catches it. A React component that reads a later useState in a
+      // derived const crashes on every render.
+      //
+      // Only flagged when the reference and the declaration share a function:
+      // inside a nested function or callback the read is deferred to call time,
+      // which is legitimate and extremely common.
+      const binding = p.scope.getBinding(name);
+      if (!binding || !['const', 'let', 'class'].includes(binding.kind)) return;
+      const declNode = binding.path.node;
+      if (declNode.start == null || p.node.start == null) return;
+      if (p.node.start >= declNode.start) return;
+      if (p.getFunctionParent() !== binding.path.getFunctionParent()) return;
       problems++;
-      console.log(`  UNBOUND  ${path.relative(process.cwd(), file)}:${p.node.loc.start.line}  ${name}`);
+      console.log(`  TDZ      ${rel}:${p.node.loc.start.line}  '${name}' used before its `
+        + `${binding.kind} declaration on line ${declNode.loc.start.line}`);
     },
   });
 }
 
 console.log(problems
-  ? `\n  ${problems} unbound identifier(s) across ${files.length} file(s)`
-  : `  no unbound identifiers (${files.length} files)`);
+  ? `\n  ${problems} problem(s) across ${files.length} file(s)`
+  : `  clean — no unbound identifiers or TDZ reads (${files.length} files)`);
 process.exit(problems ? 1 : 0);
