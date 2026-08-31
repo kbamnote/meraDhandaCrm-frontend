@@ -113,6 +113,12 @@ const S = {
   gstin:        { en: 'GSTIN', hi: 'GSTIN', hinglish: 'GSTIN' },
   panNumber:    { en: 'PAN Number', hi: 'पैन नंबर', hinglish: 'PAN Number' },
   category:     { en: 'Party Category', hi: 'पार्टी श्रेणी', hinglish: 'Party Category' },
+  accountGroup: { en: 'Account Group', hi: 'खाता समूह', hinglish: 'Account Group' },
+  groupHint:    {
+    en: 'Decides where this party sits on the Balance Sheet. Leave as Sundry Debtors/Creditors for ordinary customers and suppliers.',
+    hi: 'यह तय करता है कि पार्टी बैलेंस शीट में कहाँ दिखेगी।',
+    hinglish: 'Yeh decide karta hai ki party Balance Sheet mein kahan dikhegi.',
+  },
   categoryHint: { en: 'e.g. Wholesale, Retail, Corporate', hi: 'जैसे थोक, खुदरा', hinglish: 'e.g. Wholesale, Retail' },
   addressSec:   { en: 'Address', hi: 'पता', hinglish: 'Address' },
   billingAddress:{ en: 'Billing Address', hi: 'बिलिंग पता', hinglish: 'Billing Address' },
@@ -552,6 +558,7 @@ function ProfileTab({ p, t }) {
       [t('partyName'), p.name],
       [t('partyType'), p.type === 'client' ? t('customer') : t('supplier')],
       [t('category'), p.category],
+      [t('accountGroup'), p.accountGroup ? p.accountGroup.replace(/_/g, ' ').replace(/\w/g, (ch) => ch.toUpperCase()) : null],
       [t('mobile'), p.phone],
       [t('email'), p.email],
       [t('gstin'), p.gstNo],
@@ -706,6 +713,7 @@ const blankPartyForm = (type) => ({
   openingBalance: '', openingBalanceType: 'to_collect',
   gstNo: '', pan: '',
   partyType: type,
+  accountGroup: type === 'vendor' ? 'sundry_creditors' : 'sundry_debtors',
   category: '',
   billingAddress: '', shippingAddress: '', shippingSameAsBilling: true,
   creditPeriodDays: '', creditLimit: '',
@@ -733,6 +741,7 @@ function PartyFormModal({ type, t, onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [states, setStates] = useState([]);
+  const [groups, setGroups] = useState([]);
 
   // Reuse the invoice module's GST state list rather than duplicating it here.
   // There is no GSTIN lookup service wired up, so instead of a "Get Details"
@@ -742,6 +751,9 @@ function PartyFormModal({ type, t, onClose, onCreated }) {
     accountingApi.invoiceDefaults('invoice')
       .then((d) => setStates(d?.states || []))
       .catch(() => setStates([]));
+    accountingApi.partyGroups()
+      .then((g) => setGroups(Array.isArray(g) ? g : []))
+      .catch(() => setGroups([]));
   }, []);
   const stateMap = useMemo(() => Object.fromEntries(states.map((s) => [s.code, s.name])), [states]);
   const gstState = stateMap[String(form.gstNo || '').slice(0, 2)] || null;
@@ -769,6 +781,7 @@ function PartyFormModal({ type, t, onClose, onCreated }) {
       gstNo: form.gstNo.trim().toUpperCase(),
       gstState: gstState || null,
       pan: form.pan.trim().toUpperCase(),
+      accountGroup: form.accountGroup,
       category: form.category.trim(),
       // `address` stays the canonical single-line field the invoice form, the
       // party list and every existing screen already read — billingAddress is
@@ -868,10 +881,30 @@ function PartyFormModal({ type, t, onClose, onCreated }) {
             </div>
             <div>
               <label style={lbl}>{t('partyType')} *</label>
-              <select className="input" value={form.partyType} onChange={(e) => set('partyType', e.target.value)}>
+              <select className="input" value={form.partyType} onChange={(e) => {
+                const nextType = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  partyType: nextType,
+                  // Only re-default the group if it is still the other type's
+                  // default — never clobber a deliberate choice.
+                  accountGroup: (f.accountGroup === 'sundry_debtors' || f.accountGroup === 'sundry_creditors')
+                    ? (nextType === 'vendor' ? 'sundry_creditors' : 'sundry_debtors')
+                    : f.accountGroup,
+                }));
+              }}>
                 <option value="client">{t('customer')}</option>
                 <option value="vendor">{t('supplier')}</option>
               </select>
+            </div>
+            <div>
+              <label style={lbl}>{t('accountGroup')} *</label>
+              <select className="input" value={form.accountGroup} onChange={(e) => set('accountGroup', e.target.value)}>
+                {groups
+                  .filter((g) => g.for === 'both' || g.for === form.partyType)
+                  .map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+              </select>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>{t('groupHint')}</div>
             </div>
             <div>
               <label style={lbl}>{t('category')}</label>

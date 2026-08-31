@@ -270,6 +270,9 @@ export const accountingApi = {
   // Create a customer/supplier. Goes through accounting (not /db/:col) so a
   // non-zero opening balance posts a real journal against Owner's Capital.
   createParty: (body)       => api.post('/accounting/party', body).then(r => r.data),
+  // Tally-style account groups a party can be filed under (Balance Sheet
+  // placement — see the note in posting.js; these do NOT shape the P&L).
+  partyGroups: ()           => api.get('/accounting/party-groups').then(r => r.data),
   // Sales profitability — per-invoice and per-item margin from the costs
   // stamped at invoice time. { summary, invoices, items }.
   profit: (params)          => api.get('/accounting/profit', { params }).then(r => r.data),
