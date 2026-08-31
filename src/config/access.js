@@ -25,6 +25,15 @@ export const PERM_OF = {
   '/accounting/parties': 'parties', '/accounting/reports': 'reports', '/accounting/gst': 'gst',
   '/accounting/cash': 'cashbank', '/accounting/recon': 'cashbank', '/accounting/inventory': 'inventory', '/accounting/entries': 'entries',
   '/accounting/tds': 'tds',
+  // Routes with NO entry here are treated as ungated and shown to every role
+  // (see isSectionHidden). These four all expose company-wide financials, so
+  // they map onto the modules their APIs already require — the backend gates
+  // them with requireModule('entries'/'reports'), and without these lines the
+  // nav would offer links that then fail with 403.
+  '/accounting/daybook': 'entries',
+  '/accounting/profit': 'reports',
+  '/accounting/job-profit': 'reports',
+  '/accounting/year-end': 'reports',
   '/expenses': 'expenses', '/purchase-orders': 'expenses',
   '/products': 'products', '/stock': 'stock', '/vendors': 'vendors',
   '/machines': 'machines', '/machine-history': 'machines',

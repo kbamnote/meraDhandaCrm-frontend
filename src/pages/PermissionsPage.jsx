@@ -104,6 +104,7 @@ const MODULE_LABELS = {
   gst: { en: 'GST', hi: 'जीएसटी', hinglish: 'GST' },
   reports: { en: 'Reports', hi: 'रिपोर्ट', hinglish: 'Reports' },
   entries: { en: 'Journal Entries', hi: 'जर्नल', hinglish: 'Journal Entries' },
+  tds: { en: 'TDS', hi: 'टीडीएस', hinglish: 'TDS' },
   attendance: { en: 'Team Attendance', hi: 'अटेंडेंस', hinglish: 'Team Attendance' },
   leaves: { en: 'Leave Applications', hi: 'छुट्टियां', hinglish: 'Leaves' },
   payroll: { en: 'Payroll & Salary', hi: 'पेरोल', hinglish: 'Payroll' },
@@ -275,7 +276,13 @@ function RoleRow({ u, canEdit, t, meId }) {
 
 function PermissionsModal({ u, t, onClose }) {
   const { lang } = useLang();
-  const lbl = (dict) => dict[lang] ?? dict.en;
+  // Falls back to the key when a catalog entry has no label. Previously this
+  // read dict[lang] directly, so a single feature added to PERMISSION_CATALOG
+  // without a matching MODULE_LABELS entry took the WHOLE permissions dialog
+  // down with a TypeError — which is exactly what happened when TDS was added.
+  // A missing translation should degrade to an unpolished label, never to a
+  // blank screen that blocks granting access.
+  const lbl = (dict, key) => (dict && (dict[lang] ?? dict.en)) || key || '';
   const [perms, setPerms] = useState(() => {
     const p = u.permissions || {};
     const init = {};
@@ -343,11 +350,11 @@ function PermissionsModal({ u, t, onClose }) {
           {PERMISSION_CATALOG.map((grp) => (
             <div key={grp.group}>
               <div style={{ position: 'sticky', top: 0, background: 'var(--surface2)', padding: '6px 12px', fontSize: 11, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: 'var(--text2)', borderTop: '1px solid var(--border)' }}>
-                {lbl(GROUP_LABELS[grp.group])}
+                {lbl(GROUP_LABELS[grp.group], grp.group)}
               </div>
               {grp.features.map((f) => (
                 <div key={f.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderTop: '1px solid var(--border)' }}>
-                  <span style={{ color: 'var(--text)' }}>{lbl(MODULE_LABELS[f.key])}</span>
+                  <span style={{ color: 'var(--text)' }}>{lbl(MODULE_LABELS[f.key], f.key)}</span>
                   <span style={{ display: 'flex', gap: 22, alignItems: 'center', paddingRight: 6 }}>
                     <input type="checkbox" title={t('canViewCol')} checked={perms[f.key].view} onChange={() => toggleView(f.key)} style={{ width: 18, height: 18 }} />
                     {f.manage ? (
