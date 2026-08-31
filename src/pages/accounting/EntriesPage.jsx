@@ -18,6 +18,14 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const S = {
   title:    { en: 'Journal / Vouchers', hi: 'जर्नल / वाउचर', hinglish: 'Journal / Vouchers' },
   newVoucher: { en: '+ New Voucher', hi: '+ नया वाउचर', hinglish: '+ Naya Voucher' },
+  editVoucher:{ en: 'Edit Voucher', hi: 'वाउचर संपादित करें', hinglish: 'Voucher Edit karein' },
+  edit:       { en: 'Edit', hi: 'बदलें', hinglish: 'Edit' },
+  edited:     { en: 'Edited', hi: 'बदला गया', hinglish: 'Edited' },
+  editWarn:   {
+    en: 'Saving replaces this voucher\'s ledger effect. The previous version is kept in its revision history.',
+    hi: 'सेव करने पर इस वाउचर का लेजर प्रभाव बदल जाएगा। पिछला संस्करण इतिहास में रहेगा।',
+    hinglish: 'Save karne par iska ledger effect replace ho jayega. Purana version history mein rahega.',
+  },
   from:     { en: 'From', hi: 'से', hinglish: 'From' },
   to:       { en: 'To', hi: 'तक', hinglish: 'To' },
   account:  { en: 'Account', hi: 'खाता', hinglish: 'Account' },
@@ -93,6 +101,7 @@ export default function EntriesPage() {
   const [acct, setAcct] = useState('');
   const [type, setType] = useState('');
   const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState(null); // the manual voucher being edited
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -192,9 +201,20 @@ export default function EntriesPage() {
                     {manual ? t('manual') : t('auto')}
                   </span>
                   {e.meta && e.meta.memo && <span style={{ fontSize: 12, color: 'var(--text2)' }}>{e.meta.memo}</span>}
+                  {/* An edited voucher says so, and how many times — an edit
+                      replaces the ledger effect, so that must not be invisible. */}
+                  {e.meta && e.meta.revisions && e.meta.revisions.length > 0 && (
+                    <span className="badge" style={{ background: 'var(--surface2)', color: 'var(--amber, #B45309)' }}
+                      title={`Last edited ${new Date(e.meta.revisions[e.meta.revisions.length - 1].at).toLocaleString('en-IN')}`}>
+                      ✏️ {t('edited')} ×{e.meta.revisions.length}
+                    </span>
+                  )}
                 </div>
                 <div className="flex" style={{ gap: 10, alignItems: 'center' }}>
                   <span style={{ fontSize: 12, color: 'var(--text3)' }}>Dr {inr(totalDr)} = Cr {inr(totalCr)}</span>
+                  {manual && (
+                    <button className="btn btn-xs btn-ghost" onClick={() => setEditing(e)}>{t('edit')}</button>
+                  )}
                   {manual && (
                     <button className="btn btn-xs btn-ghost" style={{ color: 'var(--red)' }} onClick={async () => {
                       if (!window.confirm(t('confirmDel'))) return;
@@ -233,19 +253,39 @@ export default function EntriesPage() {
       </div>
 
       {showNew && <VoucherModal t={t} accounts={accounts} onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load(); }} />}
+      {editing && (
+        <VoucherModal
+          t={t} accounts={accounts} entry={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); load(); }}
+        />
+      )}
     </div>
   );
 }
 
-function VoucherModal({ t, accounts, onClose, onSaved }) {
-  const [type, setType] = useState('journal');
-  const [date, setDate] = useState(today());
-  const [memo, setMemo] = useState('');
-  const [branchId, setBranchId] = useState('');
-  const [rows, setRows] = useState(() => DEFAULT_LINES.journal.map((l) => ({ ...l })));
+// Doubles as the edit form: pass `entry` to load an existing manual voucher.
+// Editing re-posts against the same ref, so the ledger effect is REPLACED, not
+// added to — which is why the dialog says so before saving.
+function VoucherModal({ t, accounts, entry, onClose, onSaved }) {
+  const isEdit = !!entry;
+  const [type, setType] = useState(entry?.type || 'journal');
+  const [date, setDate] = useState(entry?.date || today());
+  const [memo, setMemo] = useState(entry?.meta?.memo || '');
+  const [branchId, setBranchId] = useState(entry?.meta?.branchId || '');
+  const [rows, setRows] = useState(() => (
+    entry
+      ? (entry.lines || []).map((l) => ({ account: l.account, dr: l.dr ? String(l.dr) : '', cr: l.cr ? String(l.cr) : '' }))
+      : DEFAULT_LINES.journal.map((l) => ({ ...l }))
+  ));
   const [saving, setSaving] = useState(false);
 
-  const pickType = (k) => { setType(k); setRows(DEFAULT_LINES[k].map((l) => ({ ...l }))); };
+  // Switching type resets to that type's skeleton — but not while editing, or
+  // the voucher's real lines would be wiped by a stray click on the type chips.
+  const pickType = (k) => {
+    setType(k);
+    if (!isEdit) setRows(DEFAULT_LINES[k].map((l) => ({ ...l })));
+  };
 
   const setRow = (i, patch) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const parse = (v) => { const n = round2(Number(v) || 0); return n === 0 ? '' : String(n); };
@@ -261,12 +301,14 @@ function VoucherModal({ t, accounts, onClose, onSaved }) {
     if (!balanced) { showToast(t('noLines'), 'error'); return; }
     setSaving(true);
     try {
-      await ledgerApi.entry({
+      const body = {
         date, type,
         branchId: branchId || undefined,
         memo: memo.trim() || undefined,
         lines: nonZero.map((l) => ({ account: l.account, dr: l.dr, cr: l.cr })),
-      });
+      };
+      if (isEdit) await ledgerApi.updateEntry(entry.id, body);
+      else await ledgerApi.entry(body);
       showToast('✅ ' + t('saved'), 'success');
       onSaved();
     } catch (e) {
@@ -284,9 +326,14 @@ function VoucherModal({ t, accounts, onClose, onSaved }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div className="card" style={{ maxWidth: 640, width: '100%', maxHeight: '88vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 700 }}>{t('newVoucher')}</h3>
+          <h3 style={{ fontSize: 17, fontWeight: 700 }}>{isEdit ? t('editVoucher') : t('newVoucher')}</h3>
           <button className="btn btn-sm btn-ghost" onClick={onClose}>{t('close')}</button>
         </div>
+        {isEdit && (
+          <div style={{ marginBottom: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(245,158,11,.12)', color: 'var(--amber, #B45309)', fontSize: 12.5 }}>
+            ⚠️ {t('editWarn')}
+          </div>
+        )}
 
         <div className="flex" style={{ gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
           {VOUCHER_TYPES.map((k) => (

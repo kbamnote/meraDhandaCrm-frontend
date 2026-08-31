@@ -187,6 +187,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
   const [uploading, setUploading] = useState(false);
   const [defaults, setDefaults] = useState(null); // GET /invoice-defaults result
   const [busy, setBusy] = useState(false);
+  // Set from the server's 409 when this invoice would breach the customer's
+  // credit limit; holds { creditLimit, outstanding, invoiceTotal, projected }.
+  const [creditWarning, setCreditWarning] = useState(null);
 
   // Items catalog (the `products` collection) for the line-item picker — live,
   // so stock hints and prices stay current after an invoice deducts stock.
@@ -286,13 +289,15 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
     finally { setUploading(false); }
   };
 
-  const submit = async () => {
+  const submit = async (overrideCreditLimit = false) => {
     if (!trim(party.clientName)) return showToast('Bill To — client name required', 'error');
     if (!items.some((it) => it.name.trim() && Number(it.rate) > 0)) return showToast('Add at least one item', 'error');
     setBusy(true);
     try {
       const inv = await accountingApi.createInvoice({
         type,
+        // Set only after the user confirms the credit-limit warning below.
+        overrideCreditLimit: overrideCreditLimit || undefined,
         clientId: party.clientId, clientName: trim(party.clientName),
         clientPhone: trim(party.clientPhone), clientAddress: trim(party.clientAddress),
         gstNo: trim(party.gstNo), clientPan: trim(party.clientPan),
@@ -321,7 +326,16 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
       showToast(`${inv.invoiceNo} created`, 'success');
       onCreated?.(inv);
       onClose();
-    } catch (e) { showToast(describeError(e, t('failed')), 'error'); }
+    } catch (e) {
+      // The server refuses an invoice that would push the customer past their
+      // credit limit. That's a business decision, not an error — surface the
+      // numbers and let an authorised user proceed deliberately.
+      if (e?.response?.status === 409 && e.response.data?.code === 'CREDIT_LIMIT_EXCEEDED') {
+        setCreditWarning(e.response.data);
+      } else {
+        showToast(describeError(e, t('failed')), 'error');
+      }
+    }
     finally { setBusy(false); }
   };
 
@@ -332,7 +346,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
           <h3 style={{ margin: 0 }}>Create Sales Invoice</h3>
           <div className="flex gap-2">
             <button className="btn btn-ghost" onClick={onClose} disabled={busy}>{t('cancel')}</button>
-            <button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? '…' : 'Save'}</button>
+            {/* Must be wrapped: passing `submit` directly hands the click event
+                in as overrideCreditLimit, which is truthy. */}
+            <button className="btn btn-primary" onClick={() => submit(false)} disabled={busy}>{busy ? '…' : 'Save'}</button>
           </div>
         </div>
 
@@ -619,6 +635,56 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job }
               Authorized signatory for<br /><b style={{ color: 'var(--text2)' }}>{defaults?.authorizedSignatory || ''}</b>
             </div>
           </div>
+        </div>
+      </div>
+
+      {creditWarning && (
+        <CreditLimitDialog
+          info={creditWarning}
+          busy={busy}
+          onCancel={() => setCreditWarning(null)}
+          onProceed={() => { setCreditWarning(null); submit(true); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Shown when the server rejects an invoice for breaching the customer's credit
+// limit. Deliberately states the three numbers that led to the block, so the
+// decision to proceed is an informed one — the override is recorded on the
+// invoice and in the audit trail.
+function CreditLimitDialog({ info, busy, onCancel, onProceed }) {
+  const money = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN');
+  const Row = ({ label, value, strong }) => (
+    <div className="flex items-center justify-between" style={{ padding: '6px 0', fontSize: 13 }}>
+      <span style={{ color: 'var(--text2)' }}>{label}</span>
+      <span style={{ fontWeight: strong ? 800 : 600 }}>{value}</span>
+    </div>
+  );
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div className="card" style={{ maxWidth: 420, width: '100%', padding: 20 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>⚠️ Credit limit exceeded</h3>
+        <p style={{ fontSize: 12.5, color: 'var(--text3)', margin: '0 0 12px' }}>
+          Saving this invoice would take the customer past their approved credit limit.
+        </p>
+        <div style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: '4px 0', margin: '4px 0 14px' }}>
+          <Row label="Already outstanding" value={money(info.outstanding)} />
+          <Row label="This invoice (unpaid part)" value={money(info.projected - info.outstanding)} />
+          <Row label="Exposure after saving" value={money(info.projected)} strong />
+          <Row label="Approved credit limit" value={money(info.creditLimit)} />
+          <div className="flex items-center justify-between" style={{ padding: '6px 0', fontSize: 13, color: 'var(--red, #DC2626)' }}>
+            <span>Over limit by</span>
+            <span style={{ fontWeight: 800 }}>{money(info.projected - info.creditLimit)}</span>
+          </div>
+        </div>
+        <div className="flex" style={{ gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-sm" onClick={onProceed} disabled={busy}
+            style={{ background: 'var(--red, #DC2626)', color: '#fff', border: 'none' }}>
+            {busy ? '…' : 'Save anyway'}
+          </button>
         </div>
       </div>
     </div>

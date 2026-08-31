@@ -20,6 +20,7 @@ import { useT } from '../../i18n/LanguageContext';
 import { showToast } from '../../components/common/toast';
 import { inr } from '../../components/common/DashboardCharts';
 import CreateInvoiceFlow from '../../components/common/CreateInvoiceFlow';
+import PartyBulkUpload from '../../components/common/PartyBulkUpload';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -32,6 +33,7 @@ const S = {
   supplier: { en: 'Supplier', hi: 'आपूर्तिकर्ता', hinglish: 'Supplier' },
   newCustomer: { en: '+ New customer', hi: '+ नया ग्राहक', hinglish: '+ Naya customer' },
   newSupplier: { en: '+ New supplier', hi: '+ नया आपूर्तिकर्ता', hinglish: '+ Naya supplier' },
+  importExcel: { en: '⬆️ Import from Excel', hi: 'Excel से इम्पोर्ट', hinglish: 'Excel se import' },
   searchParty: { en: 'Search Party', hi: 'पार्टी खोजें', hinglish: 'Search Party' },
   none:     { en: 'No parties yet.', hi: 'अभी कोई पार्टी नहीं।', hinglish: 'Abhi koi party nahi.' },
   pickOne:  { en: 'Select a party to see its details', hi: 'विवरण देखने के लिए पार्टी चुनें', hinglish: 'Details dekhne ke liye party chunein' },
@@ -167,6 +169,7 @@ export default function PartiesPage() {
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(null);        // { type, id, name }
   const [partyForm, setPartyForm] = useState(null);
+  const [showImport, setShowImport] = useState(false);
 
   useEffect(() => {
     const a = onValue(ref(db, 'mpw/clients'), (s) => setClients(s.val() || {}));
@@ -225,8 +228,19 @@ export default function PartiesPage() {
         <div className="flex" style={{ gap: 6 }}>
           <button className="btn btn-primary btn-sm" onClick={() => setPartyForm({ type: 'client' })}>{t('newCustomer')}</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setPartyForm({ type: 'vendor' })}>{t('newSupplier')}</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowImport((v) => !v)}>{t('importExcel')}</button>
         </div>
       </div>
+
+      {showImport && (
+        <div className="card" style={{ padding: 14, marginBottom: 12 }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{t('importExcel')}</h3>
+            <button className="btn btn-xs btn-ghost" onClick={() => setShowImport(false)}>✕</button>
+          </div>
+          <PartyBulkUpload onImported={() => setShowImport(false)} />
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 300px) minmax(0, 1fr)', gap: 14, alignItems: 'start' }} className="parties-split">
         {/* ── Left rail: party list ─────────────────────────────────────── */}

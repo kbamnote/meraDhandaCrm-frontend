@@ -54,6 +54,9 @@ import ReportsPage from './pages/accounting/ReportsPage';
 import GstPage from './pages/accounting/GstPage';
 import PurchasesPage from './pages/accounting/PurchasesPage';
 import EntriesPage from './pages/accounting/EntriesPage';
+import DayBookPage from './pages/accounting/DayBookPage';
+import ProfitPage from './pages/accounting/ProfitPage';
+import YearEndPage from './pages/accounting/YearEndPage';
 import CashBankPage from './pages/accounting/CashBankPage';
 import ReconPage from './pages/accounting/ReconPage';
 import TdsPage from './pages/accounting/TdsPage';
@@ -119,6 +122,9 @@ const CUSTOM_PAGES = {
   'accounting/gst': GstPage,
   'accounting/purchases': PurchasesPage,
   'accounting/entries': EntriesPage,
+  'accounting/daybook': DayBookPage,
+  'accounting/profit': ProfitPage,
+  'accounting/year-end': YearEndPage,
   'accounting/cash': CashBankPage,
   'accounting/recon': ReconPage,
   'accounting/tds': TdsPage,
@@ -198,6 +204,9 @@ const STUB_ROUTES = [
   // Phase 2 — real pages backed by CUSTOM_PAGES components.
   ['accounting/inventory', '📦 Inventory',    'page-accounting-inventory', null],
   ['accounting/purchases', '📦 Purchases',   'page-accounting-purchases', null],
+  ['accounting/daybook',   '📓 Day Book',     'page-accounting-daybook',   null],
+  ['accounting/profit',    '📈 Profitability', 'page-accounting-profit',   null],
+  ['accounting/year-end',  '🗓️ Year-End Close', 'page-accounting-year-end', null],
   ['accounting/entries',   '📝 Journal',      'page-accounting-entries',   null],
   ['accounting/cash',      '💵 Cash & Bank',  'page-accounting-cash',      null],
   ['accounting/recon',     '🏦 Bank Recon',   'page-accounting-recon',     null],

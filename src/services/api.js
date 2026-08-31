@@ -270,6 +270,12 @@ export const accountingApi = {
   // Create a customer/supplier. Goes through accounting (not /db/:col) so a
   // non-zero opening balance posts a real journal against Owner's Capital.
   createParty: (body)       => api.post('/accounting/party', body).then(r => r.data),
+  // Sales profitability — per-invoice and per-item margin from the costs
+  // stamped at invoice time. { summary, invoices, items }.
+  profit: (params)          => api.get('/accounting/profit', { params }).then(r => r.data),
+  // Bulk party import. ALWAYS call with dryRun:true first — the response is the
+  // exact impact report, and nothing is written until you call again without it.
+  importParties: (body)     => api.post('/accounting/import/parties', body).then(r => r.data),
   // Everything the Create Invoice form prefills: next number, bank details,
   // company GSTIN/state, default Terms for this doc type, GST state list.
   invoiceDefaults: (type)   => api.get('/accounting/invoice-defaults', { params: { type } }).then(r => r.data),
@@ -356,7 +362,17 @@ export const ledgerApi = {
   // Manual vouchers (journal / payment / receipt / contra). DELETE only works for
   // these — entries derived from invoices/payments/expenses/POs are immutable.
   entry:          (body)   => api.post('/ledger/entry', body).then(r => r.data),
+  // Edit a MANUAL voucher — re-posts against the same ref, so the correction
+  // replaces the old ledger effect instead of stacking on top of it. The prior
+  // version is retained in meta.revisions. Returns a NEW entry id.
+  updateEntry:    (id, body) => api.put(`/ledger/entry/${id}`, body).then(r => r.data),
   deleteEntry:    (id)     => api.delete(`/ledger/entry/${id}`).then(r => r.data),
+  // Year-end close (Phase 5-4). preview() posts nothing; close() is idempotent
+  // — re-running recomputes the same closing entry rather than stacking one.
+  yearEndPreview: (fy)     => api.get('/ledger/year-end', { params: { fy } }).then(r => r.data),
+  yearEndClosed:  ()       => api.get('/ledger/year-end/closed').then(r => r.data),
+  yearEndClose:   (fy)     => api.post('/ledger/year-end/close', { fy }).then(r => r.data),
+  yearEndReopen:  (fy)     => api.post('/ledger/year-end/reopen', { fy }).then(r => r.data),
 };
 
 // Sales / Leads CRM — assign, outcome, Excel import, targets, leaderboard, reports.
