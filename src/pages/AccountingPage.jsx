@@ -112,7 +112,10 @@ function InvoiceRow({ inv, t }) {
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 18, fontWeight: 700 }}>{inr(inv.total)}</div>
           <div style={{ fontSize: 11, color: 'var(--text3)' }}>{t('taxable')} {inr(inv.subtotal)} + {inr(inv.taxTotal)} GST</div>
-          {inv.type !== 'proforma' && inv.status !== 'paid' && (
+          {/* A voided invoice is cancelled — nothing is owed on it, so it must
+              not offer to take a payment. `status !== 'paid'` alone let a void
+              through, since its status is 'void'. */}
+          {inv.type !== 'proforma' && inv.status !== 'paid' && inv.status !== 'void' && (
             <button className="btn btn-sm btn-ghost" style={{ marginTop: 6 }} onClick={pay} disabled={paying}>{t('pay')}</button>
           )}
         </div>
