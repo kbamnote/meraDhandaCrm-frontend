@@ -93,6 +93,17 @@ h1,h2,h3,h4,.sidebar-logo{font-family:var(--font-display);letter-spacing:-0.01em
 }
 .input:focus{border-color:var(--blue);}
 
+/* Narrow numeric cells in the invoice/purchase item grids.
+   `.input` reserves 12px of padding each side, and a type="number" field also
+   gives ~15px to the spinner arrows — so a 50px Qty box left about 11px for the
+   digits and a 3-digit quantity was clipped. Drop the spinners (nobody nudges a
+   quantity one unit at a time on these forms) and tighten the padding, so the
+   whole box goes to the number. */
+.input.input-num{padding-left:6px;padding-right:6px;text-align:right;}
+.input.input-num::-webkit-outer-spin-button,
+.input.input-num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.input.input-num{-moz-appearance:textfield;appearance:textfield;}
+
 .form-group{margin-bottom:14px;}
 .form-group label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;font-weight:500;}
 .form-error{color:var(--red);font-size:12px;margin-top:4px;}

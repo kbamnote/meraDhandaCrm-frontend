@@ -14,6 +14,7 @@
  * duplication). Balances come from the ledger, not from re-adding invoices here.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ref, onValue, db } from '../../services/realtime';
 import { accountingApi, describeError } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
@@ -557,7 +558,17 @@ function monthRange(offset = 0) {
   return [iso(from), iso(to)];
 }
 
-function TransactionsTab({ rows, t }) {
+// Which feed rows lead somewhere. Only the `invoices` collection has a
+// single-document view (/invoice-view deep-links by id) — payments, notes,
+// purchases and expenses have list pages but no per-record page, so their rows
+// stay static rather than becoming links that go nowhere. A row that looks
+// clickable and does nothing is worse than one that never invited the click.
+export const canOpenTxn = (r) => !!r && r.collectionName === 'invoices' && !!r.id;
+
+// Exported for the regression test — clicking a bill here was dead, and a
+// source-level check could not tell a live handler from a commented-out one.
+export function TransactionsTab({ rows, t }) {
+  const navigate = useNavigate();
   const [range, setRange] = useState('all');
   const [docType, setDocType] = useState('all');
   const [status, setStatus] = useState('all');
@@ -637,15 +648,39 @@ function TransactionsTab({ rows, t }) {
           {!filtered.length && <div style={{ padding: 30, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>{t('noTxns')}</div>}
           {filtered.map((r) => {
             const st = r.status ? STATUS_STYLE[r.status] : null;
+            const openable = canOpenTxn(r);
+            const open = () => navigate(`/invoice-view?id=${encodeURIComponent(r.id)}`);
             return (
-              <div key={r.collectionName + r.id} style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '10px', borderBottom: '1px solid var(--border)', fontSize: 12.5, alignItems: 'center' }}>
+              <div
+                key={r.collectionName + r.id}
+                {...(openable ? {
+                  role: 'button',
+                  tabIndex: 0,
+                  title: `Open ${r.number || 'invoice'}`,
+                  onClick: open,
+                  // Reachable without a mouse: the row is the control, so it
+                  // has to answer Enter and Space like a button would.
+                  onKeyDown: (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+                  },
+                } : {})}
+                style={{
+                  display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '10px',
+                  borderBottom: '1px solid var(--border)', fontSize: 12.5, alignItems: 'center',
+                  cursor: openable ? 'pointer' : 'default',
+                }}
+                onMouseEnter={openable ? (e) => { e.currentTarget.style.background = 'var(--surface2)'; } : undefined}
+                onMouseLeave={openable ? (e) => { e.currentTarget.style.background = 'transparent'; } : undefined}
+              >
                 <div style={{ color: 'var(--text2)' }}>{fmtDate(r.date)}</div>
                 <div style={{ fontWeight: 600 }}>
                   {r.label}
                   {r.mode && <span style={{ color: 'var(--text3)', fontWeight: 400 }}> · {r.mode}</span>}
                 </div>
                 <div style={{ color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {r.number || '—'}
+                  <span style={openable ? { color: 'var(--primary, #2563EB)', fontWeight: 600 } : undefined}>
+                    {r.number || '—'}
+                  </span>
                   {r.againstInvoiceNo && r.number !== r.againstInvoiceNo && (
                     <span style={{ color: 'var(--text3)' }}> ({r.againstInvoiceNo})</span>
                   )}

@@ -119,6 +119,35 @@ describe('the specific bugs that shipped stay fixed', () => {
     if (err) throw new Error(`crashed: ${err.message}`);
   });
 
+  it('a bill in a party\'s Transactions opens the invoice', async () => {
+    // The rows were plain <div>s with no handler at all — clicking a bill did
+    // nothing. Only the `invoices` collection has a per-document view, so the
+    // rule is: invoice rows navigate, everything else stays inert rather than
+    // becoming a link that goes nowhere.
+    const { canOpenTxn } = await import('../src/pages/accounting/PartiesPage.jsx');
+    expect(canOpenTxn({ collectionName: 'invoices', id: 'i1' }), 'a sales invoice must open').toBe(true);
+    for (const c of ['payments', 'creditNotes', 'debitNotes', 'purchaseOrders', 'expenses']) {
+      expect(canOpenTxn({ collectionName: c, id: 'x1' }), `${c} has no document view to open`).toBe(false);
+    }
+    expect(canOpenTxn({ collectionName: 'invoices' }), 'no id means nothing to deep-link to').toBe(false);
+    expect(canOpenTxn(null), 'must not throw on a missing row').toBe(false);
+
+    // Then the actual DOM. A source regex was the first attempt here and it was
+    // useless: commenting the handler out left the matched text in place, so
+    // the test passed against a row that no longer did anything.
+    const { TransactionsTab } = await import('../src/pages/accounting/PartiesPage.jsx');
+    const { renderScreen } = await import('./renderScreen.jsx');
+    const rows = [
+      { id: 'inv1', collectionName: 'invoices', docType: 'invoice', label: 'Sales', number: 'MPW-001', date: '2026-08-01', amount: 7080, unpaid: 0, status: 'Paid' },
+      { id: 'pay1', collectionName: 'payments', docType: 'payment_in', label: 'Payment In', number: 'RCPT-01', date: '2026-08-02', amount: 7080, unpaid: 0 },
+    ];
+    const { container } = renderScreen(TransactionsTab, { props: { rows, t: (k) => k } });
+    const clickable = container.querySelectorAll('[role="button"]');
+    expect(clickable.length, 'exactly the invoice row should be clickable').toBe(1);
+    expect(clickable[0].textContent).toContain('MPW-001');
+    expect(clickable[0].getAttribute('tabindex'), 'a clickable row must be keyboard reachable').toBe('0');
+  });
+
   it('CreatePurchaseFlow mounts when opened from a supplier', async () => {
     // The path the Parties page uses: a supplier is already chosen, so the form
     // renders the Bill From card and the totals panel on the first paint.

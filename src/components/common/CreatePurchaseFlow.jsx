@@ -340,10 +340,10 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
             <div style={{ display: 'flex', gap: 6, ...lbl, padding: '0 2px 4px' }}>
               <span style={{ width: 20 }}>No</span>
               <span style={{ flex: 2.4 }}>Item</span>
-              <span style={{ flex: 1 }}>HSN</span>
-              <span style={{ width: 46 }}>Qty</span>
-              <span style={{ flex: 1 }}>Price</span>
-              <span style={{ flex: 1 }}>Discount</span>
+              <span style={{ flex: 1, minWidth: 56 }}>HSN</span>
+              <span style={{ width: 68, textAlign: 'right' }}>Qty</span>
+              <span style={{ flex: 1, minWidth: 82, textAlign: 'right' }}>Price</span>
+              <span style={{ flex: 1, minWidth: 78, textAlign: 'right' }}>Discount</span>
               <span style={{ width: 62 }}>Tax</span>
               <span style={{ flex: 1, textAlign: 'right' }}>Amount</span>
               <span style={{ width: 18 }} />
@@ -373,9 +373,9 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
                       )}
                     </div>
                     <input className="input" style={{ flex: 1, minWidth: 56 }} placeholder="HSN" value={it.hsn} onChange={(e) => setItem(i, 'hsn', e.target.value)} />
-                    <input className="input" style={{ width: 46 }} type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
-                    <input className="input" style={{ flex: 1, minWidth: 62 }} type="number" placeholder="0" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
-                    <input className="input" style={{ flex: 1, minWidth: 62 }} type="number" placeholder="0" value={it.discount} onChange={(e) => setItem(i, 'discount', e.target.value)} />
+                    <input className="input input-num" style={{ width: 68 }} type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
+                    <input className="input input-num" style={{ flex: 1, minWidth: 82 }} type="number" placeholder="0" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
+                    <input className="input input-num" style={{ flex: 1, minWidth: 78 }} type="number" placeholder="0" value={it.discount} onChange={(e) => setItem(i, 'discount', e.target.value)} />
                     <select className="input" style={{ width: 62, padding: '6px 4px' }} value={it.taxRate} onChange={(e) => setItem(i, 'taxRate', e.target.value)}>
                       {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
                     </select>

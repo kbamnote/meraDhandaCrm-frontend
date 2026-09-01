@@ -529,11 +529,15 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
 
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', margin: '10px 0 6px' }}>Items / Services</div>
             <div style={{ display: 'flex', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', padding: '0 2px 4px' }}>
+              {/* Must mirror the input row below field-for-field — the header
+                  was missing Unit entirely, so every label from Qty rightward
+                  sat over the wrong column. */}
               <span style={{ width: 22 }}>No</span>
               <span style={{ flex: 3 }}>Item / Service</span>
-              <span style={{ flex: 1.2 }}>HSN/SAC</span>
-              <span style={{ width: 55 }}>Qty</span>
-              <span style={{ flex: 1.2 }}>Price (₹)</span>
+              <span style={{ flex: 1.2, minWidth: 60 }}>HSN/SAC</span>
+              <span style={{ width: 68, textAlign: 'right' }}>Qty</span>
+              <span style={{ width: 58 }}>Unit</span>
+              <span style={{ flex: 1.2, minWidth: 82, textAlign: 'right' }}>Price (₹)</span>
               <span style={{ flex: 1.2, textAlign: 'right' }}>Amount</span>
               <span style={{ width: 18 }} />
             </div>
@@ -575,9 +579,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     )}
                   </div>
                   <input className="input" style={{ flex: 1.2, minWidth: 60 }} placeholder="HSN/SAC" value={it.hsn} onChange={(e) => setItem(i, 'hsn', e.target.value)} />
-                  <input className="input" style={{ width: 50 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
-                  <input className="input" style={{ width: 52 }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
-                  <input className="input" style={{ flex: 1.2, minWidth: 70 }} placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
+                  <input className="input input-num" style={{ width: 68 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
+                  <input className="input" style={{ width: 58 }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
+                  <input className="input input-num" style={{ flex: 1.2, minWidth: 82 }} placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
                   <span style={{ flex: 1.2, textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{inr(amount)}</span>
                   <button className="btn btn-ghost btn-xs" style={{ width: 18 }} onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))} disabled={items.length === 1}>×</button>
                 </div>
