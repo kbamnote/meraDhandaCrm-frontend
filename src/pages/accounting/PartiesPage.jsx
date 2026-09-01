@@ -21,6 +21,7 @@ import { showToast } from '../../components/common/toast';
 import { inr } from '../../components/common/DashboardCharts';
 import CreateInvoiceFlow from '../../components/common/CreateInvoiceFlow';
 import PartyBulkUpload from '../../components/common/PartyBulkUpload';
+import { NewPurchaseModal } from './PurchasesPage';
 // Reuse the report exporters so a party statement downloads in the same shapes
 // as every other report, instead of a second CSV/PDF implementation.
 import { downloadCsv, downloadExcel, downloadPdf, printReport } from './ReportsPage';
@@ -43,6 +44,7 @@ const S = {
   // Detail header
   sendReminder: { en: 'Send Reminder', hi: 'रिमाइंडर भेजें', hinglish: 'Send Reminder' },
   createInvoice:{ en: 'Create Sales Invoice', hi: 'सेल्स इनवॉइस बनाएं', hinglish: 'Create Sales Invoice' },
+  createPurchase:{ en: 'Create Purchase', hi: 'खरीद दर्ज करें', hinglish: 'Purchase banayein' },
   paymentIn:    { en: 'Payment In', hi: 'भुगतान प्राप्त', hinglish: 'Payment In' },
   onAccountTile:{ en: 'On Account', hi: 'खाते में जमा', hinglish: 'On Account' },
   paymentOut:   { en: 'Payment Out', hi: 'भुगतान किया', hinglish: 'Payment Out' },
@@ -359,6 +361,7 @@ function PartyDetail({ party, t, onBack }) {
   const [invoiceFor, setInvoiceFor] = useState(null);
   const [editingParty, setEditingParty] = useState(null);
   const [paying, setPaying] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
   // Advance held by this party, surfaced so an unapplied receipt is visible
   // rather than just quietly lowering the balance.
   const advance = useMemo(
@@ -424,9 +427,17 @@ function PartyDetail({ party, t, onBack }) {
             <button className="btn btn-sm btn-ghost" onClick={() => setEditingParty(p)}>
               ✏️ {t('editDetails')}
             </button>
-            {isClient && (
+            {isClient ? (
               <button className="btn btn-primary btn-sm" onClick={() => setInvoiceFor(p)}>
                 🧾 {t('createInvoice')}
+              </button>
+            ) : (
+              // A supplier gets a PURCHASE, not a sales invoice — you don't
+              // invoice the people you buy from. The button was simply absent
+              // before, which read as a missing feature rather than a
+              // deliberate distinction.
+              <button className="btn btn-primary btn-sm" onClick={() => setPurchasing(true)}>
+                📦 {t('createPurchase')}
               </button>
             )}
           </div>
@@ -484,6 +495,13 @@ function PartyDetail({ party, t, onBack }) {
         {data && tab === 'items' && <ItemsTab party={party} t={t} />}
       </div>
 
+      {purchasing && p && (
+        <NewPurchaseModal
+          t={t}
+          vendor={{ id: p.id, name: p.name }}
+          onClose={() => { setPurchasing(false); load(); }}
+        />
+      )}
       {paying && (
         <PartyPaymentModal
           t={t} party={party} isClient={isClient}

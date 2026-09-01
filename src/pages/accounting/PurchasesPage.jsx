@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../../services/realtime';
-import { dbApi, ledgerApi, stockApi } from '../../services/api';
+import { dbApi, ledgerApi, stockApi, accountingApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from '../../components/common/toast';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
@@ -169,15 +169,21 @@ export default function PurchasesPage() {
         })}
       </div>
 
-      {showNew && <NewInvoiceModal t={t} onClose={() => setShowNew(false)} />}
+      {showNew && <NewPurchaseModal t={t} onClose={() => setShowNew(false)} />}
     </div>
   );
 }
 
-function NewInvoiceModal({ t, onClose }) {
+// Exported so the Parties page can raise a purchase against a supplier without
+// making the user navigate here and re-pick them. `vendor` pre-selects.
+export function NewPurchaseModal({ t, onClose, vendor }) {
   const [vendors, setVendors] = useState([]);
-  const [vendorId, setVendorId] = useState('');
-  const [vendorName, setVendorName] = useState('');
+  const [vendorId, setVendorId] = useState(vendor?.id || '');
+  // NOT `vendorName` — that is the module-level helper on line 63, and naming
+  // the state the same shadowed it. `vendorName(v)` below then called a string,
+  // threw, and the .catch emptied the vendor list — so no vendor could ever be
+  // selected and the form could never be submitted.
+  const [vendorLabel, setVendorLabel] = useState(vendor?.name || '');
   const [poNo, setPoNo] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [gstType, setGstType] = useState('intra');
@@ -210,18 +216,18 @@ function NewInvoiceModal({ t, onClose }) {
       .filter((it) => it.name.trim() && (num(it.qty) > 0 || num(it.rate) > 0))
       .map((it) => ({ name: it.name.trim(), qty: num(it.qty), rate: num(it.rate), amount: round2(num(it.qty) * num(it.rate)) }));
     try {
-      await dbApi.create('purchaseOrders', {
+      // Through the accounting endpoint, NOT dbApi.create: the generic DB route
+      // writes the document and nothing else, so purchases recorded this way
+      // never posted to the ledger and never reached the P&L or balance sheet.
+      // The endpoint also allocates the PO number and writes the audit entry.
+      await accountingApi.createPO({
         poNo: poNo.trim() || undefined,
-        invoiceNo: poNo.trim() || undefined,
         vendorId: vendorId || undefined,
-        vendorName: vendorName || undefined,
+        vendorName: vendorLabel || undefined,
         date,
-        gstType, gstRate: num(gstRate),
-        items: cleanItems,
-        subtotal, cgst, sgst, igst, total,
-        status: 'received',
+        interState: gstType === 'inter',
+        items: cleanItems.map((it) => ({ ...it, taxRate: num(gstRate) })),
         notes: notes.trim() || undefined,
-        createdAt: Date.now(),
       });
       showToast('✅ ' + t('saved'), 'success');
       onClose();
@@ -244,7 +250,7 @@ function NewInvoiceModal({ t, onClose }) {
             <label>{t('vendor')}</label>
             <select className="input" value={vendorId} onChange={(e) => {
               const v = vendors.find((x) => x.id === e.target.value);
-              setVendorId(e.target.value); setVendorName(v ? v.name : '');
+              setVendorId(e.target.value); setVendorLabel(v ? v.name : '');
             }}>
               <option value="">{t('selectVendor')}</option>
               {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}

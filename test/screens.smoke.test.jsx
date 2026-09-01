@@ -117,6 +117,28 @@ describe('the specific bugs that shipped stay fixed', () => {
     if (err) throw new Error(`crashed: ${err.message}`);
   });
 
+  it('the purchase form lists vendors (a shadowed helper emptied it)', async () => {
+    // `const [vendorName] = useState('')` shadowed the module-level vendorName()
+    // helper, so building the vendor list threw, the catch emptied it, and the
+    // form could never be submitted — no vendor could be selected.
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('src/pages/accounting/PurchasesPage.jsx', 'utf8');
+    const helper = /^const vendorName = /m.test(src);
+    const shadowed = /const \[vendorName, /.test(src);
+    expect(helper, 'vendorName helper missing').toBe(true);
+    expect(shadowed, 'state named vendorName shadows the helper again').toBe(false);
+  });
+
+  it('purchases post through the accounting endpoint, not the raw DB route', async () => {
+    // dbApi.create writes the document and nothing else, so a purchase saved
+    // that way never reached the ledger, the P&L or the balance sheet.
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('src/pages/accounting/PurchasesPage.jsx', 'utf8');
+    expect(/dbApi\.create\('purchaseOrders'/.test(src),
+      'purchase creation bypasses the ledger via dbApi.create').toBe(false);
+    expect(/accountingApi\.createPO\(/.test(src)).toBe(true);
+  });
+
   it('every PERMISSION_CATALOG feature has a label (missing one crashed the dialog)', async () => {
     const { PERMISSION_CATALOG } = await import('../src/config/access.js');
     // Read from the project root: under vitest the module URL is a transformed
