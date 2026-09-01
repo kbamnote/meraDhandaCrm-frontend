@@ -21,7 +21,7 @@ import { showToast } from '../../components/common/toast';
 import { inr } from '../../components/common/DashboardCharts';
 import CreateInvoiceFlow from '../../components/common/CreateInvoiceFlow';
 import PartyBulkUpload from '../../components/common/PartyBulkUpload';
-import { NewPurchaseModal } from './PurchasesPage';
+import CreatePurchaseFlow from '../../components/common/CreatePurchaseFlow';
 // Reuse the report exporters so a party statement downloads in the same shapes
 // as every other report, instead of a second CSV/PDF implementation.
 import { downloadCsv, downloadExcel, downloadPdf, printReport } from './ReportsPage';
@@ -496,9 +496,11 @@ function PartyDetail({ party, t, onBack }) {
       </div>
 
       {purchasing && p && (
-        <NewPurchaseModal
-          t={t}
-          vendor={{ id: p.id, name: p.name }}
+        <CreatePurchaseFlow
+          vendor={{
+            id: p.id, name: p.name, phone: p.phone,
+            address: p.billingAddress || p.address, gstNo: p.gstNo,
+          }}
           onClose={() => { setPurchasing(false); load(); }}
         />
       )}

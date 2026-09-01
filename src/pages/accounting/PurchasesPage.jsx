@@ -1,17 +1,18 @@
 /**
  * Purchases — /accounting/purchases. Purchase invoices from suppliers with a
- * proper Input-GST split. Saving a RECEIVED purchase posts a ledger entry:
- *   Dr Inventory (subtotal) · Dr CGST/SGST/IGST Input Credit · Cr AP (total)
- * so the P&L, Balance Sheet and supplier statements all pick it up
- * automatically (see posting.purchaseLines). Quantity stock-in stays a separate
- * stock-move on the Stock page.
+ * proper Input-GST split. Recording a bill (CreatePurchaseFlow) posts to the
+ * ledger immediately — Dr Inventory + input GST, Cr the supplier — so the P&L,
+ * Balance Sheet and supplier statements all pick it up without a second step.
+ * Older purchase ORDERS listed here post only once marked received. Quantity
+ * stock-in stays a separate stock-move on the Stock page.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../../services/realtime';
-import { dbApi, ledgerApi, stockApi, accountingApi } from '../../services/api';
+import { dbApi, ledgerApi, stockApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from '../../components/common/toast';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
+import CreatePurchaseFlow from '../../components/common/CreatePurchaseFlow';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -53,8 +54,6 @@ const S = {
   items:    { en: 'Items', hinglish: 'Items' },
   hint:     { en: 'A received purchase posts to Inventory + Input GST + Supplier payable in the ledger. Add stock quantity separately from the Stock page.', hinglish: 'Received purchase ledger mein Inventory + Input GST + Supplier payable post hota hai.' },
 };
-
-const GST_RATES = ['0', '5', '12', '18', '28'];
 
 const STATUS_STYLE = (s) => s === 'received' ? { background: 'var(--green, #1F9D55)', color: '#fff' }
   : s === 'sent' ? { background: 'var(--blue, #C05621)', color: '#fff' }
@@ -169,143 +168,7 @@ export default function PurchasesPage() {
         })}
       </div>
 
-      {showNew && <NewPurchaseModal t={t} onClose={() => setShowNew(false)} />}
-    </div>
-  );
-}
-
-// Exported so the Parties page can raise a purchase against a supplier without
-// making the user navigate here and re-pick them. `vendor` pre-selects.
-export function NewPurchaseModal({ t, onClose, vendor }) {
-  const [vendors, setVendors] = useState([]);
-  const [vendorId, setVendorId] = useState(vendor?.id || '');
-  // NOT `vendorName` — that is the module-level helper on line 63, and naming
-  // the state the same shadowed it. `vendorName(v)` below then called a string,
-  // threw, and the .catch emptied the vendor list — so no vendor could ever be
-  // selected and the form could never be submitted.
-  const [vendorLabel, setVendorLabel] = useState(vendor?.name || '');
-  const [poNo, setPoNo] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [gstType, setGstType] = useState('intra');
-  const [gstRate, setGstRate] = useState('18');
-  const [notes, setNotes] = useState('');
-  const [items, setItems] = useState([{ name: '', qty: '', rate: '' }]);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    dbApi.list('vendors').then((m) => {
-      setVendors(Object.entries(m).map(([id, v]) => ({ id, name: vendorName(v) })).filter((x) => x.name !== '—'));
-    }).catch(() => setVendors([]));
-  }, []);
-
-  const setItem = (i, patch) => setItems((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  const num = (v) => Number(v) || 0;
-
-  const subtotal = round2(items.reduce((s, it) => s + round2(num(it.qty) * num(it.rate)), 0));
-  const taxAmt = round2(subtotal * (num(gstRate) / 100));
-  const cgst = gstType === 'intra' ? round2(subtotal * (num(gstRate) / 200)) : 0;
-  const sgst = gstType === 'intra' ? round2(taxAmt - cgst) : 0;
-  const igst = gstType === 'inter' ? taxAmt : 0;
-  const total = round2(subtotal + cgst + sgst + igst);
-  const valid = vendorId && items.some((it) => it.name.trim() && num(it.rate) > 0) && subtotal > 0;
-
-  const save = async () => {
-    if (!valid) { showToast(t('itemsNeed'), 'error'); return; }
-    setSaving(true);
-    const cleanItems = items
-      .filter((it) => it.name.trim() && (num(it.qty) > 0 || num(it.rate) > 0))
-      .map((it) => ({ name: it.name.trim(), qty: num(it.qty), rate: num(it.rate), amount: round2(num(it.qty) * num(it.rate)) }));
-    try {
-      // Through the accounting endpoint, NOT dbApi.create: the generic DB route
-      // writes the document and nothing else, so purchases recorded this way
-      // never posted to the ledger and never reached the P&L or balance sheet.
-      // The endpoint also allocates the PO number and writes the audit entry.
-      await accountingApi.createPO({
-        poNo: poNo.trim() || undefined,
-        vendorId: vendorId || undefined,
-        vendorName: vendorLabel || undefined,
-        date,
-        interState: gstType === 'inter',
-        items: cleanItems.map((it) => ({ ...it, taxRate: num(gstRate) })),
-        notes: notes.trim() || undefined,
-      });
-      showToast('✅ ' + t('saved'), 'success');
-      onClose();
-    } catch (e) {
-      showToast(e.response?.data?.error || t('failed'), 'error');
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
-      <div className="card" style={{ maxWidth: 660, width: '100%', maxHeight: '88vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 700 }}>{t('newInvoice')}</h3>
-          <button className="btn btn-sm btn-ghost" onClick={onClose}>{t('close')}</button>
-        </div>
-
-        <div className="flex gap-2" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
-          <div className="form-group" style={{ margin: 0, flex: 1, minWidth: 220 }}>
-            <label>{t('vendor')}</label>
-            <select className="input" value={vendorId} onChange={(e) => {
-              const v = vendors.find((x) => x.id === e.target.value);
-              setVendorId(e.target.value); setVendorLabel(v ? v.name : '');
-            }}>
-              <option value="">{t('selectVendor')}</option>
-              {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
-          </div>
-          <div className="form-group" style={{ margin: 0 }}><label>{t('poNo')}</label><input className="input" value={poNo} onChange={(e) => setPoNo(e.target.value)} /></div>
-          <div className="form-group" style={{ margin: 0 }}><label>{t('date')}</label><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-        </div>
-
-        <div className="flex gap-2" style={{ marginBottom: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div className="form-group" style={{ margin: 0 }}>
-            <label>{t('gstRate')}</label>
-            <select className="input" value={gstRate} onChange={(e) => setGstRate(e.target.value)}>
-              {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
-            </select>
-          </div>
-          <div className="form-group" style={{ margin: 0 }}>
-            <label>{t('status')}</label>
-            <select className="input" value={gstType} onChange={(e) => setGstType(e.target.value)}>
-              <option value="intra">{t('intra')}</option>
-              <option value="inter">{t('inter')}</option>
-            </select>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px 90px 32px', gap: 8, padding: '8px 10px', fontSize: 11, textTransform: 'uppercase', color: 'var(--text3)', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>
-          <div>{t('item')}</div><div style={{ textAlign: 'right' }}>{t('qty')}</div><div style={{ textAlign: 'right' }}>{t('rate')}</div><div style={{ textAlign: 'right' }}>{t('amount')}</div><div />
-        </div>
-        {items.map((it, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px 90px 32px', gap: 8, padding: '6px 10px', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
-            <input className="input" placeholder={t('item')} value={it.name} onChange={(e) => setItem(i, { name: e.target.value })} />
-            <input className="input" type="number" placeholder="0" value={it.qty} onChange={(e) => setItem(i, { qty: e.target.value })} />
-            <input className="input" type="number" placeholder="0" value={it.rate} onChange={(e) => setItem(i, { rate: e.target.value })} />
-            <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{inr(round2(num(it.qty) * num(it.rate)))}</div>
-            <button type="button" className="btn btn-xs btn-ghost" style={{ color: 'var(--red)' }} disabled={items.length <= 1} onClick={() => setItems((rs) => rs.filter((_, j) => j !== i))}>✕</button>
-          </div>
-        ))}
-        <div style={{ padding: '8px 10px' }}>
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setItems((rs) => [...rs, { name: '', qty: '', rate: '' }])}>{t('addItem')}</button>
-        </div>
-
-        <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '2px 0' }}><span style={{ color: 'var(--text3)' }}>{t('subtotal')}</span><span>{inr(subtotal)}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '2px 0' }}><span style={{ color: 'var(--text3)' }}>CGST / SGST / IGST</span><span>{inr(cgst)} / {inr(sgst)} / {inr(igst)}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 700, padding: '4px 0', borderTop: '1px solid var(--border)', marginTop: 4 }}><span>{t('total')}</span><span>{inr(total)}</span></div>
-        </div>
-
-        <div className="flex items-center justify-between" style={{ padding: '10px 12px', borderTop: '1px solid var(--border)' }}>
-          <span style={{ fontSize: 11, color: 'var(--text3)' }}>{t('hint')}</span>
-          <div className="flex" style={{ gap: 6 }}>
-            <button className="btn btn-sm btn-ghost" onClick={onClose}>{t('close')}</button>
-            <button className="btn btn-sm btn-primary" disabled={!valid || saving} onClick={save}>{saving ? '…' : t('save')}</button>
-          </div>
-        </div>
-      </div>
+      {showNew && <CreatePurchaseFlow onClose={() => setShowNew(false)} />}
     </div>
   );
 }

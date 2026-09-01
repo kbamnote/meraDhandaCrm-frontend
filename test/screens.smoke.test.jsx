@@ -25,6 +25,7 @@ const SCREENS = {
   PermissionsPage:      () => import('../src/pages/PermissionsPage.jsx'),
   PartiesPage:          () => import('../src/pages/accounting/PartiesPage.jsx'),
   CreateInvoiceFlow:    () => import('../src/components/common/CreateInvoiceFlow.jsx'),
+  CreatePurchaseFlow:   () => import('../src/components/common/CreatePurchaseFlow.jsx'),
   // — accounting —
   AccountingDashboard:  () => import('../src/pages/accounting/AccountingDashboardPage.jsx'),
   SalesInvoicesPage:    () => import('../src/pages/accounting/SalesInvoicesPage.jsx'),
@@ -58,6 +59,7 @@ const SCREENS = {
 // Props for the few components that are not standalone pages.
 const PROPS = {
   CreateInvoiceFlow: { onClose: () => {}, onCreated: () => {} },
+  CreatePurchaseFlow: { onClose: () => {}, onCreated: () => {} },
   Sidebar: { open: true, onClose: () => {} },
 };
 
@@ -117,6 +119,19 @@ describe('the specific bugs that shipped stay fixed', () => {
     if (err) throw new Error(`crashed: ${err.message}`);
   });
 
+  it('CreatePurchaseFlow mounts when opened from a supplier', async () => {
+    // The path the Parties page uses: a supplier is already chosen, so the form
+    // renders the Bill From card and the totals panel on the first paint.
+    const mod = await import('../src/components/common/CreatePurchaseFlow.jsx');
+    const err = tryRender(mod.default, {
+      props: {
+        vendor: { id: 'v1', name: 'Kagaz Suppliers', phone: '9876500000', address: 'Indore', gstNo: '23AAAAA0000A1Z5' },
+        onClose: () => {}, onCreated: () => {},
+      },
+    });
+    if (err) throw new Error(`crashed: ${err.message}`);
+  });
+
   it('the purchase form lists vendors (a shadowed helper emptied it)', async () => {
     // `const [vendorName] = useState('')` shadowed the module-level vendorName()
     // helper, so building the vendor list threw, the catch emptied it, and the
@@ -129,14 +144,37 @@ describe('the specific bugs that shipped stay fixed', () => {
     expect(shadowed, 'state named vendorName shadows the helper again').toBe(false);
   });
 
-  it('purchases post through the accounting endpoint, not the raw DB route', async () => {
+  it('purchases post through an accounting endpoint, not the raw DB route', async () => {
     // dbApi.create writes the document and nothing else, so a purchase saved
     // that way never reached the ledger, the P&L or the balance sheet.
+    //
+    // Asserts the PROPERTY (it goes through a posting endpoint), not one
+    // specific call — the original fix routed to createPO and this test pinned
+    // that name, so replacing the form with CreatePurchaseFlow/
+    // createPurchaseInvoice failed a test whose actual concern was still met.
     const fs = await import('node:fs');
-    const src = fs.readFileSync('src/pages/accounting/PurchasesPage.jsx', 'utf8');
-    expect(/dbApi\.create\('purchaseOrders'/.test(src),
-      'purchase creation bypasses the ledger via dbApi.create').toBe(false);
-    expect(/accountingApi\.createPO\(/.test(src)).toBe(true);
+    for (const f of [
+      'src/pages/accounting/PurchasesPage.jsx',
+      'src/components/common/CreatePurchaseFlow.jsx',
+    ]) {
+      const src = fs.readFileSync(f, 'utf8');
+      expect(/dbApi\.create\('purchaseOrders'/.test(src),
+        `${f}: purchase creation bypasses the ledger via dbApi.create`).toBe(false);
+    }
+    const flow = fs.readFileSync('src/components/common/CreatePurchaseFlow.jsx', 'utf8');
+    expect(/accountingApi\.(createPurchaseInvoice|createPO)\(/.test(flow),
+      'the purchase form does not call a posting endpoint').toBe(true);
+  });
+
+  it('the purchase form sends round-off as a boolean the server can see as false', async () => {
+    // `roundOff: form.autoRoundOff || undefined` would drop the field when the
+    // user UNticks Auto Round Off, and the server defaults an absent roundOff to
+    // rounding — so switching it off would silently do nothing.
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('src/components/common/CreatePurchaseFlow.jsx', 'utf8');
+    expect(/roundOff:\s*form\.autoRoundOff\s*\|\|/.test(src),
+      'roundOff is sent as `x || undefined`, so unticking it is lost').toBe(false);
+    expect(/roundOff:\s*form\.autoRoundOff\s*,/.test(src)).toBe(true);
   });
 
   it('every PERMISSION_CATALOG feature has a label (missing one crashed the dialog)', async () => {
