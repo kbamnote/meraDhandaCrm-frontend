@@ -77,8 +77,9 @@ export default function CashBankPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
-  const [dialog, setDialog] = useState(null); // 'account' | 'transfer' | 'adjust'
+  const [dialog, setDialog] = useState(null); // 'account' | 'transfer' | 'adjust' | 'moveAll'
   const [editing, setEditing] = useState(null);
+  const [openEntryId, setOpenEntryId] = useState(null);   // clicked statement row
 
   const loadAccounts = useCallback(async () => {
     try {
@@ -226,6 +227,11 @@ export default function CashBankPage() {
                   </>
                 )}
                 <button className="btn btn-sm btn-ghost" onClick={downloadStatement}>Download Statement ⬇️</button>
+                {selected.type === 'unlinked' && statement && statement.rows.length > 0 && (
+                  <button className="btn btn-sm btn-primary" onClick={() => setDialog('moveAll')}>
+                    Move all to an account
+                  </button>
+                )}
                 {selected.deletable && (
                   <button className="btn btn-sm btn-ghost" style={{ color: 'var(--red)' }} onClick={() => removeAccount(selected)}>Remove Account</button>
                 )}
@@ -258,7 +264,17 @@ export default function CashBankPage() {
                 <Empty>No transactions in this period.</Empty>
               )}
               {statement && statement.rows.map((r) => (
-                <div key={r.id} style={ROW}>
+                <div
+                  key={r.id}
+                  role="button"
+                  tabIndex={0}
+                  title="Open this transaction"
+                  onClick={() => setOpenEntryId(r.id)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenEntryId(r.id); } }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface2)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  style={{ ...ROW, cursor: 'pointer' }}
+                >
                   <div style={{ color: 'var(--text2)' }}>{r.date}</div>
                   <div style={{ fontWeight: 600 }}>{typeLabel(r.type)}</div>
                   <div style={{ fontFamily: 'monospace', fontSize: 11.5, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -294,6 +310,23 @@ export default function CashBankPage() {
       )}
       {dialog === 'adjust' && (
         <AdjustDialog accounts={accounts} initialId={selectedId} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); refreshAll(); }} />
+      )}
+      {dialog === 'moveAll' && (
+        <MoveAllDialog
+          accounts={accounts}
+          fromName={selected && selected.name}
+          entryIds={(statement && statement.rows ? statement.rows : []).map((r) => r.id)}
+          onClose={() => setDialog(null)}
+          onSaved={() => { setDialog(null); refreshAll(); }}
+        />
+      )}
+      {openEntryId && (
+        <EntryDialog
+          entryId={openEntryId}
+          accounts={accounts}
+          onClose={() => setOpenEntryId(null)}
+          onMoved={() => { setOpenEntryId(null); refreshAll(); }}
+        />
       )}
     </div>
   );
@@ -599,6 +632,170 @@ function AdjustDialog({ accounts, initialId, onClose, onSaved }) {
       <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>
         An adjustment still has to land somewhere — an asset cannot change on its own.
         Adding is booked to <b>Owner&apos;s Capital</b>, reducing to <b>Expenses</b>.
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * One statement row, opened.
+ *
+ * The action it offers is a RECLASSIFICATION, not a transfer — it corrects
+ * which account a transaction already went through. No money moves and no new
+ * entry appears, so the totals are unchanged; only the attribution is fixed.
+ * That is exactly what Unlinked Transactions need: the money genuinely arrived,
+ * the record just never said where.
+ */
+function EntryDialog({ entryId, accounts, onClose, onMoved }) {
+  const [entry, setEntry] = useState(null);
+  const [err, setErr] = useState('');
+  const [toId, setToId] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let dead = false;
+    accountingApi.bankEntry(entryId)
+      .then((e) => { if (!dead) setEntry(e); })
+      .catch((e) => { if (!dead) setErr(describeError(e, 'Could not open this transaction')); });
+    return () => { dead = true; };
+  }, [entryId]);
+
+  const destinations = accounts.filter(
+    (a) => a.type !== 'unlinked' && a.key !== (entry && entry.fundingAccount && entry.fundingAccount.key),
+  );
+
+  const move = async () => {
+    if (!toId) { showToast('Choose an account', 'error'); return; }
+    setBusy(true);
+    try {
+      const r = await accountingApi.bankReassign({ entryIds: [entryId], toAccountId: toId });
+      if (r.movedCount) {
+        showToast(`Moved to ${r.to.name}`, 'success');
+        onMoved();
+      } else {
+        showToast((r.skipped && r.skipped[0] && r.skipped[0].reason) || 'Nothing moved', 'error');
+        setBusy(false);
+      }
+    } catch (e) {
+      showToast(describeError(e, 'Could not move'), 'error');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="Transaction"
+      onClose={onClose}
+      width={520}
+      footer={(
+        <>
+          <button className="btn btn-sm btn-ghost" onClick={onClose} disabled={busy}>Close</button>
+          {entry && entry.reassignable && (
+            <button className="btn btn-sm btn-primary" onClick={move} disabled={busy || !toId}>
+              {busy ? '…' : 'Move'}
+            </button>
+          )}
+        </>
+      )}
+    >
+      {err && <div style={{ color: 'var(--red)', fontSize: 13 }}>{err}</div>}
+      {!entry && !err && <div style={{ color: 'var(--text3)', fontSize: 13 }}>Loading…</div>}
+      {entry && (
+        <>
+          <Detail label="Date" value={entry.date} />
+          <Detail label="Type" value={typeLabel(entry.type)} />
+          <Detail label="Txn No" value={entry.txnNo} />
+          <Detail label="Party" value={entry.party} />
+          <Detail label="Mode" value={entry.mode} />
+          <Detail label="Note" value={entry.memo} />
+          <Detail label="Currently in" value={entry.fundingAccount && entry.fundingAccount.name} />
+
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', margin: '12px 0 4px' }}>
+            Ledger entry
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            {entry.lines.map((l, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 96px 96px', gap: 8, padding: '7px 10px', fontSize: 12.5, borderTop: i ? '1px solid var(--border)' : 'none' }}>
+                <span>{l.name}</span>
+                <span style={{ textAlign: 'right' }}>{l.dr ? inr(l.dr) : ''}</span>
+                <span style={{ textAlign: 'right' }}>{l.cr ? inr(l.cr) : ''}</span>
+              </div>
+            ))}
+          </div>
+
+          {entry.reassignable ? (
+            <div style={{ marginTop: 14 }}>
+              <div className="form-group" style={{ marginBottom: 6 }}>
+                <label>Move this transaction to</label>
+                <select className="input" value={toId} onChange={(e) => setToId(e.target.value)}>
+                  <option value="">— choose an account —</option>
+                  {destinations.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>
+                This corrects <b>which account</b> the money went through. It is not a
+                transfer — nothing moves and no new entry is created, so your total
+                balance stays the same. Use it for cash recorded as bank, or the other
+                way round.
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: 14, padding: '9px 12px', borderRadius: 8, background: 'rgba(245,158,11,.12)', color: 'var(--amber, #B45309)', fontSize: 12.5 }}>
+              {entry.reassignBlockedReason || 'This transaction cannot be moved.'}
+            </div>
+          )}
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// Bulk version of the same correction, offered on Unlinked Transactions because
+// that is where a whole batch of uncaptured payments piles up.
+function MoveAllDialog({ accounts, fromName, entryIds, onClose, onSaved }) {
+  const [toId, setToId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const destinations = accounts.filter((a) => a.type !== 'unlinked');
+
+  const move = async () => {
+    if (!toId) { showToast('Choose an account', 'error'); return; }
+    setBusy(true);
+    try {
+      const r = await accountingApi.bankReassign({ entryIds, toAccountId: toId });
+      showToast(
+        `Moved ${r.movedCount} to ${r.to.name}` + (r.skippedCount ? ` · ${r.skippedCount} skipped` : ''),
+        r.movedCount ? 'success' : 'error',
+      );
+      onSaved();
+    } catch (e) {
+      showToast(describeError(e, 'Could not move'), 'error');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={`Move all from ${fromName || 'this account'}`}
+      onClose={onClose}
+      footer={(
+        <>
+          <button className="btn btn-sm btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="btn btn-sm btn-primary" onClick={move} disabled={busy || !toId}>
+            {busy ? '…' : `Move ${entryIds.length}`}
+          </button>
+        </>
+      )}
+    >
+      <div className="form-group">
+        <label>Move these {entryIds.length} transaction(s) to</label>
+        <select className="input" value={toId} onChange={(e) => setToId(e.target.value)}>
+          <option value="">— choose an account —</option>
+          {destinations.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>
+        Only do this if all of them really went through that one account. Anything that
+        cannot be moved (a transfer, for instance) is skipped and reported, never forced.
       </div>
     </Modal>
   );

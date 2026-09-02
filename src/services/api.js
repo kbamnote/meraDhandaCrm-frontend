@@ -311,6 +311,11 @@ export const accountingApi = {
   bankTransactions:   (id, params) => api.get(`/accounting/bank-accounts/${id}/transactions`, { params }).then(r => r.data),
   bankTransfer:       (body)      => api.post('/accounting/bank-accounts/transfer', body).then(r => r.data),
   bankAdjust:         (body)      => api.post('/accounting/bank-accounts/adjust', body).then(r => r.data),
+  bankEntry:          (entryId)   => api.get(`/accounting/bank-accounts/entry/${entryId}`).then(r => r.data),
+  // Correct WHICH account past transactions went through. Not a transfer: no
+  // money moves and no entry is created — it rewrites the existing one AND the
+  // document behind it, so a later re-post reproduces the correction.
+  bankReassign:       (body)      => api.post('/accounting/bank-accounts/reassign', body).then(r => r.data),
   // Per-job (cost-centre) profitability. NOTE the margin is MATERIAL-only —
   // nothing records labour or machine time against a job.
   jobProfit: (params)       => api.get('/accounting/job-profit', { params }).then(r => r.data),
