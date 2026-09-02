@@ -67,6 +67,35 @@ const typeLabel = (t) => TYPE_LABEL[t] || String(t || '').replace(/-/g, ' ');
 
 const ICONS = { cash: '💵', bank: '🏦', unlinked: '🏛' };
 
+// A passbook shows the balance with its side, the way every Indian bank
+// statement does: Cr means the money is yours, Dr means the account is
+// overdrawn. Without the suffix a negative balance reads as a typo.
+//
+// Note this is the PASSBOOK convention, which is the bank's view of what it
+// owes you — the opposite of how the same account sits in our own ledger,
+// where a bank balance is an asset and therefore a debit. The statement is
+// presented the way the bank presents it because that is what it is being
+// reconciled against.
+function balanceLabel(n) {
+  const v = round2(n);
+  if (v === 0) return { text: inr(0), side: '' };
+  return { text: inr(Math.abs(v)), side: v > 0 ? 'Cr' : 'Dr' };
+}
+
+function Balance({ value, bold }) {
+  const b = balanceLabel(value);
+  return (
+    <span style={{ fontWeight: bold ? 800 : 700, whiteSpace: 'nowrap' }}>
+      {b.text}
+      {b.side && (
+        <span style={{ fontSize: 10, fontWeight: 700, marginLeft: 3, color: b.side === 'Cr' ? 'var(--green, #059669)' : 'var(--red, #DC2626)' }}>
+          {b.side}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function CashBankPage() {
   const t = useT(S);
   const [accounts, setAccounts] = useState([]);
@@ -80,6 +109,10 @@ export default function CashBankPage() {
   const [dialog, setDialog] = useState(null); // 'account' | 'transfer' | 'adjust' | 'moveAll'
   const [editing, setEditing] = useState(null);
   const [openEntryId, setOpenEntryId] = useState(null);   // clicked statement row
+  // Banks offer both; the running balance on each row is unaffected either
+  // way, because it is the balance AFTER that transaction, not a re-total of
+  // whatever happens to be above it on screen.
+  const [newestFirst, setNewestFirst] = useState(false);
 
   const loadAccounts = useCallback(async () => {
     try {
@@ -116,6 +149,29 @@ export default function CashBankPage() {
 
   const banks = accounts.filter((a) => a.type !== 'cash');
   const cashRows = accounts.filter((a) => a.type === 'cash');
+
+  const orderedRows = useMemo(() => {
+    const rows = (statement && statement.rows) || [];
+    return newestFirst ? [...rows].reverse() : rows;
+  }, [statement, newestFirst]);
+
+  // Totals for the rows on screen. Deliberately derived from the SAME rows the
+  // table renders rather than fetched separately — a footer that disagrees with
+  // the column above it is worse than no footer, and a second source of truth
+  // is exactly how that happens.
+  const totals = useMemo(() => {
+    const rows = (statement && statement.rows) || [];
+    const paid = round2(rows.reduce((sum, r) => sum + (r.paid || 0), 0));
+    const received = round2(rows.reduce((sum, r) => sum + (r.received || 0), 0));
+    return {
+      paid,
+      received,
+      net: round2(received - paid),
+      opening: round2((statement && statement.opening) || 0),
+      closing: round2((statement && statement.closing) || 0),
+      count: rows.length,
+    };
+  }, [statement]);
 
   const copyDetails = () => {
     if (!selected) return;
@@ -248,11 +304,21 @@ export default function CashBankPage() {
             >
               {RANGES.map((r) => <option key={r.key} value={r.key}>📅 {r.label}</option>)}
             </select>
-            {statement && (
-              <span style={{ fontSize: 12, color: 'var(--text3)' }}>
-                Opening {inr(statement.opening || 0)} · Closing <b style={{ color: 'var(--text)' }}>{inr(statement.closing || 0)}</b>
-              </span>
-            )}
+            <div className="flex items-center" style={{ gap: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost"
+                onClick={() => setNewestFirst((v) => !v)}
+                title="Change the order rows are listed in"
+              >
+                {newestFirst ? '↓ Newest first' : '↑ Oldest first'}
+              </button>
+              {statement && (
+                <span style={{ fontSize: 12, color: 'var(--text3)' }}>
+                  Closing <b style={{ color: 'var(--text)' }}>{inr(statement.closing || 0)}</b>
+                </span>
+              )}
+            </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -263,12 +329,24 @@ export default function CashBankPage() {
               {statement && !statement.error && !statement.rows.length && (
                 <Empty>No transactions in this period.</Empty>
               )}
-              {statement && statement.rows.map((r) => (
+              {/* Balance brought forward. A bank statement always opens with
+                  it, so the first transaction's balance has something to be
+                  read against — and so an account whose opening balance was
+                  entered later doesn't appear to start mid-air. */}
+              {statement && !statement.error && !newestFirst && (
+                <BroughtForward label="Opening Balance (B/F)" date={statement.from} value={statement.opening || 0} />
+              )}
+              {statement && !statement.error && newestFirst && statement.rows.length > 0 && (
+                <BroughtForward label="Closing Balance (C/F)" date={statement.to} value={statement.closing || 0} />
+              )}
+
+              {statement && orderedRows.map((r) => (
                 <div
                   key={r.id}
                   role="button"
                   tabIndex={0}
                   title="Open this transaction"
+                  data-testid="statement-row"
                   onClick={() => setOpenEntryId(r.id)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenEntryId(r.id); } }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface2)'; }}
@@ -290,11 +368,57 @@ export default function CashBankPage() {
                   <div style={{ textAlign: 'right', color: r.received ? 'var(--green, #059669)' : 'var(--text3)' }}>
                     {r.received ? inr(r.received) : '-'}
                   </div>
-                  <div style={{ textAlign: 'right', fontWeight: 700 }}>{inr(r.balance)}</div>
+                  <div style={{ textAlign: 'right' }}><Balance value={r.balance} /></div>
                 </div>
               ))}
+
+              {statement && !statement.error && !newestFirst && statement.rows.length > 0 && (
+                <BroughtForward label="Closing Balance (C/F)" date={statement.to} value={statement.closing || 0} />
+              )}
+              {statement && !statement.error && newestFirst && (
+                <BroughtForward label="Opening Balance (B/F)" date={statement.from} value={statement.opening || 0} />
+              )}
+
+              {statement && !statement.error && statement.rows.length > 0 && (
+                <div style={{ ...ROW, background: 'var(--surface2)', borderTop: '2px solid var(--border)', fontWeight: 700 }}>
+                  <div style={{ gridColumn: '1 / 6', color: 'var(--text2)' }}>
+                    Total · {totals.count} transaction{totals.count === 1 ? '' : 's'}
+                  </div>
+                  <div style={{ textAlign: 'right', color: 'var(--red, #DC2626)' }}>
+                    {totals.paid ? inr(totals.paid) : '-'}
+                  </div>
+                  <div style={{ textAlign: 'right', color: 'var(--green, #059669)' }}>
+                    {totals.received ? inr(totals.received) : '-'}
+                  </div>
+                  <div style={{ textAlign: 'right' }}><Balance value={totals.closing} bold /></div>
+                </div>
+              )}
             </div>
           </div>
+
+          {statement && !statement.error && statement.rows.length > 0 && (
+            <div data-testid="statement-totals" style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 22, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <Total label="Opening Balance" value={inr(totals.opening)} />
+              <Total label="Total Received" value={inr(totals.received)} color="var(--green, #059669)" />
+              <Total label="Total Paid" value={inr(totals.paid)} color="var(--red, #DC2626)" />
+              {/* Opening + net movement must equal the closing balance. Showing
+                  the net beside both is what lets someone check that by eye. */}
+              <Total
+                label="Net Change"
+                value={`${totals.net >= 0 ? '+' : '-'} ${inr(Math.abs(totals.net))}`}
+                color={totals.net >= 0 ? 'var(--green, #059669)' : 'var(--red, #DC2626)'}
+              />
+              <Total label="Closing Balance" value={inr(totals.closing)} strong />
+              <Total label="Total Balance (all accounts)" value={inr(totalBalance)} strong />
+            </div>
+          )}
+
+          {statement && !statement.error && statement.rows.length > 0 && (
+            <div style={{ padding: '0 16px 12px', fontSize: 11, color: 'var(--text3)' }}>
+              Balance runs down the page, updating after every transaction — the same way a passbook does.
+              <b> Cr</b> means money in the account, <b>Dr</b> means overdrawn.
+            </div>
+          )}
         </div>
       </div>
 
@@ -345,6 +469,34 @@ function StatementHeader() {
       <div style={{ textAlign: 'right' }}>Paid</div>
       <div style={{ textAlign: 'right' }}>Received</div>
       <div style={{ textAlign: 'right' }}>Balance</div>
+    </div>
+  );
+}
+
+// The brought-forward / carried-forward line. Not a transaction, so it has no
+// paid or received figure and is deliberately not clickable — there is no
+// underlying entry to open.
+function BroughtForward({ label, date, value }) {
+  return (
+    <div data-testid="carried-row" style={{ ...ROW, background: 'var(--surface2)', color: 'var(--text2)' }}>
+      <div>{date || ''}</div>
+      <div style={{ gridColumn: '2 / 6', fontWeight: 700 }}>{label}</div>
+      <div style={{ textAlign: 'right', color: 'var(--text3)' }}>-</div>
+      <div style={{ textAlign: 'right', color: 'var(--text3)' }}>-</div>
+      <div style={{ textAlign: 'right' }}><Balance value={value} /></div>
+    </div>
+  );
+}
+
+function Total({ label, value, color, strong }) {
+  return (
+    <div style={{ textAlign: 'right' }}>
+      <div style={{ fontSize: 10.5, color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '.03em' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: strong ? 17 : 14, fontWeight: strong ? 800 : 700, color: color || 'var(--text)' }}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -428,6 +580,7 @@ function AccountDialog({ account, onClose, onSaved }) {
     bankName: account?.bankName || '',
     branch: account?.branch || '',
     openingBalance: '',
+    openingDate: todayStr(),
   });
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
   const [busy, setBusy] = useState(false);
@@ -441,7 +594,7 @@ function AccountDialog({ account, onClose, onSaved }) {
         await accountingApi.updateBankAccount(account.id, rest);
         showToast('Bank details updated', 'success');
       } else {
-        await accountingApi.createBankAccount({ ...f, openingBalance: Number(f.openingBalance) || 0 });
+        await accountingApi.createBankAccount({ ...f, openingBalance: Number(f.openingBalance) || 0, openingDate: f.openingDate });
         showToast('Account added', 'success');
       }
       onSaved();
@@ -495,13 +648,24 @@ function AccountDialog({ account, onClose, onSaved }) {
         </div>
       </div>
       {!isEdit ? (
-        <div className="form-group">
-          <label>Opening Balance</label>
-          <input className="input input-num" type="number" value={f.openingBalance} onChange={(e) => set('openingBalance', e.target.value)} placeholder="0" />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
-            What is in the account today. Posted against Opening Balance so the books stay balanced.
+        <>
+        <div className="flex gap-2">
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Opening Balance</label>
+            <input className="input input-num" type="number" value={f.openingBalance} onChange={(e) => set('openingBalance', e.target.value)} placeholder="0" />
+          </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>As on</label>
+            <input className="input" type="date" value={f.openingDate} onChange={(e) => set('openingDate', e.target.value)} />
           </div>
         </div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: -6, marginBottom: 10 }}>
+          What was in the account on that date. Date it BEFORE the account&apos;s oldest
+          transaction — an opening balance dated later lands in the middle of the
+          statement instead of at the top. Posted against Opening Balance so the books
+          stay balanced.
+        </div>
+        </>
       ) : (
         <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>
           The opening balance isn't editable — it has a ledger entry behind it. To correct a
