@@ -27,6 +27,7 @@ import { accountingApi, describeError } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
 import BranchSelect from './BranchSelect';
+import BankAccountSelect from './BankAccountSelect';
 import { ref, onValue, db } from '../../services/realtime';
 
 // Null-safe .trim(). Building the request body must never throw on an absent
@@ -89,7 +90,7 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
     tcsAmount: '0', applyTcs: false,
     tdsAmount: '0', applyTds: false,
     autoRoundOff: true,
-    markFullyPaid: false, paidAmount: '0', paymentMode: 'Cash',
+    markFullyPaid: false, paidAmount: '0', paymentMode: 'Cash', bankAccountId: '',
     notes: '', showNotes: false,
     terms: '', editingTerms: false,
   });
@@ -254,6 +255,7 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
         markFullyPaid: form.markFullyPaid,
         paidAmount: form.markFullyPaid ? undefined : num(form.paidAmount),
         paymentMode: form.paymentMode,
+        bankAccountId: form.bankAccountId || undefined,
         notes: trim(form.notes) || undefined,
         terms: trim(form.terms) || undefined,
       };
@@ -518,6 +520,15 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
                   </select>
                 </div>
               </div>
+            )}
+
+            {(form.markFullyPaid || num(form.paidAmount) > 0) && (
+              <BankAccountSelect
+                label="Paid from"
+                mode={form.paymentMode}
+                value={form.bankAccountId}
+                onChange={(v) => setF('bankAccountId', v)}
+              />
             )}
 
             {/* TDS is withheld from the supplier and owed onward to the

@@ -20,6 +20,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
 import BranchSelect from './BranchSelect';
+import BankAccountSelect from './BankAccountSelect';
 import { ref, onValue, db } from '../../services/realtime';
 
 // Null-safe .trim() — building the request body must never throw on a field that
@@ -198,6 +199,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     markFullyPaid: false,
     amountReceived: '0',
     paymentMode: 'Cash',
+    bankAccountId: '',
     sendPaymentLink: !invoice, // don't re-queue the WhatsApp link on an edit
     notes: invoice?.notes || '', showNotes: !!invoice?.notes,
     terms: invoice?.terms || '', editingTerms: false,
@@ -397,6 +399,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         applyAdvance: useAdvance || undefined,
         amountReceived: form.markFullyPaid ? undefined : Number(form.amountReceived) || 0,
         paymentMode: form.paymentMode,
+        bankAccountId: form.bankAccountId || undefined,
         sendPaymentLink: form.sendPaymentLink,
         notes: form.notes, terms: form.terms, attachments,
         items: items.filter((it) => it.name.trim()).map((it) => ({ name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate), itemId: it.itemId || null })),
@@ -747,7 +750,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
               <div className="flex gap-2">
                 <div className="form-group" style={{ flex: 1 }}>
                   <label>Amount Received</label>
-                  <input className="input" type="number" value={form.amountReceived} onChange={(e) => setF('amountReceived', e.target.value)} />
+                  <input className="input input-num" type="number" value={form.amountReceived} onChange={(e) => setF('amountReceived', e.target.value)} />
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
                   <label>Mode</label>
@@ -756,6 +759,17 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                   </select>
                 </div>
               </div>
+            )}
+            {/* Shown whenever money is actually being received — including
+                "mark as fully paid", which is still a receipt that has to land
+                in a real account. */}
+            {(form.markFullyPaid || Number(form.amountReceived) > 0) && !isEdit && (
+              <BankAccountSelect
+                label="Received in"
+                mode={form.paymentMode}
+                value={form.bankAccountId}
+                onChange={(v) => setF('bankAccountId', v)}
+              />
             )}
             {/* Advance the customer is already holding. Offered, never applied
                 automatically — silently consuming someone's advance is exactly

@@ -7,6 +7,7 @@ import { accountingApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
 import BranchSelect from '../../components/common/BranchSelect';
+import BankAccountSelect from '../../components/common/BankAccountSelect';
 
 const round2 = (n) => Math.round(((Number(n) || 0) * 100) + 1e-8) / 100;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -57,7 +58,7 @@ export default function ExpensesPage() {
   const [suggested, setSuggested] = useState(null); // live rule-based category preview
 
   function emptyForm() {
-    return { date: today(), category: 'General', description: '', amount: '', paymentMode: 'cash', vendor: '', invoiceRef: '', branchId: '' };
+    return { date: today(), category: 'General', description: '', amount: '', paymentMode: 'cash', bankAccountId: '', vendor: '', invoiceRef: '', branchId: '' };
   }
 
   // Live category suggestion — debounced call to the rule engine while typing.
@@ -100,7 +101,7 @@ export default function ExpensesPage() {
   const topCat = catTotals.length > 0 ? catTotals[0] : null;
 
   const openNew = () => { setEditItem(null); setForm(emptyForm()); setShowForm(true); };
-  const openEdit = (e) => { setEditItem(e); setForm({ date: e.date || today(), category: e.category || '', description: e.description || '', amount: e.amount || '', paymentMode: e.paymentMode || 'cash', vendor: e.vendor || '', invoiceRef: e.invoiceRef || '', branchId: e.branchId || '' }); setShowForm(true); };
+  const openEdit = (e) => { setEditItem(e); setForm({ date: e.date || today(), category: e.category || '', description: e.description || '', amount: e.amount || '', paymentMode: e.paymentMode || 'cash', bankAccountId: e.bankAccountId || '', vendor: e.vendor || '', invoiceRef: e.invoiceRef || '', branchId: e.branchId || '' }); setShowForm(true); };
 
   const save = async () => {
     if (!form.amount || Number(form.amount) <= 0) return;
@@ -249,6 +250,12 @@ export default function ExpensesPage() {
                   <option value="bank">{t('bank')}</option>
                 </select>
               </div>
+              <BankAccountSelect
+                label="Paid from"
+                mode={form.paymentMode}
+                value={form.bankAccountId}
+                onChange={(v) => setForm({ ...form, bankAccountId: v })}
+              />
               <div className="form-group">
                 <label>{t('branch')}</label>
                 <BranchSelect value={form.branchId} onChange={(v) => setForm({ ...form, branchId: v })} />

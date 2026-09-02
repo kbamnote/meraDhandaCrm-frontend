@@ -27,6 +27,7 @@ const SCREENS = {
   CreateInvoiceFlow:    () => import('../src/components/common/CreateInvoiceFlow.jsx'),
   CreatePurchaseFlow:   () => import('../src/components/common/CreatePurchaseFlow.jsx'),
   PurchaseBulkUpload:   () => import('../src/components/common/PurchaseBulkUpload.jsx'),
+  BankAccountSelect:    () => import('../src/components/common/BankAccountSelect.jsx'),
   // — accounting —
   AccountingDashboard:  () => import('../src/pages/accounting/AccountingDashboardPage.jsx'),
   SalesInvoicesPage:    () => import('../src/pages/accounting/SalesInvoicesPage.jsx'),

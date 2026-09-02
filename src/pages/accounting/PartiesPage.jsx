@@ -23,6 +23,7 @@ import { inr } from '../../components/common/DashboardCharts';
 import CreateInvoiceFlow from '../../components/common/CreateInvoiceFlow';
 import PartyBulkUpload from '../../components/common/PartyBulkUpload';
 import CreatePurchaseFlow from '../../components/common/CreatePurchaseFlow';
+import BankAccountSelect from '../../components/common/BankAccountSelect';
 // Reuse the report exporters so a party statement downloads in the same shapes
 // as every other report, instead of a second CSV/PDF implementation.
 import { downloadCsv, downloadExcel, downloadPdf, printReport } from './ReportsPage';
@@ -1091,6 +1092,9 @@ function PartyPaymentModal({ t, party, isClient, outstanding, unpaidInvoices, on
     amount: '',
     date: new Date().toISOString().slice(0, 10),
     mode: 'Cash',
+    // WHICH account the money moved through. Left blank the server files it
+    // under Unlinked Transactions rather than guessing a real account.
+    bankAccountId: '',
     reference: '',
     invoiceId: '',      // '' = allocate oldest-first
     notes: '',
@@ -1133,6 +1137,7 @@ function PartyPaymentModal({ t, party, isClient, outstanding, unpaidInvoices, on
       const r = await accountingApi.partyPayment(party.id, {
         partyType: party.type === 'vendor' ? 'vendor' : 'client',
         amount, date: form.date, mode: form.mode,
+        bankAccountId: form.bankAccountId || undefined,
         reference: form.reference.trim() || undefined,
         notes: form.notes.trim() || undefined,
         invoiceId: form.invoiceId || undefined,
@@ -1189,6 +1194,16 @@ function PartyPaymentModal({ t, party, isClient, outstanding, unpaidInvoices, on
             <input className="input" value={form.reference} onChange={(e) => set('reference', e.target.value)} placeholder="UTR / cheque no" />
           </div>
         </div>
+
+        {/* The mode says HOW the money moved; this says WHERE it landed. Both
+            are needed before a bank statement can be reconciled. */}
+        <BankAccountSelect
+          style={{ marginTop: 12, marginBottom: 0 }}
+          label={isClient ? 'Received in' : 'Paid from'}
+          mode={form.mode}
+          value={form.bankAccountId}
+          onChange={(v) => set('bankAccountId', v)}
+        />
 
         {isClient && openInvoices.length > 0 && (
           <div className="form-group" style={{ marginTop: 12 }}>

@@ -302,6 +302,15 @@ export const accountingApi = {
   // Imported bills never move stock, existing bill numbers are skipped, and the
   // optional ledger posting debits Purchases (expense) rather than Inventory.
   importPurchases: (body)   => api.post('/accounting/import/purchases', body).then(r => r.data),
+  // Cash & Bank. Each named account is its own ledger head (`bank:<id>`), so a
+  // payment can say WHICH account it landed in.
+  bankAccounts:       ()          => api.get('/accounting/bank-accounts').then(r => r.data),
+  createBankAccount:  (body)      => api.post('/accounting/bank-accounts', body).then(r => r.data),
+  updateBankAccount:  (id, body)  => api.put(`/accounting/bank-accounts/${id}`, body).then(r => r.data),
+  deleteBankAccount:  (id)        => api.delete(`/accounting/bank-accounts/${id}`).then(r => r.data),
+  bankTransactions:   (id, params) => api.get(`/accounting/bank-accounts/${id}/transactions`, { params }).then(r => r.data),
+  bankTransfer:       (body)      => api.post('/accounting/bank-accounts/transfer', body).then(r => r.data),
+  bankAdjust:         (body)      => api.post('/accounting/bank-accounts/adjust', body).then(r => r.data),
   // Per-job (cost-centre) profitability. NOTE the margin is MATERIAL-only —
   // nothing records labour or machine time against a job.
   jobProfit: (params)       => api.get('/accounting/job-profit', { params }).then(r => r.data),
