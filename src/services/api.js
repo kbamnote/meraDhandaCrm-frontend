@@ -298,6 +298,10 @@ export const accountingApi = {
   // Historical sales import. Always dry-run first. Imported invoices never move
   // stock, and existing invoice numbers are skipped rather than overwritten.
   importTransactions: (body) => api.post('/accounting/import/transactions', body).then(r => r.data),
+  // Purchase register import — one row per supplier bill. Always dry-run first.
+  // Imported bills never move stock, existing bill numbers are skipped, and the
+  // optional ledger posting debits Purchases (expense) rather than Inventory.
+  importPurchases: (body)   => api.post('/accounting/import/purchases', body).then(r => r.data),
   // Per-job (cost-centre) profitability. NOTE the margin is MATERIAL-only —
   // nothing records labour or machine time against a job.
   jobProfit: (params)       => api.get('/accounting/job-profit', { params }).then(r => r.data),

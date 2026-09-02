@@ -26,6 +26,7 @@ const SCREENS = {
   PartiesPage:          () => import('../src/pages/accounting/PartiesPage.jsx'),
   CreateInvoiceFlow:    () => import('../src/components/common/CreateInvoiceFlow.jsx'),
   CreatePurchaseFlow:   () => import('../src/components/common/CreatePurchaseFlow.jsx'),
+  PurchaseBulkUpload:   () => import('../src/components/common/PurchaseBulkUpload.jsx'),
   // — accounting —
   AccountingDashboard:  () => import('../src/pages/accounting/AccountingDashboardPage.jsx'),
   SalesInvoicesPage:    () => import('../src/pages/accounting/SalesInvoicesPage.jsx'),

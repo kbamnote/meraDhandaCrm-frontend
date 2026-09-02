@@ -13,6 +13,7 @@ import { useT } from '../../i18n/LanguageContext';
 import { showToast } from '../../components/common/toast';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
 import CreatePurchaseFlow from '../../components/common/CreatePurchaseFlow';
+import PurchaseBulkUpload from '../../components/common/PurchaseBulkUpload';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -67,6 +68,7 @@ export default function PurchasesPage() {
   const [accounts, setAccounts] = useState([]);
   const [valuation, setValuation] = useState(0);
   const [showNew, setShowNew] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [openId, setOpenId] = useState(null);
 
   useEffect(() => {
@@ -100,8 +102,23 @@ export default function PurchasesPage() {
     <div>
       <div className="flex items-center justify-between mb-4" style={{ flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>{t('newInvoice')}</button>
+        <div className="flex" style={{ gap: 8 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowImport((v) => !v)}>
+            {showImport ? '✕ Close import' : '📥 Import Excel'}
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>{t('newInvoice')}</button>
+        </div>
       </div>
+
+      {showImport && (
+        <div className="card" style={{ padding: 16, marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>Import purchase bills from Excel</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>
+            One row per bill. Nothing is written until you review the preview.
+          </div>
+          <PurchaseBulkUpload onImported={() => setShowImport(false)} />
+        </div>
+      )}
 
       <KpiGrid>
         <Kpi label={t('purchases')} value={inr(purchases)} icon="🧾" color="var(--red)" />
