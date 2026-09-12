@@ -21,6 +21,7 @@ import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
 import BranchSelect from './BranchSelect';
 import BankAccountSelect from './BankAccountSelect';
+import NewItemDialog from './NewItemDialog';
 import { ref, onValue, db } from '../../services/realtime';
 
 // Null-safe .trim() — building the request body must never throw on a field that
@@ -233,6 +234,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const [advance, setAdvance] = useState(null);
   const [useAdvance, setUseAdvance] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Index of the line whose typed name is being turned into a catalog item.
+  const [newItemFor, setNewItemFor] = useState(null);
   // Set from the server's 409 when this invoice would breach the customer's
   // credit limit; holds { creditLimit, outstanding, invoiceTotal, projected }.
   const [creditWarning, setCreditWarning] = useState(null);
@@ -300,6 +303,25 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   // Picking a catalog product fills Name / HSN / Selling Price and links itemId
   // so the backend deducts that product's stock when the invoice is saved.
   const pickCatalogItem = (i, p) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, itemId: p.id, name: p.name, hsn: p.hsn || '', rate: String(p.price ?? '') } : it)));
+
+  // A newly created item is linked exactly like an existing one — same
+  // function, so there is no second path that could drift. The catalog is a
+  // live feed, but it has not necessarily caught up by the time this runs, so
+  // the product is applied directly from the create response.
+  const linkNewItem = (i, product) => {
+    if (!product || !product.id) return;
+    setItems((arr) => arr.map((it, idx) => (idx === i ? {
+      ...it,
+      itemId: product.id,
+      name: product.name,
+      hsn: product.hsn || it.hsn || '',
+      unit: product.unit || it.unit || '',
+      // Keep whatever price was already typed on the line — the person is
+      // mid-bill and retyping it would be a nuisance.
+      rate: it.rate !== '' && it.rate != null ? it.rate : String(product.price ?? ''),
+    } : it)));
+    setNewItemFor(null);
+  };
 
   // Client-side preview of Place of Supply — the server recomputes
   // authoritatively at save time from the same GSTIN, this is display-only.
@@ -552,6 +574,10 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                 ? []
                 : catalog.filter((p) => (p.name || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q)).slice(0, 8);
               const picked = it.itemId ? catalog.find((c) => c.id === it.itemId) : null;
+              // Worth offering only when there is a name, it is not already a
+              // catalog line, and nothing in the catalog already has that name.
+              const canCreate = q.length >= 2 && !it.itemId && !exactMatch
+                && !catalog.some((c) => String(c.name || '').trim().toLowerCase() === q);
               const trackable = picked && picked.trackStock !== 'no' && picked.type !== 'service';
               const overStock = trackable && picked.stock != null && (Number(it.qty) || 0) > Number(picked.stock);
               return (
@@ -560,8 +586,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                   <span style={{ width: 22, fontSize: 12, color: 'var(--text3)' }}>{i + 1}</span>
                   <div style={{ position: 'relative', flex: 3 }}>
                     <input className="input" style={{ width: '100%' }} placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
-                    {itemMatches.length > 0 && (
-                      <div className="card" style={{ position: 'absolute', zIndex: 5, left: 0, right: 0, top: '100%', marginTop: 2, padding: 0, maxHeight: 160, overflow: 'auto' }}>
+                    {(itemMatches.length > 0 || canCreate) && (
+                      <div className="card" style={{ position: 'absolute', zIndex: 5, left: 0, right: 0, top: '100%', marginTop: 2, padding: 0, maxHeight: 200, overflow: 'auto' }}>
                         {itemMatches.map((p) => (
                           <div key={p.id} onClick={() => pickCatalogItem(i, p)} style={{ padding: '7px 9px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
                             <b>{p.name}</b>
@@ -572,12 +598,35 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                             </span>
                           </div>
                         ))}
+                        {/* Offered, never automatic. Creating an item behind
+                            someone's back would fill the catalog with typos,
+                            and a typo with an opening stock figure attached is
+                            worse than loose text. */}
+                        {canCreate && (
+                          <div
+                            onClick={() => setNewItemFor(i)}
+                            style={{ padding: '8px 9px', cursor: 'pointer', fontSize: 12.5, color: 'var(--primary, #2563EB)', fontWeight: 600, background: 'var(--surface2)' }}
+                          >
+                            + Add &ldquo;{it.name.trim()}&rdquo; to your items
+                            <span style={{ display: 'block', fontWeight: 400, fontSize: 11, color: 'var(--text3)' }}>
+                              so its stock is counted on every bill
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                     {picked && (
                       <div style={{ fontSize: 10.5, marginTop: 1, color: overStock ? 'var(--red, #DC2626)' : 'var(--text3)' }}>
                         {trackable ? `stock ${Number(picked.stock)}${picked.unit ? ' ' + picked.unit : ''}` : 'service / no stock tracking'}
                         {overStock ? ` — qty exceeds available stock` : ''}
+                      </div>
+                    )}
+                    {/* Says the quiet part out loud: this line bills fine but
+                        moves no stock, which is exactly the case that leaves a
+                        stock report claiming goods that were sold months ago. */}
+                    {!picked && canCreate && (
+                      <div style={{ fontSize: 10.5, marginTop: 1, color: 'var(--amber, #B45309)' }}>
+                        not in your items — stock won&apos;t be counted for this line
                       </div>
                     )}
                   </div>
@@ -805,6 +854,18 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
           </div>
         </div>
       </div>
+
+      {newItemFor != null && items[newItemFor] && (
+        <NewItemDialog
+          name={items[newItemFor].name}
+          billingQty={items[newItemFor].qty}
+          defaultRate={items[newItemFor].rate}
+          defaultGst={form.gstRate}
+          context="sales"
+          onCreated={(product) => linkNewItem(newItemFor, product)}
+          onClose={() => setNewItemFor(null)}
+        />
+      )}
 
       {creditWarning && (
         <CreditLimitDialog

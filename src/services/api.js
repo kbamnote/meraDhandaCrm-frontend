@@ -217,9 +217,13 @@ export const paymentApi = {
 };
 
 export const uploadApi = {
-  upload: (file) => {
+  // `preset` asks the server to shrink before storing: 'selfie' (640px) or
+  // 'photo' (1600px cap). Omitted, the file is stored exactly as sent — so this
+  // cannot silently degrade an existing caller.
+  upload: (file, preset) => {
     const fd = new FormData();
     fd.append('file', file);
+    if (preset) fd.append('preset', preset);
     return api.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       .then(r => r.data);
   },
