@@ -124,14 +124,24 @@ describe('the specific bugs that shipped stay fixed', () => {
 
   it('a bill in a party\'s Transactions opens the invoice', async () => {
     // The rows were plain <div>s with no handler at all — clicking a bill did
-    // nothing. Only the `invoices` collection has a per-document view, so the
-    // rule is: invoice rows navigate, everything else stays inert rather than
-    // becoming a link that goes nowhere.
-    const { canOpenTxn } = await import('../src/pages/accounting/PartiesPage.jsx');
+    // nothing. The rule now: a row navigates when there is somewhere real to go,
+    // and stays inert otherwise rather than becoming a link that goes nowhere.
+    const { canOpenTxn, txnTarget } = await import('../src/pages/accounting/PartiesPage.jsx');
     expect(canOpenTxn({ collectionName: 'invoices', id: 'i1' }), 'a sales invoice must open').toBe(true);
-    for (const c of ['payments', 'creditNotes', 'debitNotes', 'purchaseOrders', 'expenses']) {
+    expect(txnTarget({ collectionName: 'invoices', id: 'i1' })).toBe('/invoice-view?id=i1');
+
+    // A purchase BILL has no document page of its own, but it renders in full on
+    // the Purchases list, so it deep-links there and expands rather than being
+    // left inert. (This row used to be unopenable, which is what was reported.)
+    expect(canOpenTxn({ collectionName: 'purchaseOrders', id: 'p1' }), 'a purchase bill must open').toBe(true);
+    expect(txnTarget({ collectionName: 'purchaseOrders', id: 'p1' })).toBe('/accounting/purchases?open=p1');
+
+    // These still have nowhere to go.
+    for (const c of ['payments', 'creditNotes', 'debitNotes', 'expenses']) {
       expect(canOpenTxn({ collectionName: c, id: 'x1' }), `${c} has no document view to open`).toBe(false);
     }
+    // Ids are encoded, so one containing a slash or & cannot break the URL.
+    expect(txnTarget({ collectionName: 'invoices', id: 'a/b&c' })).toBe('/invoice-view?id=a%2Fb%26c');
     expect(canOpenTxn({ collectionName: 'invoices' }), 'no id means nothing to deep-link to').toBe(false);
     expect(canOpenTxn(null), 'must not throw on a missing row').toBe(false);
 
@@ -146,7 +156,7 @@ describe('the specific bugs that shipped stay fixed', () => {
     ];
     const { container } = renderScreen(TransactionsTab, { props: { rows, t: (k) => k } });
     const clickable = container.querySelectorAll('[role="button"]');
-    expect(clickable.length, 'exactly the invoice row should be clickable').toBe(1);
+    expect(clickable.length, 'the invoice row should be clickable; the payment row should not').toBe(1);
     expect(clickable[0].textContent).toContain('MPW-001');
     expect(clickable[0].getAttribute('tabindex'), 'a clickable row must be keyboard reachable').toBe('0');
   });
