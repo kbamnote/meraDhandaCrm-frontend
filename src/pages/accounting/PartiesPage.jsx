@@ -559,12 +559,23 @@ function monthRange(offset = 0) {
   return [iso(from), iso(to)];
 }
 
-// Which feed rows lead somewhere. Only the `invoices` collection has a
-// single-document view (/invoice-view deep-links by id) — payments, notes,
-// purchases and expenses have list pages but no per-record page, so their rows
-// stay static rather than becoming links that go nowhere. A row that looks
-// clickable and does nothing is worse than one that never invited the click.
-export const canOpenTxn = (r) => !!r && r.collectionName === 'invoices' && !!r.id;
+// Which feed rows lead somewhere, and where.
+//
+// A sales invoice has its own document page. A purchase BILL does not, but it
+// renders in full on the Purchases list, so it deep-links there and expands —
+// reusing that view rather than maintaining a second one that could drift.
+//
+// Everything else (payments, notes, expenses) still has nowhere to go and
+// stays static: a row that looks clickable and does nothing is worse than one
+// that never invited the click.
+export const txnTarget = (r) => {
+  if (!r || !r.id) return null;
+  if (r.collectionName === 'invoices') return `/invoice-view?id=${encodeURIComponent(r.id)}`;
+  if (r.collectionName === 'purchaseOrders') return `/accounting/purchases?open=${encodeURIComponent(r.id)}`;
+  return null;
+};
+
+export const canOpenTxn = (r) => txnTarget(r) !== null;
 
 // Exported for the regression test — clicking a bill here was dead, and a
 // source-level check could not tell a live handler from a commented-out one.
@@ -649,15 +660,16 @@ export function TransactionsTab({ rows, t }) {
           {!filtered.length && <div style={{ padding: 30, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>{t('noTxns')}</div>}
           {filtered.map((r) => {
             const st = r.status ? STATUS_STYLE[r.status] : null;
-            const openable = canOpenTxn(r);
-            const open = () => navigate(`/invoice-view?id=${encodeURIComponent(r.id)}`);
+            const target = txnTarget(r);
+            const openable = !!target;
+            const open = () => navigate(target);
             return (
               <div
                 key={r.collectionName + r.id}
                 {...(openable ? {
                   role: 'button',
                   tabIndex: 0,
-                  title: `Open ${r.number || 'invoice'}`,
+                  title: `Open ${r.number || 'this document'}`,
                   onClick: open,
                   // Reachable without a mouse: the row is the control, so it
                   // has to answer Enter and Space like a button would.

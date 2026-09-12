@@ -28,6 +28,7 @@ import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
 import BranchSelect from './BranchSelect';
 import BankAccountSelect from './BankAccountSelect';
+import NewItemDialog from './NewItemDialog';
 import { ref, onValue, db } from '../../services/realtime';
 
 // Null-safe .trim(). Building the request body must never throw on an absent
@@ -101,6 +102,8 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
   const [catalog, setCatalog] = useState([]);
   const [defaults, setDefaults] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Index of the line whose typed name is being turned into a catalog item.
+  const [newItemFor, setNewItemFor] = useState(null);
 
   useEffect(() => {
     const offV = onValue(ref(db, 'mpw/vendors'), (s) => {
@@ -162,6 +165,24 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
       ? { ...it, itemId: p.id, name: p.name, hsn: p.hsn || '', unit: p.unit || '', rate: String(p.purchasePrice ?? p.costPrice ?? p.price ?? '') }
       : it
   )));
+
+  // A newly created item is linked exactly like an existing one, so there is
+  // no second path that could drift. Only a linked line moves stock, which is
+  // the whole reason this exists: a free-text purchase line brought nothing in.
+  const linkNewItem = (i, product) => {
+    if (!product || !product.id) return;
+    setItems((arr) => arr.map((it, idx) => (idx === i ? {
+      ...it,
+      itemId: product.id,
+      name: product.name,
+      hsn: product.hsn || it.hsn || '',
+      unit: product.unit || it.unit || '',
+      // Keep the price already typed from the supplier's bill — that is the
+      // figure being transcribed, and it is what should be paid.
+      rate: it.rate !== '' && it.rate != null ? it.rate : String(product.purchasePrice ?? ''),
+    } : it)));
+    setNewItemFor(null);
+  };
 
   // Interstate decides CGST+SGST vs IGST. Previewed from the supplier's GSTIN
   // state code; the server recomputes it, this is display-only.
@@ -357,20 +378,44 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
               const matches = (q.length < 1 || exact) ? [] : catalog
                 .filter((p) => (p.name || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q))
                 .slice(0, 8);
+              // Same rule as the sales form: worth offering only when there is
+              // a real name, the line is not already linked, and nothing in the
+              // catalog already carries that name.
+              const canCreate = q.length >= 2 && !it.itemId && !exact
+                && !catalog.some((c) => String(c.name || '').trim().toLowerCase() === q);
               return (
                 <div key={i}>
                   <div className="flex gap-2" style={{ marginBottom: 6, alignItems: 'center' }}>
                     <span style={{ width: 20, fontSize: 12, color: 'var(--text3)' }}>{i + 1}</span>
                     <div style={{ position: 'relative', flex: 2.4 }}>
                       <input className="input" style={{ width: '100%' }} placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
-                      {matches.length > 0 && (
-                        <div className="card" style={{ position: 'absolute', zIndex: 5, left: 0, right: 0, top: '100%', marginTop: 2, padding: 0, maxHeight: 160, overflow: 'auto' }}>
+                      {(matches.length > 0 || canCreate) && (
+                        <div className="card" style={{ position: 'absolute', zIndex: 5, left: 0, right: 0, top: '100%', marginTop: 2, padding: 0, maxHeight: 200, overflow: 'auto' }}>
                           {matches.map((p) => (
                             <div key={p.id} onClick={() => pickCatalogItem(i, p)} style={{ padding: '7px 9px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
                               <b>{p.name}</b>
                               {p.sku ? <span style={{ color: 'var(--text3)', marginLeft: 6 }}>{p.sku}</span> : null}
+                              {p.trackStock !== 'no' && p.type !== 'service' && p.stock != null
+                                ? <span style={{ float: 'right', color: 'var(--text2)' }}>{`stock ${Number(p.stock)}${p.unit ? ' ' + p.unit : ''}`}</span>
+                                : null}
                             </div>
                           ))}
+                          {canCreate && (
+                            <div
+                              onClick={() => setNewItemFor(i)}
+                              style={{ padding: '8px 9px', cursor: 'pointer', fontSize: 12.5, color: 'var(--primary, #2563EB)', fontWeight: 600, background: 'var(--surface2)' }}
+                            >
+                              + Add &ldquo;{trim(it.name)}&rdquo; to your items
+                              <span style={{ display: 'block', fontWeight: 400, fontSize: 11, color: 'var(--text3)' }}>
+                                so this bill adds its quantity to stock
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {canCreate && (
+                        <div style={{ fontSize: 10.5, marginTop: 1, color: 'var(--amber, #B45309)' }}>
+                          not in your items — this quantity won&apos;t reach stock
                         </div>
                       )}
                     </div>
@@ -559,6 +604,18 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
           </div>
         </div>
       </div>
+
+      {newItemFor != null && items[newItemFor] && (
+        <NewItemDialog
+          name={items[newItemFor].name}
+          billingQty={items[newItemFor].qty}
+          defaultRate={items[newItemFor].rate}
+          defaultGst={items[newItemFor].taxRate}
+          context="purchase"
+          onCreated={(product) => linkNewItem(newItemFor, product)}
+          onClose={() => setNewItemFor(null)}
+        />
+      )}
     </div>
   );
 }

@@ -51,12 +51,15 @@ export default function NewItemDialog({
   const [busy, setBusy] = useState(false);
 
   const isService = f.type === 'service';
+  const isPurchase = context === 'purchase';
   const billing = round2(num(billingQty));
   const opening = round2(num(f.openingStock));
-  // What the invoice will leave behind. Sales deducts; a purchase bill does not
-  // move stock in this system, so there is nothing to project there.
-  const after = context === 'sales' ? round2(opening - billing) : opening;
-  const short = context === 'sales' && !isService && billing > 0 && opening < billing;
+  // What the document will leave behind. A sales invoice takes the quantity
+  // out; a purchase bill brings it in. Showing the resulting figure is what
+  // makes the opening number checkable rather than a guess.
+  const after = isPurchase ? round2(opening + billing) : round2(opening - billing);
+  // Only a sale can leave you short.
+  const short = !isPurchase && !isService && billing > 0 && opening < billing;
 
   const save = async () => {
     const itemName = String(f.name || '').trim();
@@ -160,7 +163,7 @@ export default function NewItemDialog({
                   placeholder="0"
                 />
                 <div style={hint}>
-                  How many you have <b>before</b> this bill.
+                  How many you have <b>before</b> this bill{isPurchase ? ' — usually 0 for something you are buying for the first time' : ''}.
                 </div>
               </div>
               <div className="form-group" style={{ flex: 1 }}>
@@ -169,7 +172,7 @@ export default function NewItemDialog({
               </div>
             </div>
 
-            {context === 'sales' && billing > 0 && (
+            {billing > 0 && (
               <div
                 style={{
                   padding: '9px 12px', borderRadius: 8, fontSize: 12.5, marginBottom: 12,
@@ -177,8 +180,8 @@ export default function NewItemDialog({
                   color: short ? 'var(--red, #DC2626)' : 'var(--text2)',
                 }}
               >
-                {opening} in hand − {billing} on this bill ={' '}
-                <b>{after}</b> left after saving.
+                {opening} in hand {isPurchase ? '+' : '−'} {billing} on this bill ={' '}
+                <b>{after}</b> {isPurchase ? 'in stock after saving.' : 'left after saving.'}
                 {short && (
                   <span style={{ display: 'block', marginTop: 3 }}>
                     That is less than you are billing. Save it and the stock goes
@@ -193,7 +196,7 @@ export default function NewItemDialog({
 
         {isService && (
           <div style={{ padding: '9px 12px', borderRadius: 8, background: 'var(--surface2)', fontSize: 12.5, color: 'var(--text2)', marginBottom: 12 }}>
-            A service has no quantity to track, so nothing is deducted when you bill it.
+            A service has no quantity to track, so nothing moves when it appears on a bill.
           </div>
         )}
 

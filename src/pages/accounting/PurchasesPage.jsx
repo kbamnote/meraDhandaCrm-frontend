@@ -3,10 +3,15 @@
  * proper Input-GST split. Recording a bill (CreatePurchaseFlow) posts to the
  * ledger immediately — Dr Inventory + input GST, Cr the supplier — so the P&L,
  * Balance Sheet and supplier statements all pick it up without a second step.
- * Older purchase ORDERS listed here post only once marked received. Quantity
- * stock-in stays a separate stock-move on the Stock page.
+ * Older purchase ORDERS listed here post only once marked received.
+ *
+ * Recording a bill also RECEIVES the goods: every line linked to a catalog
+ * item adds its quantity to stock and blends its cost into the moving
+ * average. Quantity only — the ledger entry above already carries the value,
+ * so posting the stock-in as well would count the same rupees twice.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ref, onValue, db } from '../../services/realtime';
 import { dbApi, ledgerApi, stockApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
@@ -53,7 +58,7 @@ const S = {
   confirmDel: { en: 'Delete this purchase? Its ledger entry will be removed too.', hi: 'यह खरीद हटाएँ?', hinglish: 'Yeh purchase delete karein?' },
   notes:    { en: 'Notes', hinglish: 'Notes' },
   items:    { en: 'Items', hinglish: 'Items' },
-  hint:     { en: 'A received purchase posts to Inventory + Input GST + Supplier payable in the ledger. Add stock quantity separately from the Stock page.', hinglish: 'Received purchase ledger mein Inventory + Input GST + Supplier payable post hota hai.' },
+  hint:     { en: 'Recording a purchase posts Inventory + Input GST + Supplier payable to the ledger AND adds the quantity of every catalog item to stock.', hinglish: 'Purchase record karne par ledger bhi banta hai aur catalog items ka stock bhi badhta hai.' },
 };
 
 const STATUS_STYLE = (s) => s === 'received' ? { background: 'var(--green, #1F9D55)', color: '#fff' }
@@ -70,6 +75,14 @@ export default function PurchasesPage() {
   const [showNew, setShowNew] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [openId, setOpenId] = useState(null);
+  // Deep link: /accounting/purchases?open=<id> expands that bill and scrolls
+  // to it. This is what makes a purchase row in a party's Transactions
+  // openable — the bills already render here, so a second detail view would
+  // be a second thing to keep in step with this one.
+  const [params] = useSearchParams();
+  const urlOpen = params.get('open');
+  const rowRefs = useRef({});
+  const appliedDeepLink = useRef(null);
 
   useEffect(() => {
     const off = onValue(ref(db, 'mpw/purchaseOrders'), (s) => setPos(s.val() || {}));
@@ -77,6 +90,20 @@ export default function PurchasesPage() {
     stockApi.valuation().then((v) => setValuation(v && v.value != null ? v.value : 0)).catch(() => setValuation(0));
     return off;
   }, []);
+
+  // Applied once per id, so the user can collapse it again and browse
+  // without it springing back open.
+  useEffect(() => {
+    if (!urlOpen || appliedDeepLink.current === urlOpen) return;
+    if (!pos || !pos[urlOpen]) return;            // not loaded yet
+    appliedDeepLink.current = urlOpen;
+    setOpenId(urlOpen);
+    // Let the row render expanded before scrolling to it.
+    setTimeout(() => {
+      const el = rowRefs.current[urlOpen];
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
+  }, [urlOpen, pos]);
 
   const acct = (k) => accounts.find((a) => a.key === k)?.balance || 0;
   const purchases = round2(acct('purchases'));
@@ -138,7 +165,15 @@ export default function PurchasesPage() {
           const isOpen = openId === p.id;
           const st = String(p.status || 'draft').toLowerCase();
           return (
-            <div key={p.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div
+              key={p.id}
+              ref={(el) => { rowRefs.current[p.id] = el; }}
+              className="card"
+              style={{
+                padding: 0, overflow: 'hidden',
+                outline: isOpen && urlOpen === p.id ? '2px solid var(--primary, #2563EB)' : 'none',
+              }}
+            >
               <button type="button" onClick={() => setOpenId(isOpen ? null : p.id)}
                 style={{ display: 'flex', gap: 12, alignItems: 'center', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', borderBottom: isOpen ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text)', flexWrap: 'wrap' }}>
                 <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{p.poNo || p.invoiceNo || '—'}</span>
