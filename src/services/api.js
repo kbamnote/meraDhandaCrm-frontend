@@ -366,6 +366,10 @@ export const accountingApi = {
   // A purchase INVOICE is the supplier's bill for goods already received, so
   // unlike a PO it posts to the ledger the moment it is saved.
   createPurchaseInvoice: (body) => api.post('/accounting/purchase-invoice', body).then(r => r.data),
+  getPurchaseInvoice:    (id)   => api.get(`/accounting/purchase-invoice/${id}`).then(r => r.data),
+  // Refused once a payment is recorded against the bill (use a debit note), and
+  // inside a closed year. Re-posts the ledger and re-receives the stock.
+  updatePurchaseInvoice: (id, body) => api.put(`/accounting/purchase-invoice/${id}`, body).then(r => r.data),
   // Client Ledger
   clientLedger:  (clientId) => api.get(`/accounting/client-ledger/${clientId}`).then(r => r.data),
   // Delivery Challans

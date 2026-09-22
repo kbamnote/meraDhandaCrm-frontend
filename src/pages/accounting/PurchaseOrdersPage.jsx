@@ -3,7 +3,10 @@
  * Status flow: draft → sent → received (posts to ledger: Dr Inventory + Dr Input-GST, Cr AP).
  */
 import { useEffect, useMemo, useState } from 'react';
-import { accountingApi } from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+import { accountingApi, describeError } from '../../services/api';
+import { showToast } from '../../components/common/toast';
+import CreatePurchaseFlow from '../../components/common/CreatePurchaseFlow';
 import { useT } from '../../i18n/LanguageContext';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
 import BranchSelect from '../../components/common/BranchSelect';
@@ -82,6 +85,17 @@ export default function PurchaseOrdersPage() {
   const receivedAmt = round2(pending.reduce((s, p) => s + (Number(p.total) || 0), 0));
 
   const openNew = () => { setEditItem(null); setForm(emptyForm()); setShowForm(true); };
+  const navigate = useNavigate();
+  // The full purchase editor, same one the Purchases page and the document
+  // view use — so editing an order looks and behaves like editing a sales
+  // invoice. The basic form below is kept for raising a NEW order, which is a
+  // different thing from recording a supplier's bill.
+  const [editingPurchase, setEditingPurchase] = useState(null);
+  const openFullEdit = async (po) => {
+    try { setEditingPurchase(await accountingApi.getPurchaseInvoice(po.id)); }
+    catch (e) { showToast(describeError(e, 'Could not open this order'), 'error'); }
+  };
+
   const openEdit = (po) => {
     setEditItem(po);
     setForm({
@@ -183,11 +197,23 @@ export default function PurchaseOrdersPage() {
                     </span>
                   </td>
                   <td>
+                    <button className="btn btn-xs btn-ghost" onClick={() => navigate(`/purchase-view?id=${encodeURIComponent(po.id)}`)}>👁 View</button>
+                    {/* Editable whatever its status now — a received order is
+                        corrected the same way a sales invoice is, with the
+                        ledger re-posted and the stock re-received. Only a
+                        cancelled order, or one already paid against, is not. */}
+                    {po.status !== 'cancelled' && (
+                      <button
+                        className="btn btn-xs btn-ghost"
+                        disabled={Number(po.paidAmount) > 0}
+                        title={Number(po.paidAmount) > 0 ? 'Already paid against — raise a debit note to adjust it' : 'Edit'}
+                        onClick={() => openFullEdit(po)}
+                      >
+                        ✏️ {t('edit')}
+                      </button>
+                    )}
                     {po.status !== 'received' && po.status !== 'cancelled' && (
-                      <>
-                        <button className="btn btn-xs btn-ghost" onClick={() => receivePO(po.id)} style={{ color: 'var(--green)' }}>{t('receive')}</button>
-                        <button className="btn btn-xs btn-ghost" onClick={() => openEdit(po)}>{t('edit')}</button>
-                      </>
+                      <button className="btn btn-xs btn-ghost" onClick={() => receivePO(po.id)} style={{ color: 'var(--green)' }}>{t('receive')}</button>
                     )}
                     {po.status !== 'received' && (
                       <button className="btn btn-xs btn-ghost" style={{ color: 'var(--red)' }} onClick={() => removePO(po.id)}>{t('delete')}</button>
@@ -266,6 +292,13 @@ export default function PurchaseOrdersPage() {
             </div>
           </div>
         </div>
+      )}
+      {editingPurchase && (
+        <CreatePurchaseFlow
+          purchase={editingPurchase}
+          onClose={() => setEditingPurchase(null)}
+          onCreated={() => { setEditingPurchase(null); load(); }}
+        />
       )}
     </div>
   );

@@ -11,9 +11,9 @@
  * so posting the stock-in as well would count the same rupees twice.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ref, onValue, db } from '../../services/realtime';
-import { dbApi, ledgerApi, stockApi } from '../../services/api';
+import { dbApi, ledgerApi, stockApi, accountingApi, describeError } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from '../../components/common/toast';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
@@ -75,11 +75,15 @@ export default function PurchasesPage() {
   const [showNew, setShowNew] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [openId, setOpenId] = useState(null);
-  // Deep link: /accounting/purchases?open=<id> expands that bill and scrolls
-  // to it. This is what makes a purchase row in a party's Transactions
-  // openable — the bills already render here, so a second detail view would
-  // be a second thing to keep in step with this one.
+  // Deep link: /accounting/purchases?open=<id> expands that bill in the list
+  // and scrolls to it. The full document lives at /purchase-view; this stays for
+  // any link that wants the bill in the context of the list around it.
   const [params] = useSearchParams();
+  const navigate = useNavigate();
+  // Which bill is open in the editor. Loaded through the same endpoint the
+  // view page uses, so the form gets the enriched record (supplier details,
+  // editability) rather than the raw list row.
+  const [editing, setEditing] = useState(null);
   const urlOpen = params.get('open');
   const rowRefs = useRef({});
   const appliedDeepLink = useRef(null);
@@ -210,6 +214,18 @@ export default function PurchasesPage() {
                   </div>
                   {p.notes && <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 8 }}>📝 {p.notes}</div>}
                   <div className="flex" style={{ gap: 6, marginTop: 10 }}>
+                    <button className="btn btn-sm btn-ghost" onClick={() => navigate(`/purchase-view?id=${encodeURIComponent(p.id)}`)}>👁 View</button>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      disabled={Number(p.paidAmount) > 0}
+                      title={Number(p.paidAmount) > 0 ? 'Already paid against — raise a debit note to adjust it' : 'Edit this bill'}
+                      onClick={async () => {
+                        try { setEditing(await accountingApi.getPurchaseInvoice(p.id)); }
+                        catch (e) { showToast(describeError(e, t('failed')), 'error'); }
+                      }}
+                    >
+                      ✏️ Edit
+                    </button>
                     {st !== 'received' && <button className="btn btn-sm btn-primary" onClick={() => markReceived(p.id)}>{t('markReceived')}</button>}
                     <button className="btn btn-sm btn-ghost" style={{ color: 'var(--red)' }} onClick={() => remove(p.id)}>{t('delete')}</button>
                   </div>
@@ -221,6 +237,13 @@ export default function PurchasesPage() {
       </div>
 
       {showNew && <CreatePurchaseFlow onClose={() => setShowNew(false)} />}
+      {editing && (
+        <CreatePurchaseFlow
+          purchase={editing}
+          onClose={() => setEditing(null)}
+          onCreated={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }

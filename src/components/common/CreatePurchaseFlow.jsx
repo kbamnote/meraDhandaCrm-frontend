@@ -19,8 +19,9 @@
  *
  * Props:
  *   vendor?    — pre-select this supplier ({ id, name, gstNo, address, phone })
+ *   purchase?  — an existing bill to EDIT (as returned by GET /purchase-invoice/:id)
  *   onClose()  — close the form
- *   onCreated(po) — called with the created purchase before onClose()
+ *   onCreated(po) — called with the created/updated purchase before onClose()
  */
 import { useEffect, useMemo, useState } from 'react';
 import { accountingApi, describeError } from '../../services/api';
@@ -62,13 +63,44 @@ function Row({ label, value, bold, color, muted }) {
   );
 }
 
-export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
+// Rebuild the form's own shapes from a saved bill. Strings throughout, because
+// that is what the inputs hold — a number in an <input> round-trips as a string
+// the moment it is touched, and comparing mixed types is how edits go wrong.
+const str = (v) => (v == null ? '' : String(v));
+
+function itemsFromPurchase(purchase) {
+  const src = Array.isArray(purchase && purchase.items) ? purchase.items : [];
+  if (!src.length) return [blankItem()];
+  return src.map((it) => ({
+    ...blankItem(),
+    name: str(it.name), description: str(it.description), hsn: str(it.hsn), unit: str(it.unit),
+    qty: it.qty != null ? str(it.qty) : '1',
+    rate: str(it.rate),
+    discount: Number(it.discount) ? str(it.discount) : '',
+    taxRate: it.taxRate != null ? str(it.taxRate) : '18',
+    itemId: it.itemId || null,
+  }));
+}
+
+export default function CreatePurchaseFlow({ vendor, purchase, onClose, onCreated }) {
+  const isEdit = !!(purchase && purchase.id);
   const t = useT(S);
 
   // ── Bill From ──────────────────────────────────────────────────────────────
   const [vendors, setVendors] = useState([]);
   const [vendorQ, setVendorQ] = useState('');
-  const [party, setParty] = useState({
+  const [party, setParty] = useState(isEdit ? {
+    vendorId: purchase.vendorId || null,
+    vendorName: str(purchase.vendorName),
+    vendorPhone: str(purchase.vendorPhone),
+    vendorAddress: str(purchase.vendorAddress),
+    vendorGstNo: str(purchase.vendorGstNo),
+    // Only treat Ship From as separate when it genuinely differs — the server
+    // mirrors the supplier address into it, so a blind copy would tick the box
+    // on every edit.
+    shipDifferent: !!purchase.shipFromAddress && purchase.shipFromAddress !== purchase.vendorAddress,
+    shipFromAddress: str(purchase.shipFromAddress),
+  } : {
     vendorId: vendor?.id || null,
     vendorName: vendor?.name || '',
     vendorPhone: vendor?.phone || '',
@@ -80,25 +112,43 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
   const setP = (k, v) => setParty((p) => ({ ...p, [k]: v }));
 
   const [form, setForm] = useState({
-    purchaseInvoiceNo: '',            // THEIR bill number — the reference that matters
-    originalInvoiceNo: '',
-    date: new Date().toISOString().slice(0, 10),
-    paymentTermDays: '', dueDate: '',
-    purchaseOrderNo: '', ewayBillNo: '', vehicleNo: '',
-    approvedBy: '', eventType: '', branchId: '',
-    placeOfSupply: 'auto',
-    discount: '0',
-    tcsAmount: '0', applyTcs: false,
-    tdsAmount: '0', applyTds: false,
-    autoRoundOff: true,
+    purchaseInvoiceNo: isEdit ? str(purchase.poNo || purchase.supplierInvoiceNo) : '',  // THEIR bill number
+    originalInvoiceNo: isEdit ? str(purchase.originalInvoiceNo) : '',
+    date: isEdit && purchase.date ? String(purchase.date).slice(0, 10) : new Date().toISOString().slice(0, 10),
+    paymentTermDays: isEdit ? str(purchase.paymentTermDays) : '',
+    dueDate: isEdit ? str(purchase.dueDate) : '',
+    purchaseOrderNo: isEdit ? str(purchase.purchaseOrderNo) : '',
+    ewayBillNo: isEdit ? str(purchase.ewayBillNo) : '',
+    vehicleNo: isEdit ? str(purchase.vehicleNo) : '',
+    approvedBy: isEdit ? str(purchase.approvedBy) : '',
+    eventType: isEdit ? str(purchase.eventType) : '',
+    branchId: isEdit ? str(purchase.branchId) : '',
+    // A saved bill states where supply was; defaulting an edit back to 'auto'
+    // would silently re-derive it and could flip CGST/SGST to IGST.
+    placeOfSupply: isEdit && purchase.placeOfSupply ? purchase.placeOfSupply : 'auto',
+    discount: isEdit ? str(purchase.discount || 0) : '0',
+    tcsAmount: isEdit ? str(purchase.tcsAmount || 0) : '0',
+    applyTcs: isEdit ? Number(purchase.tcsAmount) > 0 : false,
+    tdsAmount: isEdit ? str(purchase.tdsAmount || 0) : '0',
+    applyTds: isEdit ? Number(purchase.tdsAmount) > 0 : false,
+    // The bill does not record whether round-off was switched on, so infer it:
+    // a non-zero round-off means on; a total with paise means OFF (on would have
+    // rounded it away); a whole total is either, and rounding it changes nothing.
+    // Reopening a no-round bill with rounding on would silently round the total
+    // the moment it was re-saved.
+    autoRoundOff: isEdit
+      ? Number(purchase.roundOff || 0) !== 0 || Number.isInteger(Math.round(Number(purchase.total || 0) * 100) / 100)
+      : true,
     markFullyPaid: false, paidAmount: '0', paymentMode: 'Cash', bankAccountId: '',
-    notes: '', showNotes: false,
-    terms: '', editingTerms: false,
+    notes: isEdit ? str(purchase.notes) : '', showNotes: isEdit ? !!purchase.notes : false,
+    terms: isEdit ? str(purchase.terms) : '', editingTerms: false,
   });
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  const [items, setItems] = useState([blankItem()]);
-  const [charges, setCharges] = useState([]);   // [{ label, amount }]
+  const [items, setItems] = useState(() => (isEdit ? itemsFromPurchase(purchase) : [blankItem()]));
+  const [charges, setCharges] = useState(() => (isEdit && Array.isArray(purchase.additionalCharges)
+    ? purchase.additionalCharges.map((c) => ({ label: str(c.label), amount: str(c.amount) }))
+    : []));   // [{ label, amount }]
   const [catalog, setCatalog] = useState([]);
   const [defaults, setDefaults] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -280,8 +330,17 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
         notes: trim(form.notes) || undefined,
         terms: trim(form.terms) || undefined,
       };
-      const po = await accountingApi.createPurchaseInvoice(body);
-      showToast(`Purchase ${po.poNo || ''} recorded`, 'success');
+      // An edit never carries payment fields: the server refuses to edit a
+      // bill with money against it, so there is nothing to capture here — and
+      // sending a paid amount would be ignored at best, confusing at worst.
+      if (isEdit) {
+        delete body.markFullyPaid; delete body.paidAmount;
+        delete body.paymentMode; delete body.bankAccountId;
+      }
+      const po = isEdit
+        ? await accountingApi.updatePurchaseInvoice(purchase.id, body)
+        : await accountingApi.createPurchaseInvoice(body);
+      showToast(`Purchase ${po.poNo || ''} ${isEdit ? 'updated' : 'recorded'}`, 'success');
       onCreated?.(po);
       onClose();
     } catch (e) {
@@ -297,7 +356,9 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div className="card" style={{ maxWidth: 1040, width: '100%', maxHeight: '94vh', overflow: 'auto', padding: 20 }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
-          <h3 style={{ margin: 0 }}>{t('title')}</h3>
+          <h3 style={{ margin: 0 }}>
+            {isEdit ? `Edit Purchase ${purchase.poNo || ''}` : t('title')}
+          </h3>
           <div className="flex gap-2">
             <button className="btn btn-ghost" onClick={onClose} disabled={busy}>{t('cancel')}</button>
             {/* Wrapped, not passed directly — a bare handler hands the click
@@ -307,6 +368,14 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
             </button>
           </div>
         </div>
+
+        {isEdit && (
+          <div style={{ marginBottom: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(245,158,11,.12)', color: 'var(--amber, #B45309)', fontSize: 12.5 }}>
+            Saving replaces this bill&apos;s ledger entry and its stock receipt — the old
+            quantities come back out before the corrected ones go in. The previous
+            version is kept in its revision history.
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
           {/* ── LEFT COLUMN ── */}
@@ -549,10 +618,14 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
               <Row label="Total Amount" value={inr(totals.total)} bold />
             </div>
 
+            {/* Payment belongs to creation only: a bill with money against it
+                cannot be edited at all, so an edit has nothing to capture. */}
+            {!isEdit && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 13 }}>
               <input type="checkbox" checked={form.markFullyPaid} onChange={(e) => setF('markFullyPaid', e.target.checked)} /> Mark as fully paid
             </label>
-            {!form.markFullyPaid && (
+            )}
+            {!isEdit && !form.markFullyPaid && (
               <div className="flex gap-2">
                 <div className="form-group" style={{ flex: 1 }}>
                   <label>Total Amount Paid</label>
@@ -567,7 +640,7 @@ export default function CreatePurchaseFlow({ vendor, onClose, onCreated }) {
               </div>
             )}
 
-            {(form.markFullyPaid || num(form.paidAmount) > 0) && (
+            {!isEdit && (form.markFullyPaid || num(form.paidAmount) > 0) && (
               <BankAccountSelect
                 label="Paid from"
                 mode={form.paymentMode}

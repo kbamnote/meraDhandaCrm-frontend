@@ -35,6 +35,7 @@ import CustDashboardPage from './pages/CustDashboardPage';
 import PermissionsPage from './pages/PermissionsPage';
 import HierarchyPage from './pages/HierarchyPage';
 import InvoiceViewPage from './pages/InvoiceViewPage';
+import PurchaseViewPage from './pages/PurchaseViewPage';
 import PublicPayPage from './pages/PublicPayPage';
 import JobDetailPage from './pages/JobDetailPage';
 import JobViewPage from './pages/JobViewPage';
@@ -105,6 +106,7 @@ const CUSTOM_PAGES = {
   'permissions': PermissionsPage,
   'hierarchy': HierarchyPage,
   'invoice-view': InvoiceViewPage,
+  'purchase-view': PurchaseViewPage,
   'job-detail': JobDetailPage,
   'job-view': JobViewPage,
   'review': ReviewPage,
@@ -221,6 +223,7 @@ const STUB_ROUTES = [
   ['accounting/branches',     '🏬 Branches',           'page-accounting-branches',  null],
   ['accounting/search',       '🔍 Search',             'page-accounting-search',    null],
   ['invoice-view',    '🧾 Invoice',           'page-invoice-view',    'mpw/invoices'],
+  ['purchase-view',   '📦 Purchase',          'page-purchase-view',   'mpw/purchaseOrders'],
   ['expenses',        '🧾 Expenses',          'page-expenses',        'mpw/expenses'],
   ['purchase-orders', '📦 Purchase Orders',   'page-purchase-orders', 'mpw/purchaseOrders'],
   ['client-ledger',   '📒 Client Ledger',     'page-client-ledger',   'mpw/clients'],

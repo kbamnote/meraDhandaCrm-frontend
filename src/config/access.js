@@ -22,6 +22,7 @@ export const PERM_OF = {
   '/leads-crm': 'leads', '/sales-panel': 'leads', '/sales-admin': 'leads',
   '/accounting': 'invoices', '/invoice-view': 'invoices', '/client-ledger': 'invoices',
   '/accounting/sales': 'invoices', '/accounting/purchases': 'purchases',
+  '/purchase-view': 'purchases',
   '/accounting/parties': 'parties', '/accounting/reports': 'reports', '/accounting/gst': 'gst',
   '/accounting/cash': 'cashbank', '/accounting/recon': 'cashbank', '/accounting/inventory': 'inventory', '/accounting/entries': 'entries',
   '/accounting/tds': 'tds',

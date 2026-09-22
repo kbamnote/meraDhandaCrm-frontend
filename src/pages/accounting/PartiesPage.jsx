@@ -561,9 +561,8 @@ function monthRange(offset = 0) {
 
 // Which feed rows lead somewhere, and where.
 //
-// A sales invoice has its own document page. A purchase BILL does not, but it
-// renders in full on the Purchases list, so it deep-links there and expands —
-// reusing that view rather than maintaining a second one that could drift.
+// Both sales invoices and purchase bills have their own document page, so a
+// row opens the document itself — the same thing it opens from its own list.
 //
 // Everything else (payments, notes, expenses) still has nowhere to go and
 // stays static: a row that looks clickable and does nothing is worse than one
@@ -571,7 +570,7 @@ function monthRange(offset = 0) {
 export const txnTarget = (r) => {
   if (!r || !r.id) return null;
   if (r.collectionName === 'invoices') return `/invoice-view?id=${encodeURIComponent(r.id)}`;
-  if (r.collectionName === 'purchaseOrders') return `/accounting/purchases?open=${encodeURIComponent(r.id)}`;
+  if (r.collectionName === 'purchaseOrders') return `/purchase-view?id=${encodeURIComponent(r.id)}`;
   return null;
 };
 

@@ -29,6 +29,7 @@ const SCREENS = {
   PurchaseBulkUpload:   () => import('../src/components/common/PurchaseBulkUpload.jsx'),
   BankAccountSelect:    () => import('../src/components/common/BankAccountSelect.jsx'),
   NewItemDialog:        () => import('../src/components/common/NewItemDialog.jsx'),
+  PurchaseDocument:     () => import('../src/components/common/PurchaseDocument.jsx'),
   // — accounting —
   AccountingDashboard:  () => import('../src/pages/accounting/AccountingDashboardPage.jsx'),
   SalesInvoicesPage:    () => import('../src/pages/accounting/SalesInvoicesPage.jsx'),
@@ -55,6 +56,8 @@ const SCREENS = {
   // — high-traffic screens outside accounting —
   CompanySettingsPage:  () => import('../src/pages/CompanySettingsPage.jsx'),
   InvoiceViewPage:      () => import('../src/pages/InvoiceViewPage.jsx'),
+  PurchaseViewPage:     () => import('../src/pages/PurchaseViewPage.jsx'),
+  PurchaseOrdersPage:   () => import('../src/pages/accounting/PurchaseOrdersPage.jsx'),
   JobCardsPage:         () => import('../src/pages/JobCardsPage.jsx'),
   Sidebar:              () => import('../src/components/layout/Sidebar.jsx'),
 };
@@ -130,11 +133,10 @@ describe('the specific bugs that shipped stay fixed', () => {
     expect(canOpenTxn({ collectionName: 'invoices', id: 'i1' }), 'a sales invoice must open').toBe(true);
     expect(txnTarget({ collectionName: 'invoices', id: 'i1' })).toBe('/invoice-view?id=i1');
 
-    // A purchase BILL has no document page of its own, but it renders in full on
-    // the Purchases list, so it deep-links there and expands rather than being
-    // left inert. (This row used to be unopenable, which is what was reported.)
+    // A purchase bill opens its own document page, exactly as a sales invoice
+    // does. (This row was once unopenable, which is what was first reported.)
     expect(canOpenTxn({ collectionName: 'purchaseOrders', id: 'p1' }), 'a purchase bill must open').toBe(true);
-    expect(txnTarget({ collectionName: 'purchaseOrders', id: 'p1' })).toBe('/accounting/purchases?open=p1');
+    expect(txnTarget({ collectionName: 'purchaseOrders', id: 'p1' })).toBe('/purchase-view?id=p1');
 
     // These still have nowhere to go.
     for (const c of ['payments', 'creditNotes', 'debitNotes', 'expenses']) {
