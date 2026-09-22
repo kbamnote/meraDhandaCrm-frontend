@@ -54,7 +54,8 @@ const S = {
   search:   { en: 'Search POs…', hinglish: 'Search…' },
 };
 
-const STATUS_COLORS = { draft: 'var(--text3)', sent: 'var(--amber)', received: 'var(--green)', cancelled: 'var(--red)' };
+// Same badge classes as Sales Invoices, so a status reads the same on both.
+const PO_TONE = { draft: '', sent: 'badge-amber', received: 'badge-green', cancelled: 'badge-red' };
 
 export default function PurchaseOrdersPage() {
   const t = useT(S);
@@ -62,6 +63,7 @@ export default function PurchaseOrdersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [q, setQ] = useState('');
+  const [filter, setFilter] = useState('all');
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
 
@@ -72,17 +74,22 @@ export default function PurchaseOrdersPage() {
   const load = () => accountingApi.purchaseOrders().then(setPos).catch(() => setPos([]));
   useEffect(() => { load(); }, []);
 
-  const filtered = useMemo(() => {
-    if (!q) return pos;
-    const s = q.toLowerCase();
-    return pos.filter((p) => (p.poNo || '').toLowerCase().includes(s) || (p.vendorName || '').toLowerCase().includes(s));
-  }, [pos, q]);
+  const filtered = useMemo(() => pos.filter((p) => {
+    if (filter !== 'all' && String(p.status || 'draft') !== filter) return false;
+    if (q) {
+      const s = q.toLowerCase();
+      if (!(p.poNo || '').toLowerCase().includes(s) && !(p.vendorName || '').toLowerCase().includes(s)) return false;
+    }
+    return true;
+  }), [pos, q, filter]);
 
-  // KPIs
-  const totalAll = round2(pos.reduce((s, p) => s + (Number(p.total) || 0), 0));
-  const pending = pos.filter((p) => p.status === 'received');
-  const pendingCount = pos.filter((p) => p.status !== 'received' && p.status !== 'cancelled').length;
-  const receivedAmt = round2(pending.reduce((s, p) => s + (Number(p.total) || 0), 0));
+  // KPIs — the same four-card shape as Sales Invoices, read from the orders.
+  const open = pos.filter((p) => ['draft', 'sent'].includes(String(p.status || 'draft')));
+  const openValue = round2(open.reduce((s, p) => s + (Number(p.total) || 0), 0));
+  const awaitingCount = pos.filter((p) => p.status === 'sent').length;
+  const receivedOrders = pos.filter((p) => p.status === 'received');
+  const receivedAmt = round2(receivedOrders.reduce((s, p) => s + (Number(p.total) || 0), 0));
+  const draftCount = pos.filter((p) => String(p.status || 'draft') === 'draft').length;
 
   const openNew = () => { setEditItem(null); setForm(emptyForm()); setShowForm(true); };
   const navigate = useNavigate();
@@ -94,18 +101,6 @@ export default function PurchaseOrdersPage() {
   const openFullEdit = async (po) => {
     try { setEditingPurchase(await accountingApi.getPurchaseInvoice(po.id)); }
     catch (e) { showToast(describeError(e, 'Could not open this order'), 'error'); }
-  };
-
-  const openEdit = (po) => {
-    setEditItem(po);
-    setForm({
-      date: po.date || today(), vendorName: po.vendorName || '', vendorId: po.vendorId || '',
-      vendorGstNo: po.vendorGstNo || '', interState: !!po.interState,
-      branchId: po.branchId || '',
-      items: (po.items && po.items.length > 0 ? po.items : [{ name: '', qty: 1, rate: 0, taxRate: 18 }]),
-      notes: po.notes || '',
-    });
-    setShowForm(true);
   };
 
   const save = async () => {
@@ -154,79 +149,76 @@ export default function PurchaseOrdersPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+      <div className="flex items-center justify-between mb-4" style={{ flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
-        <button className="btn btn-primary" onClick={openNew}>+ {t('addNew')}</button>
+        <button className="btn btn-primary btn-sm" onClick={openNew}>+ {t('addNew')}</button>
       </div>
 
-      <KpiGrid>
-        <Kpi label={t('totalPOs')} value={pos.length} icon="📦" color="var(--text)" />
-        <Kpi label={t('pending')} value={pendingCount} icon="⏳" color="var(--amber)" />
-        <Kpi label={t('totalVal')} value={inr(totalAll)} icon="💰" color="var(--blue)" />
-        <Kpi label={t('receivedAmt')} value={inr(receivedAmt)} icon="✅" color="var(--green)" />
+      <KpiGrid min={170}>
+        <Kpi label="Open orders" value={inr(openValue)} icon="📦" color="var(--blue)"
+          sub={`${open.length} order${open.length === 1 ? '' : 's'}`} />
+        <Kpi label="Awaiting delivery" value={awaitingCount} icon="🚚" color="var(--amber)" />
+        <Kpi label={t('receivedAmt')} value={inr(receivedAmt)} icon="✅" color="var(--green)"
+          sub={`${receivedOrders.length} order${receivedOrders.length === 1 ? '' : 's'}`} />
+        <Kpi label={t('draft')} value={draftCount} icon="📝" color="var(--text)" />
       </KpiGrid>
 
-      <input type="text" placeholder={t('search')} value={q} onChange={(e) => setQ(e.target.value)}
-        style={{ width: '100%', maxWidth: 320, padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, marginBottom: 12, boxSizing: 'border-box' }} />
+      <div className="flex" style={{ gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {['all', 'draft', 'sent', 'received', 'cancelled'].map((k) => (
+          <button key={k} className="btn btn-xs" onClick={() => setFilter(k)}
+            style={{ background: filter === k ? 'var(--blue, #C05621)' : 'var(--surface2)', color: filter === k ? '#fff' : 'var(--text2)', border: 'none', borderRadius: 14 }}>
+            {k === 'all' ? 'All' : t(k)}
+          </button>
+        ))}
+        <input className="input" style={{ marginLeft: 'auto', maxWidth: 240 }} placeholder={t('search')} value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
 
-      {filtered.length === 0 ? (
-        <div style={{ color: 'var(--text3)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>{t('noPOs')}</div>
-      ) : (
-        <div className="card" style={{ padding: 0, overflow: 'auto' }}>
-          <table className="table table-sm" style={{ minWidth: 700, margin: 0 }}>
-            <thead>
-              <tr>
-                <th>{t('poNo')}</th>
-                <th>{t('date')}</th>
-                <th>{t('vendor')}</th>
-                <th style={{ textAlign: 'right' }}>{t('amount')}</th>
-                <th>{t('status')}</th>
-                <th style={{ width: 140 }}>{t('actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((po) => (
-                <tr key={po.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>{po.poNo}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{po.date}</td>
-                  <td>{po.vendorName}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{inr(po.total)}</td>
-                  <td>
-                    <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: STATUS_COLORS[po.status] || 'var(--text3)', color: '#fff' }}>
-                      {t(po.status || 'draft')}
-                    </span>
-                  </td>
-                  <td>
-                    <button className="btn btn-xs btn-ghost" onClick={() => navigate(`/purchase-view?id=${encodeURIComponent(po.id)}`)}>👁 View</button>
-                    {/* Editable whatever its status now — a received order is
-                        corrected the same way a sales invoice is, with the
-                        ledger re-posted and the stock re-received. Only a
-                        cancelled order, or one already paid against, is not. */}
-                    {po.status !== 'cancelled' && (
-                      <button
-                        className="btn btn-xs btn-ghost"
-                        disabled={Number(po.paidAmount) > 0}
-                        title={Number(po.paidAmount) > 0 ? 'Already paid against — raise a debit note to adjust it' : 'Edit'}
-                        onClick={() => openFullEdit(po)}
-                      >
-                        ✏️ {t('edit')}
-                      </button>
-                    )}
-                    {po.status !== 'received' && po.status !== 'cancelled' && (
-                      <button className="btn btn-xs btn-ghost" onClick={() => receivePO(po.id)} style={{ color: 'var(--green)' }}>{t('receive')}</button>
-                    )}
-                    {po.status !== 'received' && (
-                      <button className="btn btn-xs btn-ghost" style={{ color: 'var(--red)' }} onClick={() => removePO(po.id)}>{t('delete')}</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {!pos.length && <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>{t('noPOs')}</div>}
+      {pos.length > 0 && !filtered.length && (
+        <div className="card" style={{ textAlign: 'center', padding: 30, color: 'var(--text3)' }}>Nothing matches this filter.</div>
       )}
 
-      {/* Modal Form */}
+      {filtered.map((po) => {
+        const st = String(po.status || 'draft');
+        const paidAgainst = Number(po.paidAmount) > 0;
+        return (
+          <div key={po.id} className="card" style={{ marginBottom: 8 }} data-testid="po-row">
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{po.poNo || '—'}</span>
+                <span className={`badge ${PO_TONE[st] || ''}`} style={{ marginLeft: 6 }}>{t(st)}</span>
+                {po.editedAt && <span className="badge" style={{ marginLeft: 6 }}>edited</span>}
+                <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{po.vendorName || '—'}</div>
+                <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+                  {po.date}{po.receivedDate ? ` · received ${po.receivedDate}` : ''}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>{inr(po.total)}</div>
+                <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+                  Taxable {inr(po.taxable ?? po.subtotal)} + {inr(po.taxTotal ?? round2((po.cgst || 0) + (po.sgst || 0) + (po.igst || 0)))} GST
+                </div>
+                <div className="flex" style={{ gap: 6, marginTop: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <button className="btn btn-sm btn-ghost" onClick={() => navigate(`/purchase-view?id=${encodeURIComponent(po.id)}`)}>View</button>
+                  {/* Editable whatever its stage — a received order is corrected
+                      the way a sales invoice is, with the ledger re-posted and the
+                      stock re-received. Not once cancelled or paid against. */}
+                  {st !== 'cancelled' && !paidAgainst && (
+                    <button className="btn btn-sm btn-ghost" onClick={() => openFullEdit(po)}>{t('edit')}</button>
+                  )}
+                  {st !== 'received' && st !== 'cancelled' && (
+                    <button className="btn btn-sm btn-ghost" style={{ color: 'var(--green)' }} onClick={() => receivePO(po.id)}>{t('receive')}</button>
+                  )}
+                  {st !== 'received' && (
+                    <button className="btn btn-sm btn-ghost" style={{ color: 'var(--red)' }} onClick={() => removePO(po.id)}>{t('delete')}</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
       {showForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>

@@ -370,6 +370,9 @@ export const accountingApi = {
   // Refused once a payment is recorded against the bill (use a debit note), and
   // inside a closed year. Re-posts the ledger and re-receives the stock.
   updatePurchaseInvoice: (id, body) => api.put(`/accounting/purchase-invoice/${id}`, body).then(r => r.data),
+  // Pay a supplier against one bill. Refuses more than is owed — pay the excess
+  // from Parties so it is held as an advance.
+  payPurchaseInvoice:    (id, body) => api.post(`/accounting/purchase-invoice/${id}/payment`, body).then(r => r.data),
   // Client Ledger
   clientLedger:  (clientId) => api.get(`/accounting/client-ledger/${clientId}`).then(r => r.data),
   // Delivery Challans

@@ -47,6 +47,18 @@ export function DashHeader({ title, subtitle }) {
 
 // `onClick` is optional — pass it to make the tile a shortcut to the page that
 // backs the number. Without it the card renders exactly as before.
+// A figure shrinks rather than overflows. Indian grouping makes rupee amounts
+// long — ₹96,66,550 is ten characters before the icon — and at a fixed 24px it
+// ran straight out of a 150px card. Shrinking beats truncating: an ellipsis on a
+// money figure hides exactly the digits someone is reading it for.
+function kpiFontSize(value) {
+  const n = String(value ?? '').length;
+  if (n <= 8) return 24;
+  if (n <= 11) return 20;
+  if (n <= 14) return 17;
+  return 15;
+}
+
 export function Kpi({ label, value, sub, color, icon, onClick }) {
   const clickable = typeof onClick === 'function';
   return (
@@ -54,6 +66,10 @@ export function Kpi({ label, value, sub, color, icon, onClick }) {
       className="card"
       style={{
         padding: 16,
+        // A grid item's default min-width is its content, which is what let a
+        // long figure push past the card edge. 0 lets the card own its width.
+        minWidth: 0,
+        overflow: 'hidden',
         cursor: clickable ? 'pointer' : 'default',
         transition: 'transform .12s ease, box-shadow .12s ease',
       }}
@@ -64,9 +80,21 @@ export function Kpi({ label, value, sub, color, icon, onClick }) {
       onMouseEnter={clickable ? (e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,.10)'; } : undefined}
       onMouseLeave={clickable ? (e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; } : undefined}
     >
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        {icon ? <span style={{ fontSize: 16 }}>{icon}</span> : null}
-        <div style={{ fontSize: 24, fontWeight: 800, color: color || 'var(--text)', lineHeight: 1.1 }}>{value}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+        {icon ? <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span> : null}
+        <div
+          data-testid="kpi-value"
+          title={String(value ?? '')}
+          style={{
+            fontSize: kpiFontSize(value), fontWeight: 800, color: color || 'var(--text)', lineHeight: 1.1,
+            minWidth: 0,
+            // Last resort on a very narrow screen: wrap inside the card rather
+            // than spill out of it.
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {value}
+        </div>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>{label}</div>
       {sub ? <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>{sub}</div> : null}

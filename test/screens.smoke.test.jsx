@@ -176,16 +176,15 @@ describe('the specific bugs that shipped stay fixed', () => {
     if (err) throw new Error(`crashed: ${err.message}`);
   });
 
-  it('the purchase form lists vendors (a shadowed helper emptied it)', async () => {
-    // `const [vendorName] = useState('')` shadowed the module-level vendorName()
-    // helper, so building the vendor list threw, the catch emptied it, and the
-    // form could never be submitted — no vendor could be selected.
+  it('the Purchases page has no inline vendor form left to break', async () => {
+    // The page once carried its own purchase form, where a state variable named
+    // vendorName shadowed a helper and emptied the vendor list. Purchases are now
+    // created only through CreatePurchaseFlow (covered by purchaseViewEdit and
+    // purchaseLists tests); this keeps a second, divergent form from creeping back.
     const fs = await import('node:fs');
     const src = fs.readFileSync('src/pages/accounting/PurchasesPage.jsx', 'utf8');
-    const helper = /^const vendorName = /m.test(src);
-    const shadowed = /const \[vendorName, /.test(src);
-    expect(helper, 'vendorName helper missing').toBe(true);
-    expect(shadowed, 'state named vendorName shadows the helper again').toBe(false);
+    expect(src).toMatch(/<CreatePurchaseFlow /);
+    expect(/useState\([^)]*\)\s*;?\s*\/\/.*vendor/i.test(src) || /const \[vendorName, /.test(src)).toBe(false);
   });
 
   it('purchases post through an accounting endpoint, not the raw DB route', async () => {
