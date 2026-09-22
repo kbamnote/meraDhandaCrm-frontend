@@ -214,6 +214,7 @@ const STATUS_STYLE = {
   'Paid':         { bg: 'rgba(16,185,129,.14)', fg: 'var(--green, #059669)' },
   'Partial Paid': { bg: 'rgba(245,158,11,.16)', fg: 'var(--amber, #B45309)' },
   'Unpaid':       { bg: 'rgba(239,68,68,.14)',  fg: 'var(--red, #DC2626)' },
+  'Cancelled':    { bg: 'var(--surface2)',      fg: 'var(--text3)' },
 };
 
 export default function PartiesPage() {
@@ -699,6 +700,11 @@ export function TransactionsTab({ rows, t }) {
                 </div>
                 <div style={{ textAlign: 'right', fontWeight: 700 }}>
                   {inr(r.amount)}
+                  {r.voided && r.originalAmount > 0 && (
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text3)' }}>
+                      was <s>{inr(r.originalAmount)}</s>
+                    </span>
+                  )}
                   {r.unpaid > 0 && (
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--red, #DC2626)' }}>
                       ({inr(r.unpaid)} {t('unpaid')})

@@ -40,6 +40,9 @@ function upiQrUrl(inv) {
 export default function InvoiceDocument({ invoice }) {
   const inv = invoice || {};
   const isCash = inv.type === 'cash';
+  // A cancelled invoice still prints (it is part of the series) but must not
+  // be mistakable for a live bill.
+  const cancelled = inv.status === 'void' || inv.voided === true;
   const items = Array.isArray(inv.items) ? inv.items : [];
 
   // HSN-wise tax summary — derived here rather than stored, so it always agrees
@@ -98,6 +101,12 @@ export default function InvoiceDocument({ invoice }) {
           box-shadow: 0 2px 10px rgba(0,0,0,.15);
         }
         .inv-page * { box-sizing: border-box; }
+        .inv-page { position: relative; }
+        .inv-cancelled {
+          position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%) rotate(-24deg);
+          font-size: 72px; font-weight: 800; letter-spacing: 6px; color: rgba(220,38,38,.22);
+          border: 6px solid rgba(220,38,38,.22); padding: 4px 24px; pointer-events: none;
+        }
         .inv-b { border: 1px solid #111; }
         .inv-t { width: 100%; border-collapse: collapse; }
         .inv-t th, .inv-t td { border: 1px solid #111; padding: 4px 6px; vertical-align: top; }
@@ -124,6 +133,7 @@ export default function InvoiceDocument({ invoice }) {
       <div className="inv-doc">
         {copies.map((copy, ci) => (
           <section className="inv-page" key={ci}>
+            {cancelled && <div className="inv-cancelled" data-testid="inv-cancelled">CANCELLED</div>}
             {/* Title + copy designation */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
               <span className="inv-title">{title}</span>

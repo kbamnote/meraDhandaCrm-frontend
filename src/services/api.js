@@ -333,6 +333,7 @@ export const accountingApi = {
   updateInvoice: (id, body) => api.put(`/accounting/invoice/${id}`, body).then(r => r.data),
   recordPayment: (id, body) => api.post(`/accounting/invoice/${id}/payment`, body).then(r => r.data),
   voidInvoice:   (id)       => api.post(`/accounting/invoice/${id}/void`).then(r => r.data),
+  deleteInvoice: (id)       => api.delete(`/accounting/invoice/${id}`).then(r => r.data),
   // Payment links (Phase 4B-1) — status (no mint) and mint-if-missing.
   payLinkStatus: (id)       => api.get(`/accounting/invoice/${id}/pay-link`).then(r => r.data),
   payLinkMint:   (id)       => api.post(`/accounting/invoice/${id}/pay-link`).then(r => r.data),

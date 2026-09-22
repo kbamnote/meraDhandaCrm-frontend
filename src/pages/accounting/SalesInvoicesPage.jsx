@@ -26,15 +26,27 @@ const S = {
   partial:  { en: 'Partial', hi: 'आंशिक', hinglish: 'Partial' },
   paid:     { en: 'Paid', hi: 'पेड', hinglish: 'Paid' },
   proforma: { en: 'Proforma', hi: 'प्रोफॉर्मा', hinglish: 'Proforma' },
-  void:     { en: 'Void', hi: 'रद्द', hinglish: 'Void' },
+  void:     { en: 'Cancelled', hi: 'रद्द', hinglish: 'Cancelled' },
   none:     { en: 'No invoices yet.', hi: 'अभी कोई इनवॉइस नहीं।', hinglish: 'Abhi koi invoice nahi.' },
   pay:      { en: 'Record payment', hi: 'पेमेंट दर्ज करें', hinglish: 'Payment record karein' },
   outstanding: { en: 'Outstanding', hi: 'बकाया', hinglish: 'Outstanding' },
   sales:    { en: 'Sales', hi: 'सेल्स', hinglish: 'Sales' },
   overdues: { en: 'Overdue', hi: 'अतिदेय', hinglish: 'Overdue' },
   taxable:  { en: 'Taxable', hi: 'कर योग्य', hinglish: 'Taxable' },
-  voidInv:  { en: 'Void invoice', hi: 'इनवॉइस रद्द करें', hinglish: 'Invoice void karein' },
-  voidConfirm: { en: 'Void this invoice? It will be kept for history and removed from the ledger.', hi: 'इनवॉइस रद्द करें?', hinglish: 'Invoice void karein?' },
+  voidInv:  { en: 'Cancel', hi: 'रद्द करें', hinglish: 'Cancel' },
+  voidConfirm: {
+    en: 'Cancel this invoice? It stays in the list with its number but its amount becomes ₹0, and its stock is returned.',
+    hi: 'यह इनवॉइस रद्द करें? यह सूची में रहेगा पर राशि ₹0 हो जाएगी और स्टॉक वापस आ जाएगा।',
+    hinglish: 'Invoice cancel karein? List mein rahega par amount ₹0 ho jayega aur stock wapas aa jayega.',
+  },
+  del:      { en: 'Delete', hi: 'हटाएँ', hinglish: 'Delete' },
+  delConfirm: {
+    en: 'Delete this invoice permanently? It will be removed from the list, the ledger and GST reports, and its stock returned. Use Cancel instead to keep it on record.',
+    hi: 'यह इनवॉइस हमेशा के लिए हटाएँ? यह सूची, लेजर और GST रिपोर्ट से हट जाएगा।',
+    hinglish: 'Invoice hamesha ke liye delete karein? List, ledger aur GST reports se hat jayega.',
+  },
+  deleted:  { en: 'Invoice deleted', hi: 'इनवॉइस हटाया गया', hinglish: 'Invoice delete ho gaya' },
+  cancelled: { en: 'Invoice cancelled', hi: 'इनवॉइस रद्द', hinglish: 'Invoice cancel ho gaya' },
   edit:     { en: 'Edit', hi: 'बदलें', hinglish: 'Edit' },
   view:     { en: 'View', hi: 'देखें', hinglish: 'View' },
   search:   { en: 'Search invoice no / client…', hi: 'खोजें…', hinglish: 'Search invoice…' },
@@ -46,7 +58,7 @@ const S = {
   against:  { en: 'Against', hi: 'विरुद्ध', hinglish: 'Against' },
 };
 
-const STATUS_TONE = { paid: 'badge-green', partial: 'badge-amber', unpaid: 'badge-red', void: 'badge-amber' };
+const STATUS_TONE = { paid: 'badge-green', partial: 'badge-amber', unpaid: 'badge-red', void: '' };
 
 export default function SalesInvoicesPage() {
   const t = useT(S);
@@ -196,14 +208,17 @@ export default function SalesInvoicesPage() {
   );
 }
 
-function InvoiceRow({ inv, t }) {
+export function InvoiceRow({ inv, t }) {
   const navigate = useNavigate();
   const [paying, setPaying] = useState(false);
   const [voiding, setVoiding] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showCrn, setShowCrn] = useState(false);
   const [showDbn, setShowDbn] = useState(false);
   const [editing, setEditing] = useState(false);
   const due = round2((inv.total || 0) - (inv.paidAmount || 0));
+  const cancelled = inv.status === 'void';
+  const hasPayment = round2(inv.paidAmount || 0) > 0;
 
   const pay = async () => {
     const v = window.prompt(`${t('pay')} (${t('outstanding')}: ${inr(due)})`, String(due));
@@ -219,25 +234,36 @@ function InvoiceRow({ inv, t }) {
   const doVoid = async () => {
     if (!window.confirm(t('voidConfirm'))) return;
     setVoiding(true);
-    try { await accountingApi.voidInvoice(inv.id); showToast(t('void'), 'success'); }
+    try { await accountingApi.voidInvoice(inv.id); showToast(t('cancelled'), 'success'); }
     catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
     finally { setVoiding(false); }
   };
 
+  const doDelete = async () => {
+    if (!window.confirm(t('delConfirm'))) return;
+    setDeleting(true);
+    try { await accountingApi.deleteInvoice(inv.id); showToast(t('deleted'), 'success'); }
+    catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); setDeleting(false); }
+  };
+
   return (
-    <div className="card" style={{ marginBottom: 8 }}>
+    <div className="card" style={{ marginBottom: 8, opacity: cancelled ? 0.75 : 1 }} data-testid="invoice-row">
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
         <div>
-          <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{inv.invoiceNo}</span>
+          <span style={{ fontFamily: 'monospace', fontWeight: 700, textDecoration: cancelled ? 'line-through' : 'none' }}>{inv.invoiceNo}</span>
           {inv.type === 'proforma' && <span className="badge badge-blue" style={{ marginLeft: 6 }}>{t('proforma')}</span>}
           <span className={`badge ${STATUS_TONE[inv.status] || ''}`} style={{ marginLeft: 6 }}>{t(inv.status || 'unpaid')}</span>
           <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{inv.clientName}</div>
           <div style={{ fontSize: 12, color: 'var(--text2)' }}>{inv.date}{inv.jobNo ? ` · ${inv.jobNo}` : ''}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{inr(inv.total)}</div>
-          <div style={{ fontSize: 11, color: 'var(--text3)' }}>{t('taxable')} {inr(inv.subtotal)} + {inr(inv.taxTotal)} GST</div>
-          <div className="flex" style={{ gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
+          {/* A cancelled bill charges nothing: ₹0, with what it was for kept
+              underneath so the list still explains itself. */}
+          <div style={{ fontSize: 18, fontWeight: 700 }} data-testid="invoice-amount">{inr(cancelled ? 0 : inv.total)}</div>
+          {cancelled
+            ? <div style={{ fontSize: 11, color: 'var(--text3)' }}>was <s>{inr(inv.total)}</s>{inv.voidedAt ? ` · cancelled ${inv.voidedAt}` : ''}</div>
+            : <div style={{ fontSize: 11, color: 'var(--text3)' }}>{t('taxable')} {inr(inv.subtotal)} + {inr(inv.taxTotal)} GST</div>}
+          <div className="flex" style={{ gap: 6, marginTop: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
             <button className="btn btn-sm btn-ghost" onClick={() => navigate(`/invoice-view?id=${inv.id}`)}>{t('view')}</button>
             {/* Editable only while nothing has been received against it. Once a
                 receipt exists the server refuses the edit — a payment is
@@ -255,8 +281,14 @@ function InvoiceRow({ inv, t }) {
             {inv.type !== 'proforma' && inv.status !== 'void' && (
               <button className="btn btn-sm btn-ghost" style={{ color: 'var(--amber)' }} onClick={() => setShowDbn(true)}>{t('debitNote')}</button>
             )}
-            {inv.status !== 'void' && (
-              <button className="btn btn-sm btn-ghost" style={{ color: 'var(--red)' }} onClick={doVoid} disabled={voiding}>{t('voidInv')}</button>
+            {/* Cancel and Delete both unwind the bill, which the server refuses
+                once money has been received against it — hidden, not offered
+                and then rejected. */}
+            {!cancelled && !hasPayment && (
+              <button className="btn btn-sm btn-ghost" style={{ color: 'var(--amber)' }} onClick={doVoid} disabled={voiding}>{t('voidInv')}</button>
+            )}
+            {!hasPayment && (
+              <button className="btn btn-sm btn-ghost" style={{ color: 'var(--red)' }} onClick={doDelete} disabled={deleting}>{t('del')}</button>
             )}
           </div>
         </div>

@@ -51,6 +51,11 @@ const HIDDEN = new Set(['paymentLink']);
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
+// A cancelled (void) invoice is listed at ₹0 — it no longer charges anything.
+const isCancelled = (inv) => !!inv && (inv.status === 'void' || inv.voided === true);
+const shownTotal = (inv) => (isCancelled(inv) ? 0 : (inv.total ?? inv.amount));
+const statusLabel = (inv, fallback) => (isCancelled(inv) ? 'cancelled' : (inv.status || fallback));
+
 function money(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return '—';
@@ -126,7 +131,7 @@ export default function InvoiceViewPage() {
           <button className="btn btn-ghost btn-sm" onClick={() => setOpenId(null)}>← Back to list</button>
           <div className="flex gap-2">
             <span className={`badge ${STATUS_BADGE[doc.status] || 'badge-blue'}`} style={{ alignSelf: 'center' }}>
-              {doc.status || t('draft')}
+              {statusLabel(doc, t('draft'))}
             </span>
             <button className="btn btn-primary btn-sm" onClick={() => window.print()}>{t('print')}</button>
           </div>
@@ -189,7 +194,7 @@ export default function InvoiceViewPage() {
                     {inv.clientName || inv.client || '—'}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-                    {money(inv.total ?? inv.amount)}
+                    {money(shownTotal(inv))}
                   </div>
                 </button>
               );
@@ -209,13 +214,18 @@ export default function InvoiceViewPage() {
                     {selected.invoiceNo || `${t('invoiceWord')} #${selected.id}`}
                   </h3>
                   <span className={`badge ${STATUS_BADGE[selected.status] || 'badge-blue'}`}>
-                    {selected.status || t('draft')}
+                    {statusLabel(selected, t('draft'))}
                   </span>
                 </div>
 
                 <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>
-                  {money(selected.total ?? selected.amount)}
+                  {money(shownTotal(selected))}
                 </div>
+                {isCancelled(selected) && (
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>
+                    Cancelled{selected.voidedAt ? ` on ${selected.voidedAt}` : ''} · was <s>{money(selected.total ?? selected.amount)}</s>
+                  </div>
+                )}
                 {Number(selected.paidAmount) > 0 && (
                   <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>
                     Paid {money(selected.paidAmount)} · Balance {money(round2((selected.total || 0) - (selected.paidAmount || 0)))}
@@ -226,8 +236,8 @@ export default function InvoiceViewPage() {
                   <tbody>
                     <DetailRow label={t('invoiceNo')} value={selected.invoiceNo} />
                     <DetailRow label={t('client')} value={selected.clientName || selected.client} />
-                    <DetailRow label={t('amount')} value={money(selected.total ?? selected.amount)} />
-                    <DetailRow label={t('status')} value={selected.status} />
+                    <DetailRow label={t('amount')} value={money(shownTotal(selected))} />
+                    <DetailRow label={t('status')} value={statusLabel(selected)} />
                     <DetailRow label={t('date')} value={selected.date} />
                     <DetailRow label={t('dueDate')} value={selected.dueDate} />
                   </tbody>
