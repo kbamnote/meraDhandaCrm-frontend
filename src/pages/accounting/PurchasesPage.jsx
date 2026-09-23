@@ -27,9 +27,9 @@ const round2 = (n) => Math.round(((Number(n) || 0) * 100) + 1e-8) / 100;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 const S = {
-  title:     { en: 'Purchases', hi: 'खरीद', hinglish: 'Purchases' },
+  title:     { en: 'Purchase Invoices', hi: 'खरीद इनवॉइस', hinglish: 'Purchase Invoices' },
   newInvoice: { en: '+ New Purchase Invoice', hi: '+ नई खरीद इनवॉइस', hinglish: '+ Naya Purchase Invoice' },
-  purchases: { en: 'Purchases', hi: 'खरीद', hinglish: 'Purchases' },
+  purchases: { en: 'Purchase Invoices', hi: 'खरीद इनवॉइस', hinglish: 'Purchase Invoices' },
   payable:   { en: 'Payable', hi: 'देय', hinglish: 'Payable' },
   overdue:   { en: 'Overdue', hi: 'अतिदेय', hinglish: 'Overdue' },
   all:       { en: 'All', hi: 'सभी', hinglish: 'All' },
