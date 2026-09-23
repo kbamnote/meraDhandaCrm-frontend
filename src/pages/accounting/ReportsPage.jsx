@@ -63,6 +63,14 @@ const S = {
   print:    { en: 'Print', hi: 'प्रिंट', hinglish: 'Print' },
   branch:   { en: 'Branch', hi: 'शाखा', hinglish: 'Branch' },
   allBranches: { en: 'All branches', hi: 'सभी शाखाएँ', hinglish: 'All branches' },
+  preset:   { en: 'Preset', hi: 'प्रीसेट', hinglish: 'Preset' },
+  custom:   { en: 'Custom', hi: 'कस्टम', hinglish: 'Custom' },
+  daily:    { en: 'Daily', hi: 'दैनिक', hinglish: 'Daily' },
+  weekly:   { en: 'Weekly', hi: 'साप्ताहिक', hinglish: 'Weekly' },
+  monthly:  { en: 'Monthly', hi: 'मासिक', hinglish: 'Monthly' },
+  quarterly:{ en: 'Quarterly', hi: 'त्रैमासिक', hinglish: 'Quarterly' },
+  fy:       { en: 'Current FY', hi: 'वर्तमान वित्तीय वर्ष', hinglish: 'Current FY' },
+  prevFy:   { en: 'Previous FY', hi: 'पिछला वित्तीय वर्ष', hinglish: 'Previous FY' },
 };
 
 // ── Export helpers (CSV / Excel / PDF / Print) ──────────────────────────────
@@ -166,6 +174,7 @@ export default function ReportsPage() {
   const [tab, setTab] = useState('trialBalance');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [preset, setPreset] = useState('custom');
   const [asOf, setAsOf] = useState('');
   const [months, setMonths] = useState(12);
   const [branchId, setBranchId] = useState('');
@@ -177,6 +186,60 @@ export default function ReportsPage() {
   const [accounts, setAccounts] = useState([]);
   const [clientLedger, setClientLedger] = useState([]);
   const [vendorPos, setVendorPos] = useState([]);
+
+  const applyPreset = (presetValue) => {
+    setPreset(presetValue);
+    if (presetValue === 'custom' || !presetValue) return;
+    
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    const d = today.getDate();
+    let start, end;
+    const f = (date) => {
+      const p = (n) => String(n).padStart(2, '0');
+      return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
+    };
+
+    switch(presetValue) {
+      case 'daily':
+        start = new Date(y, m, d);
+        end = new Date(y, m, d);
+        break;
+      case 'weekly': {
+        const day = today.getDay();
+        const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+        start = new Date(y, m, diff);
+        end = new Date(y, m, diff + 6);
+        break;
+      }
+      case 'monthly':
+        start = new Date(y, m, 1);
+        end = new Date(y, m + 1, 0);
+        break;
+      case 'quarterly': {
+        const q = Math.floor(m / 3);
+        start = new Date(y, q * 3, 1);
+        end = new Date(y, q * 3 + 3, 0);
+        break;
+      }
+      case 'fy': {
+        const startY = m >= 3 ? y : y - 1;
+        start = new Date(startY, 3, 1);
+        end = new Date(startY + 1, 2, 31);
+        break;
+      }
+      case 'prevFy': {
+        const startY = (m >= 3 ? y : y - 1) - 1;
+        start = new Date(startY, 3, 1);
+        end = new Date(startY + 1, 2, 31);
+        break;
+      }
+      default: return;
+    }
+    setFrom(f(start));
+    setTo(f(end));
+  };
 
   useEffect(() => {
     ledgerApi.accounts().then(setAccounts).catch(() => setAccounts([]));
@@ -313,8 +376,20 @@ export default function ReportsPage() {
       <div className="flex gap-2 mb-4" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
         {tab !== 'balanceSheet' && tab !== 'cashFlow' && tab !== 'outstanding' && (
           <>
-            <div className="form-group" style={{ margin: 0 }}><label>{t('from')}</label><input className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-            <div className="form-group" style={{ margin: 0 }}><label>{t('to')}</label><input className="input" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>{t('preset')}</label>
+              <select className="input" value={preset} onChange={(e) => applyPreset(e.target.value)}>
+                <option value="custom">{t('custom')}</option>
+                <option value="daily">{t('daily')}</option>
+                <option value="weekly">{t('weekly')}</option>
+                <option value="monthly">{t('monthly')}</option>
+                <option value="quarterly">{t('quarterly')}</option>
+                <option value="fy">{t('fy')}</option>
+                <option value="prevFy">{t('prevFy')}</option>
+              </select>
+            </div>
+            <div className="form-group" style={{ margin: 0 }}><label>{t('from')}</label><input className="input" type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPreset('custom'); }} /></div>
+            <div className="form-group" style={{ margin: 0 }}><label>{t('to')}</label><input className="input" type="date" value={to} onChange={(e) => { setTo(e.target.value); setPreset('custom'); }} /></div>
           </>
         )}
         {tab === 'balanceSheet' && (
