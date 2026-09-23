@@ -401,7 +401,7 @@ export default function ReportsPage() {
         <div className="form-group" style={{ margin: 0 }}><label>{t('branch')}</label>
           <BranchSelect value={branchId} onChange={setBranchId} allowAll allLabel={t('allBranches')} style={{ width: 170 }} />
         </div>
-        <button className="btn btn-primary btn-sm" onClick={run}>{t('run')}</button>
+        <button className="btn btn-primary btn-sm" onClick={() => run()}>{t('run')}</button>
       </div>
 
       {tab === 'trialBalance' && tb && (
