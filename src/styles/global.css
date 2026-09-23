@@ -54,6 +54,7 @@ h1,h2,h3,h4,.sidebar-logo{font-family:var(--font-display);letter-spacing:-0.01em
 .sidebar a:hover{background:var(--sidebar-hover);}
 .sidebar a.active{background:var(--sidebar-active);color:var(--sidebar-text-active);border-left-color:var(--sidebar-text-active);}
 .sidebar-section-title{padding:14px 18px 4px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.45);}
+.sidebar-section-title:hover{color:rgba(255,255,255,.75);}
 
 .main-area{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;}
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:40;}

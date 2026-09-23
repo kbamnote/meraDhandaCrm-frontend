@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
 import { PERM_OF, canViewModule } from '../../config/access';
@@ -273,7 +273,9 @@ export default function Sidebar({ open, onClose }) {
   const { profile, tenant, isPlatformAdmin, signOut } = useAuth();
   const t = useT(SECTION_S);
   const navigate = useNavigate();
+  const location = useLocation();
   const [q, setQ] = useState('');
+  const [expandedSections, setExpandedSections] = useState({});
   const role = profile?.role;
   const custom = profile?.customRole;
   const modules = tenant?.settings?.modules || null;
@@ -304,6 +306,16 @@ export default function Sidebar({ open, onClose }) {
   // so typing in Hindi/Gujarati/etc. finds the same items a user is reading.
   // Sections with no match collapse away instead of showing an empty title.
   const sections = isPlatformAdmin ? PLATFORM_SECTIONS : SECTIONS;
+
+  useEffect(() => {
+    const activeSection = sections.find(sec =>
+      sec.items.some(item => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))
+    );
+    if (activeSection) {
+      setExpandedSections(prev => ({ ...prev, [activeSection.title]: true }));
+    }
+  }, [location.pathname, sections]);
+
   const query = q.trim().toLowerCase();
   const visibleSections = sections
     .map((sec) => ({ ...sec, items: sec.items.filter(canSee) }))
@@ -369,10 +381,19 @@ export default function Sidebar({ open, onClose }) {
           </div>
         </div>
         <nav>
-          {visibleSections.map(sec => (
+          {visibleSections.map(sec => {
+            const isExpanded = !!expandedSections[sec.title] || query.length > 0;
+            return (
             <div key={sec.title}>
-              <div className="sidebar-section-title">{t(sec.title)}</div>
-              {sec.items.map(item => (
+              <div 
+                className="sidebar-section-title"
+                onClick={() => setExpandedSections(prev => ({ ...prev, [sec.title]: !prev[sec.title] }))}
+                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span>{t(sec.title)}</span>
+                <span style={{ fontSize: '10px', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+              </div>
+              {isExpanded && sec.items.map(item => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -384,7 +405,8 @@ export default function Sidebar({ open, onClose }) {
                 </NavLink>
               ))}
             </div>
-          ))}
+            );
+          })}
           {query && visibleSections.length === 0 && (
             <div style={{ padding: '16px 16px', fontSize: 12, color: 'rgba(255,255,255,.55)' }}>
               No menu item matches "{q}"
