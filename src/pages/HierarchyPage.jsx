@@ -71,8 +71,9 @@ function buildTree(usersObj) {
 }
 
 /* ─── single tree node card ───────────────────────────────────────────────── */
-function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
+function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving, managerOptions, onSetManager }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [over, setOver] = useState(false);
   const isDragging = dragId === node.id;
   const isTarget  = over && dragId && dragId !== node.id;
@@ -86,7 +87,7 @@ function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
   };
   const handleDragOver = (e) => {
     if (!canEdit || !dragId || dragId === node.id) return;
-    e.preventDefault();
+    e.preventDefault(); // Required to allow drop
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     setOver(true);
@@ -109,15 +110,15 @@ function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
     flexDirection: 'column',
     alignItems: 'center',
     background: isTarget ? 'var(--primary-light, #eff6ff)' : 'var(--surface)',
-    border: isTarget ? '2px dashed var(--primary)' : `1px solid ${isDragging ? 'var(--primary)' : 'var(--border)'}`,
+    border: isTarget ? '2px dashed var(--primary)' : `1px solid ${isDragging || editing ? 'var(--primary)' : 'var(--border)'}`,
     borderRadius: 6,
     padding: '6px 8px',
     minWidth: 110,
     maxWidth: 130,
-    cursor: canEdit ? 'grab' : 'default',
+    cursor: canEdit ? 'pointer' : 'default',
     opacity: isDragging ? 0.45 : 1,
     transition: 'all .15s',
-    boxShadow: isTarget ? '0 0 0 3px rgba(59,130,246,.18)' : '0 1px 2px rgba(0,0,0,.04)',
+    boxShadow: isTarget || editing ? '0 0 0 3px rgba(59,130,246,.18)' : '0 1px 2px rgba(0,0,0,.04)',
     userSelect: 'none',
     textAlign: 'center',
   };
@@ -126,14 +127,16 @@ function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       {/* ── card ── */}
       <div
-        draggable={canEdit}
+        draggable={canEdit && !editing}
         onDragStart={handleDragStart}
         onDragEnd={() => setDragId(null)}
         onDragOver={handleDragOver}
+        onDragEnter={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onClick={() => canEdit && setEditing(!editing)}
         style={cardStyle}
-        title={node.email || ''} // Show full details on hover
+        title="Drag or click to reassign manager"
       >
         <div style={{
           width: 26, height: 26, borderRadius: '50%',
@@ -158,8 +161,54 @@ function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
           {node.customRole || node.role || 'pending'}
         </span>
 
+        {/* Editor Dropdown for click fallback */}
+        {editing && canEdit && (
+          <div
+            onClick={(e) => e.stopPropagation()} // Prevent closing when interacting with select
+            style={{
+              position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+              zIndex: 10, background: 'var(--surface)', padding: '12px', borderRadius: 8,
+              border: '1px solid var(--border)', marginTop: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              width: 200, cursor: 'default'
+            }}
+          >
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)', marginBottom: 4, display: 'block', textAlign: 'left' }}>
+              ↳ Manager
+            </label>
+            <select
+              className="input"
+              style={{ width: '100%', padding: '4px 8px', fontSize: 13 }}
+              value={node.reportsTo || ''}
+              onChange={(e) => {
+                 onSetManager(node.id, e.target.value);
+                 setEditing(false);
+              }}
+            >
+              <option value="">— No manager —</option>
+              {managerOptions.filter((o) => {
+                const isDescendant = (childId, ancestorId) => {
+                   if(childId === ancestorId) return true;
+                   const childNode = managerOptions.find(n => n.id === childId);
+                   if(!childNode || !childNode.reportsTo) return false;
+                   return isDescendant(childNode.reportsTo, ancestorId);
+                }
+                return o.id !== node.id && !isDescendant(o.id, node.id);
+              }).map(o => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => setEditing(false)}
+              className="btn btn-secondary"
+              style={{ width: '100%', marginTop: 8, padding: '4px 0', fontSize: 12 }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
         {/* collapse toggle */}
-        {node.children.length > 0 && (
+        {node.children.length > 0 && !editing && (
           <button
             onClick={(e) => { e.stopPropagation(); setCollapsed((v) => !v); }}
             style={{
@@ -206,6 +255,8 @@ function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
                   dragId={dragId}
                   setDragId={setDragId}
                   saving={saving}
+                  managerOptions={managerOptions}
+                  onSetManager={onSetManager}
                 />
               </div>
             ))}
@@ -234,6 +285,14 @@ export default function HierarchyPage() {
 
   const roots = useMemo(() => buildTree(usersObj), [usersObj]);
   const totalUsers = Object.keys(usersObj).length;
+
+  // Dropdown options for click-to-edit
+  const managerOptions = useMemo(
+    () => Object.values(usersObj)
+      .map((u) => ({ id: u.id, name: u.name || u.email || u.id, reportsTo: u.reportsTo }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [usersObj]
+  );
 
   const onDrop = useCallback(async (movedId, newParentId) => {
     // Guard against circular ref — don't allow dropping onto own descendant.
@@ -329,6 +388,8 @@ export default function HierarchyPage() {
                   dragId={dragId}
                   setDragId={setDragId}
                   saving={saving}
+                  managerOptions={managerOptions}
+                  onSetManager={onDrop}
                 />
               ) : (
                 /* multiple roots — lay them horizontally */
@@ -343,6 +404,8 @@ export default function HierarchyPage() {
                       dragId={dragId}
                       setDragId={setDragId}
                       saving={saving}
+                      managerOptions={managerOptions}
+                      onSetManager={onDrop}
                     />
                   ))}
                 </div>
