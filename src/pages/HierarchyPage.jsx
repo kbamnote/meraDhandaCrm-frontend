@@ -1,187 +1,385 @@
 /**
- * HierarchyPage — read-only org view.
+ * HierarchyPage — Interactive org-chart tree.
  *
- * Real-time subscribe to mpw/users + mpw/departments. Group users by their
- * department (fallback 'Unassigned') and render one card per department, each
- * listing its users with a role badge. No writes.
+ * - Builds a proper parent→children tree from the `reportsTo` field on each user.
+ * - Users with no `reportsTo` (or a broken reference) sit at the root level.
+ * - Admins can DRAG any node and DROP it onto another node to reassign that
+ *   person's manager (calls authApi.updateUser with the new reportsTo).
+ * - Dropping onto the root "strip" clears the manager.
+ * - Uses native HTML5 drag-and-drop — zero extra dependencies.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
 import { useT } from '../i18n/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../services/api';
 import { showToast } from '../components/common/toast';
 
+/* ─── translations ─────────────────────────────────────────────────────────── */
 const S = {
-  orgHierarchy: { en: 'Org Hierarchy', hi: 'संगठन पदानुक्रम', hinglish: 'Org Hierarchy', gu: 'સંસ્થા પદાનુક્રમ', mr: 'संस्था उतरंड', mwr: 'संगठन पदानुक्रम' },
-  person: { en: 'person', hi: 'व्यक्ति', hinglish: 'person', gu: 'વ્યક્તિ', mr: 'व्यक्ती', mwr: 'व्यक्ति' },
-  people: { en: 'people', hi: 'लोग', hinglish: 'people', gu: 'લોકો', mr: 'लोक', mwr: 'लोग' },
-  across: { en: 'across', hi: 'में', hinglish: 'across', gu: 'માં', mr: 'मध्ये', mwr: 'में' },
-  department: { en: 'department', hi: 'विभाग', hinglish: 'department', gu: 'વિભાગ', mr: 'विभाग', mwr: 'विभाग' },
-  departments: { en: 'departments', hi: 'विभाग', hinglish: 'departments', gu: 'વિભાગો', mr: 'विभाग', mwr: 'विभाग' },
-  noUsers: { en: 'No users yet.', hi: 'अभी तक कोई यूज़र नहीं।', hinglish: 'Abhi tak koi user nahi.', gu: 'હજુ સુધી કોઈ યૂઝર નથી.', mr: 'अद्याप कोणतेही युझर नाहीत.', mwr: 'अजे तांई कोई यूज़र कोनी।' },
-  pending: { en: 'pending', hi: 'पेंडिंग', hinglish: 'pending', gu: 'પેન્ડિંગ', mr: 'प्रलंबित', mwr: 'पेंडिंग' },
-  reportsTo: { en: 'Reports to', hi: 'रिपोर्ट करता है', hinglish: 'Reports to', gu: 'રિપોર્ટ કરે', mr: 'रिपोर्ट करतो', mwr: 'रिपोर्ट करै' },
-  noManager: { en: '— No manager —', hi: '— कोई मैनेजर नहीं —', hinglish: '— No manager —', gu: '— કોઈ મેનેજર નહીં —', mr: '— मॅनेजर नाही —', mwr: '— कोई मैनेजर कोनी —' },
-  managerSaved: { en: 'Manager updated', hi: 'मैनेजर अपडेट हो गया', hinglish: 'Manager update ho gaya', gu: 'મેનેજર અપડેટ થયો', mr: 'मॅनेजर अपडेट झाला', mwr: 'मैनेजर अपडेट हो ग्यो' },
-  failed: { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua', gu: 'નિષ્ફળ', mr: 'अयशस्वी', mwr: 'कोनी हुयो' },
+  orgHierarchy:  { en: '🏢 Org Hierarchy',   hi: '🏢 संगठन पदानुक्रम', hinglish: '🏢 Org Hierarchy', gu: '🏢 સંસ્થા પદાનુક્રમ', mr: '🏢 संस्था उतरंड',        mwr: '🏢 संगठन पदानुक्रम' },
+  person:        { en: 'person',              hi: 'व्यक्ति',           hinglish: 'person',          gu: 'વ્યક્તિ',              mr: 'व्यक्ती',              mwr: 'व्यक्ति' },
+  people:        { en: 'people',              hi: 'लोग',              hinglish: 'people',          gu: 'લોકો',                mr: 'लोक',                  mwr: 'लोग' },
+  noUsers:       { en: 'No users yet.',       hi: 'अभी कोई यूज़र नहीं।', hinglish: 'No users yet.',  gu: 'હજુ કોઈ યૂઝર નથી.', mr: 'अद्याप युझर नाहीत.',    mwr: 'अजे कोई यूज़र कोनी।' },
+  reportsTo:     { en: 'Reports to',          hi: 'रिपोर्ट करता है',  hinglish: 'Reports to',      gu: 'રિપોર્ટ કરે',         mr: 'रिपोर्ट करतो',         mwr: 'रिपोर्ट करै' },
+  noManager:     { en: '— No manager —',      hi: '— कोई मैनेजर नहीं —', hinglish: '— No manager —', gu: '— મેનેજર નહીં —',    mr: '— मॅनेजर नाही —',      mwr: '— कोई मैनेजर कोनी —' },
+  managerSaved:  { en: 'Manager updated',     hi: 'मैनेजर अपडेट हो गया', hinglish: 'Manager updated', gu: 'મેનેજર અપડેટ થયો',  mr: 'मॅनेजर अपडेट झाला',    mwr: 'मैनेजर अपडेट हो ग्यो' },
+  failed:        { en: 'Failed',              hi: 'नहीं हुआ',         hinglish: 'Failed',          gu: 'નિષ્ફળ',              mr: 'अयशस्वी',              mwr: 'कोनी हुयो' },
+  dragHint:      { en: 'Drag a card onto another to reassign reporting line', hi: 'रिपोर्टिंग बदलने के लिए कार्ड को दूसरे पर खींचें', hinglish: 'Reporting change karne ke liye card drag karein', gu: 'રિપોર્ટિંગ બદલવા કાર્ડ ખેંચો', mr: 'रिपोर्टिंग बदलण्यासाठी कार्ड ड्रॅग करा', mwr: 'रिपोर्टिंग बदलण खातर कार्ड खींचो' },
+  rootDrop:      { en: 'Drop here to remove manager', hi: 'यहाँ छोड़ें — मैनेजर हटाएं', hinglish: 'Yahan drop karein — manager hatayein', gu: 'અહીં છોડો — મેનેજર હટાવો', mr: 'येथे सोडा — मॅनेजर काढा', mwr: 'इठे छोड़ो — मैनेजर हटावो' },
+  pending:       { en: 'pending', hi: 'पेंडिंग', hinglish: 'pending', gu: 'પેન્ડિંગ', mr: 'प्रलंबित', mwr: 'पेंडिंग' },
 };
 
-const ROLE_BADGE = {
-  admin: 'badge-red', superadmin: 'badge-red', owner: 'badge-red',
-  manager: 'badge-amber', floor_manager: 'badge-amber', hr: 'badge-amber',
-  designer: 'badge-blue', jobsetter: 'badge-blue', sales: 'badge-blue',
-  staff: 'badge-green', pending: 'badge-amber',
+/* ─── role → badge colour ─────────────────────────────────────────────────── */
+const ROLE_COLOR = {
+  owner: '#dc2626', superadmin: '#dc2626', admin: '#dc2626',
+  manager: '#d97706', floor_manager: '#d97706', hr: '#d97706',
+  designer: '#2563eb', jobsetter: '#2563eb', sales: '#2563eb',
+  accountant: '#7c3aed', cashier: '#7c3aed', inventory: '#7c3aed',
+  staff: '#059669', viewer: '#059669', pending: '#9ca3af',
 };
+const roleColor = (r) => ROLE_COLOR[r] || '#6b7280';
 
-const UNASSIGNED = 'Unassigned';
+/* ─── avatar initials ─────────────────────────────────────────────────────── */
+function initials(name, email) {
+  const src = name || email || '?';
+  return src.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+}
 
+/* ─── build tree from flat user list ─────────────────────────────────────── */
+function buildTree(usersObj) {
+  const byId = {};
+  Object.entries(usersObj).forEach(([id, u]) => {
+    byId[id] = { ...u, id, children: [] };
+  });
+  const roots = [];
+  Object.values(byId).forEach((node) => {
+    const parentId = node.reportsTo;
+    if (parentId && byId[parentId]) {
+      byId[parentId].children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  // Sort each level by name
+  const sort = (nodes) => {
+    nodes.sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || ''));
+    nodes.forEach((n) => sort(n.children));
+  };
+  sort(roots);
+  return roots;
+}
+
+/* ─── single tree node card ───────────────────────────────────────────────── */
+function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [over, setOver] = useState(false);
+  const isDragging = dragId === node.id;
+  const isTarget  = over && dragId && dragId !== node.id;
+
+  const handleDragStart = (e) => {
+    if (!canEdit) return;
+    e.stopPropagation();
+    setDragId(node.id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', node.id);
+  };
+  const handleDragOver = (e) => {
+    if (!canEdit || !dragId || dragId === node.id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setOver(true);
+  };
+  const handleDragLeave = (e) => {
+    e.stopPropagation();
+    setOver(false);
+  };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOver(false);
+    if (!dragId || dragId === node.id) return;
+    onDrop(dragId, node.id);
+  };
+
+  const cardStyle = {
+    position: 'relative',
+    display: 'inline-flex',
+    flexDirection: 'column',
+    background: isTarget
+      ? 'var(--primary-light, #eff6ff)'
+      : 'var(--surface)',
+    border: isTarget
+      ? '2px dashed var(--primary)'
+      : `2px solid ${isDragging ? 'var(--primary)' : 'var(--border)'}`,
+    borderRadius: 10,
+    padding: '10px 14px',
+    minWidth: 200,
+    maxWidth: 240,
+    cursor: canEdit ? 'grab' : 'default',
+    opacity: isDragging ? 0.45 : 1,
+    transition: 'border-color .15s, background .15s, opacity .15s',
+    boxShadow: isTarget
+      ? '0 0 0 4px rgba(59,130,246,.18)'
+      : '0 1px 4px rgba(0,0,0,.06)',
+    userSelect: 'none',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* ── card ── */}
+      <div
+        draggable={canEdit}
+        onDragStart={handleDragStart}
+        onDragEnd={() => setDragId(null)}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        style={cardStyle}
+        title={canEdit ? 'Drag to reassign manager' : ''}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* avatar */}
+          <div style={{
+            width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+            background: `${roleColor(node.role)}22`,
+            border: `2px solid ${roleColor(node.role)}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, fontWeight: 700, color: roleColor(node.role),
+          }}>
+            {initials(node.name, node.email)}
+          </div>
+          {/* info */}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>
+              {node.name || node.email || node.id}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>
+              {node.email && node.name ? node.email : node.department || ''}
+            </div>
+          </div>
+        </div>
+
+        {/* role + custom badge */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: .4, textTransform: 'uppercase',
+            background: `${roleColor(node.role)}22`, color: roleColor(node.role),
+            borderRadius: 4, padding: '2px 6px',
+          }}>
+            {node.role || 'pending'}
+          </span>
+          {node.customRole && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, letterSpacing: .4, textTransform: 'uppercase',
+              background: 'var(--surface2)', color: 'var(--text2)',
+              borderRadius: 4, padding: '2px 6px',
+            }}>
+              {node.customRole}
+            </span>
+          )}
+          {node.department && (
+            <span style={{
+              fontSize: 10, color: 'var(--text3)',
+              borderRadius: 4, padding: '2px 6px', background: 'var(--surface2)',
+            }}>
+              {node.department}
+            </span>
+          )}
+        </div>
+
+        {/* collapse toggle if there are children */}
+        {node.children.length > 0 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setCollapsed((v) => !v); }}
+            style={{
+              position: 'absolute', bottom: -12, left: '50%', transform: 'translateX(-50%)',
+              width: 22, height: 22, borderRadius: '50%', border: '1px solid var(--border)',
+              background: 'var(--surface)', cursor: 'pointer', fontSize: 11,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--text2)', zIndex: 2,
+            }}
+          >
+            {collapsed ? '+' : '−'}
+          </button>
+        )}
+      </div>
+
+      {/* ── children branch ── */}
+      {!collapsed && node.children.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          {/* vertical connector down */}
+          <div style={{ width: 2, height: 24, background: 'var(--border)' }} />
+          {/* horizontal bar */}
+          {node.children.length > 1 && (
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+              <div style={{
+                position: 'absolute', top: 0,
+                left: `calc(50% - ${(node.children.length - 1) * 50}%)`,
+                width: `calc(${(node.children.length - 1) * 100}%)`,
+                height: 2, background: 'var(--border)',
+              }} />
+            </div>
+          )}
+          {/* children row */}
+          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', paddingTop: node.children.length > 1 ? 2 : 0 }}>
+            {node.children.map((child) => (
+              <div key={child.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                {/* vertical connector to each child */}
+                <div style={{ width: 2, height: 20, background: 'var(--border)' }} />
+                <TreeNode
+                  node={child}
+                  depth={depth + 1}
+                  canEdit={canEdit}
+                  onDrop={onDrop}
+                  dragId={dragId}
+                  setDragId={setDragId}
+                  saving={saving}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── main page ───────────────────────────────────────────────────────────── */
 export default function HierarchyPage() {
   const t = useT(S);
   const { hasRole } = useAuth();
   const canEdit = hasRole('admin', 'superadmin', 'owner');
-  const [users, setUsers] = useState({});
-  const [departments, setDepartments] = useState({});
+
+  const [usersObj, setUsersObj] = useState({});
+  const [dragId, setDragId]     = useState(null);
+  const [saving, setSaving]     = useState(false);
+  const [rootOver, setRootOver] = useState(false);
 
   useEffect(() => {
-    const u1 = onValue(ref(db, 'mpw/users'), (snap) => setUsers(snap.val() || {}));
-    const u2 = onValue(ref(db, 'mpw/departments'), (snap) => setDepartments(snap.val() || {}));
-    return () => { u1(); u2(); };
+    const u = onValue(ref(db, 'mpw/users'), (snap) => setUsersObj(snap.val() || {}));
+    return () => u();
   }, []);
 
-  // id -> display name, for the reports-to picker + manager display.
-  const userName = useMemo(() => {
-    const m = {};
-    Object.entries(users).forEach(([id, u]) => { m[id] = u?.name || u?.email || id; });
-    return m;
-  }, [users]);
+  const roots = useMemo(() => buildTree(usersObj), [usersObj]);
+  const totalUsers = Object.keys(usersObj).length;
 
-  // Candidate managers for the picker (everyone, sorted by name).
-  const managerOptions = useMemo(
-    () => Object.entries(users)
-      .map(([id, u]) => ({ id, name: u?.name || u?.email || id }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    [users]
-  );
-
-  const setManager = async (uid, reportsTo) => {
+  const onDrop = useCallback(async (movedId, newParentId) => {
+    // Guard against circular ref — don't allow dropping onto own descendant.
+    const isDescendant = (nodeId, ancestorId, obj) => {
+      if (!nodeId || !obj[nodeId]) return false;
+      if (nodeId === ancestorId) return true;
+      return isDescendant(obj[nodeId]?.reportsTo, ancestorId, obj);
+    };
+    if (isDescendant(newParentId, movedId, usersObj)) {
+      showToast('Cannot move a manager under their own report — circular hierarchy!', 'error');
+      return;
+    }
+    setSaving(true);
     try {
-      await authApi.updateUser(uid, { reportsTo: reportsTo || null });
+      await authApi.updateUser(movedId, { reportsTo: newParentId || null });
       showToast(t('managerSaved'), 'success');
     } catch (err) {
       showToast(err.response?.data?.error || t('failed'), 'error');
-    }
+    } finally { setSaving(false); }
+  }, [usersObj, t]);
+
+  // Drop onto root zone → clear manager
+  const handleRootDrop = (e) => {
+    e.preventDefault();
+    setRootOver(false);
+    if (!dragId) return;
+    onDrop(dragId, null);
   };
 
-  // Map a department id (or name) to a readable label.
-  const deptLabel = useMemo(() => {
-    const m = {};
-    Object.entries(departments).forEach(([id, d]) => {
-      m[id] = (d && (d.name || d.title)) || id;
-    });
-    return m;
-  }, [departments]);
-
-  // Group users by department label.
-  const groups = useMemo(() => {
-    const byDept = {};
-    Object.entries(users).forEach(([id, u]) => {
-      const raw = u?.department;
-      const label = raw ? (deptLabel[raw] || raw) : UNASSIGNED;
-      if (!byDept[label]) byDept[label] = [];
-      byDept[label].push({ ...u, id });
-    });
-    // Sort: named departments first (alpha), Unassigned last.
-    const names = Object.keys(byDept).sort((a, b) => {
-      if (a === UNASSIGNED) return 1;
-      if (b === UNASSIGNED) return -1;
-      return a.localeCompare(b);
-    });
-    return names.map((name) => ({
-      name,
-      members: byDept[name].sort((a, b) =>
-        (a.name || a.phone || '').localeCompare(b.name || b.phone || '')
-      ),
-    }));
-  }, [users, deptLabel]);
-
-  const totalUsers = Object.keys(users).length;
-
   return (
-    <div data-legacy-id="page-hierarchy">
-      <div className="mb-4">
-        <h2 style={{ fontSize: 20, fontWeight: 600 }}>🏢 {t('orgHierarchy')}</h2>
-        <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-          {totalUsers} {totalUsers === 1 ? t('person') : t('people')} {t('across')} {groups.length}{' '}
-          {groups.length === 1 ? t('department') : t('departments')}
+    <div data-legacy-id="page-hierarchy" style={{ minHeight: '60vh' }}>
+      {/* header */}
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{t('orgHierarchy')}</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, color: 'var(--text2)' }}>
+            {totalUsers} {totalUsers === 1 ? t('person') : t('people')}
+          </span>
+          {saving && (
+            <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>
+              ⏳ Saving…
+            </span>
+          )}
+          {canEdit && (
+            <span style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>
+              💡 {t('dragHint')}
+            </span>
+          )}
         </div>
       </div>
 
-      {!groups.length ? (
+      {!totalUsers ? (
         <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
           {t('noUsers')}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 12 }}>
-          {groups.map((g) => (
-            <div key={g.name} className="card">
-              <div className="flex items-center justify-between mb-2">
-                <div style={{ fontSize: 15, fontWeight: 600 }}>{g.name}</div>
-                <span className="badge badge-blue">{g.members.length}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {g.members.map((u) => (
-                  <div
-                    key={u.id}
-                    style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>
-                          {u.name || u.phone || u.id}
-                        </div>
-                        {u.phone && u.name && (
-                          <div style={{ fontSize: 11, color: 'var(--text3)' }}>{u.phone}</div>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        <span className={`badge ${ROLE_BADGE[u.role] || 'badge-blue'}`}>
-                          {u.role || t('pending')}
-                        </span>
-                        {u.customRole && (
-                          <span className="badge badge-blue">{u.customRole}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2" style={{ marginTop: 6, fontSize: 11, color: 'var(--text3)' }}>
-                      <span style={{ whiteSpace: 'nowrap' }}>↳ {t('reportsTo')}:</span>
-                      {canEdit ? (
-                        <select
-                          className="input"
-                          style={{ height: 28, padding: '2px 6px', fontSize: 12, flex: 1, minWidth: 0 }}
-                          value={u.reportsTo || ''}
-                          onChange={(e) => setManager(u.id, e.target.value)}
-                        >
-                          <option value="">{t('noManager')}</option>
-                          {managerOptions
-                            .filter((o) => o.id !== u.id)
-                            .map((o) => (
-                              <option key={o.id} value={o.id}>{o.name}</option>
-                            ))}
-                        </select>
-                      ) : (
-                        <span style={{ color: 'var(--text2)' }}>
-                          {u.reportsTo ? (userName[u.reportsTo] || u.reportsTo) : '—'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+        <>
+          {/* ── root drop zone (clear manager) ── */}
+          {canEdit && dragId && (
+            <div
+              onDragOver={(e) => { e.preventDefault(); setRootOver(true); }}
+              onDragLeave={() => setRootOver(false)}
+              onDrop={handleRootDrop}
+              style={{
+                border: `2px dashed ${rootOver ? 'var(--primary)' : 'var(--border)'}`,
+                background: rootOver ? 'var(--primary-light, #eff6ff)' : 'transparent',
+                borderRadius: 10, padding: '10px 20px', marginBottom: 20,
+                textAlign: 'center', fontSize: 13, color: rootOver ? 'var(--primary)' : 'var(--text3)',
+                transition: 'all .15s',
+              }}
+            >
+              🗂 {t('rootDrop')}
             </div>
-          ))}
-        </div>
+          )}
+
+          {/* ── scrollable tree canvas ── */}
+          <div style={{ overflowX: 'auto', overflowY: 'visible', paddingBottom: 40 }}>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 0,
+              minWidth: 'max-content',
+              paddingTop: 8,
+            }}>
+              {roots.length === 1 ? (
+                /* single root — render inline */
+                <TreeNode
+                  node={roots[0]}
+                  depth={0}
+                  canEdit={canEdit}
+                  onDrop={onDrop}
+                  dragId={dragId}
+                  setDragId={setDragId}
+                  saving={saving}
+                />
+              ) : (
+                /* multiple roots — lay them horizontally */
+                <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {roots.map((root) => (
+                    <TreeNode
+                      key={root.id}
+                      node={root}
+                      depth={0}
+                      canEdit={canEdit}
+                      onDrop={onDrop}
+                      dragId={dragId}
+                      setDragId={setDragId}
+                      saving={saving}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
