@@ -561,7 +561,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 980, width: '100%', maxHeight: '94vh', overflow: 'auto', padding: 20 }}>
+      <div className="card" style={{ maxWidth: 1300, width: '100%', maxHeight: '96vh', overflow: 'auto', padding: 28 }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
           <h3 style={{ margin: 0 }}>
             {isEdit ? `Edit Invoice ${invoice.invoiceNo || ''}` : 'Create Sales Invoice'}
@@ -586,9 +586,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
           {/* ── LEFT COLUMN ── */}
-          <div style={{ flex: '1 1 560px', minWidth: 320 }}>
+          <div style={{ flex: '1 1 640px', minWidth: 440 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 6 }}>Bill To</div>
             {party.clientName ? (
               <div className="card" style={{ background: 'var(--surface2)', marginBottom: 8, padding: 12 }}>
