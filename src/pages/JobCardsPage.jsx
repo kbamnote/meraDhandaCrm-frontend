@@ -236,9 +236,9 @@ function NewJobModal({ onClose, t }) {
   const [salespeople, setSalespeople] = useState([]);
   const [clientQ, setClientQ] = useState('');
   const [clientMatches, setClientMatches] = useState([]);
-  // The existing client whose details were pulled into the form (null = new client).
   const [existingClient, setExistingClient] = useState(null);
   const [prodSel, setProdSel] = useState(''); const [prodQty, setProdQty] = useState('');
+  const [prodSearch, setProdSearch] = useState('');
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
@@ -432,10 +432,13 @@ function NewJobModal({ onClose, t }) {
           </div>
           <div className="form-group">
             <label style={lbl}>🛍 Products/Items (optional — product list se select karein)</label>
+            <div className="flex gap-2" style={{ marginBottom: 6 }}>
+              <input className="input" placeholder="🔍 Search products..." value={prodSearch} onChange={(e) => setProdSearch(e.target.value)} />
+            </div>
             <div className="flex gap-2">
               <select className="input" style={{ flex: 1 }} value={prodSel} onChange={(e) => setProdSel(e.target.value)}>
                 <option value="">— Product select karein —</option>
-                {products.map((p) => <option key={idOf(p)} value={idOf(p)}>{p.name || p.title}</option>)}
+                {products.filter(p => !prodSearch || (p.name || p.title || '').toLowerCase().includes(prodSearch.toLowerCase())).map((p) => <option key={idOf(p)} value={idOf(p)}>{p.name || p.title}</option>)}
               </select>
               <input className="input" style={{ width: 70 }} type="number" min="1" placeholder="Qty" value={prodQty} onChange={(e) => setProdQty(e.target.value)} />
               <button type="button" className="btn btn-primary btn-sm" onClick={addItem}>+ Add</button>

@@ -65,6 +65,8 @@ const S = {
   showAll: { en: 'Show all', hi: 'सब दिखाएं', hinglish: 'Sab dikhayein', gu: 'બધા બતાવો', mr: 'सर्व दाखवा', mwr: 'सगळा दिखावो' },
   hideAll: { en: 'Hide all', hi: 'सब छुपाएं', hinglish: 'Sab chhupayein', gu: 'બધા છુપાવો', mr: 'सर्व लपवा', mwr: 'सगळा छुपावो' },
   close: { en: 'Close', hi: 'बंद करें', hinglish: 'Close karein', gu: 'બંધ કરો', mr: 'बंद करा', mwr: 'बंद करो' },
+  remove:        { en: 'Remove', hi: 'हटाएं', hinglish: 'Remove karein', gu: 'દૂર કરો', mr: 'हटवा', mwr: 'हटावो' },
+  confirmRemove: { en: 'Permanently delete this staff member? This cannot be undone.', hi: 'क्या आप इस स्टाफ को हमेशा के लिए हटाना चाहते हैं? यह वापस नहीं होगा।', hinglish: 'Permanently delete karein? Yeh undo nahi hoga.', gu: 'આ સ્ટાફ સભ્યને કાયમ માટે ડિલીટ કરો? આ પૂર્વવત્ કરી શકાતું નથી.', mr: 'हा कर्मचारी कायमचा हटवायचा? हे पूर्ववत होणार नाही.', mwr: 'Permanently delete karein? Yeh undo nahi hoga.' },
   accessHint: { en: 'Switch a section ON so this teammate can see it; Edit also lets them create/change records (needs View). New staff start with only the basics; job roles already see their own sections. Admins & owners always have full access.', hi: 'सेक्शन ON करें ताकि यह टीममेट उसे देख सके; एडिट से रिकॉर्ड बना/बदल भी सकता है (देखें ज़रूरी)। नया स्टाफ सिर्फ़ बेसिक से शुरू होता है; जॉब रोल अपने सेक्शन पहले से देखते हैं। एडमिन/ओनर के पास हमेशा पूरा एक्सेस।', hinglish: 'Section ON karein taaki teammate use dekh sake; Edit se record bana/badal bhi sakta hai (View zaroori). Naya staff sirf basics se start hota hai; job roles apne section pehle se dekhte hain. Admin/owner ke paas hamesha full access.', gu: 'સેક્શન ON કરો જેથી આ ટીમમેટ તે જુએ; એડિટથી રેકોર્ડ બનાવી/બદલી શકે (જુઓ જરૂરી). નવો સ્ટાફ ફક્ત બેઝિકથી શરૂ થાય; જોબ રોલ પોતાના સેક્શન પહેલેથી જુએ. એડમિન/ઓનર પાસે હંમેશા સંપૂર્ણ એક્સેસ.', mr: 'सेक्शन ON करा जेणेकरून हा टीममेट तो पाहू शकेल; एडिटने रेकॉर्ड तयार/बदलू शकतो (पाहा आवश्यक). नवीन स्टाफ फक्त बेसिकने सुरू होतो; जॉब रोल त्यांचे सेक्शन आधीच पाहतात. अॅडमिन/ओनरकडे नेहमी पूर्ण अॅक्सेस.', mwr: 'सेक्शन ON करो ताकि यो टीममेट उणनै देख सकै; एडिट सूं रिकॉर्ड बणा/बदल सकै (देखो जरूरी). नयो स्टाफ सिरफ बेसिक सूं चालू होवै; जॉब रोल आपरा सेक्शन पैलां सूं देखै. एडमिन/ओनर कनै हमेसा पूरो एक्सेस.' },
 };
 
@@ -198,6 +200,7 @@ export default function PermissionsPage() {
                 {canEdit && <th style={{ minWidth: 320 }}>{t('thChangeRole')}</th>}
                 {canEdit && <th>{t('edit')}</th>}
                 {canEdit && <th>{t('thAccess')}</th>}
+                {canEdit && <th>{t('remove')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -270,7 +273,37 @@ function RoleRow({ u, canEdit, t, meId }) {
           {showAccess && <PermissionsModal u={u} t={t} onClose={() => setShowAccess(false)} />}
         </td>
       )}
+      {canEdit && (
+        <td>
+          <RemoveButton u={u} t={t} meId={meId} />
+        </td>
+      )}
     </tr>
+  );
+}
+
+function RemoveButton({ u, t, meId }) {
+  const [busy, setBusy] = useState(false);
+  const isSelf = meId && String(meId) === String(u.id);
+  const isOwner = u.role === 'owner';
+  if (isSelf || isOwner) return <span style={{ fontSize: 11, color: 'var(--text3)' }}>—</span>;
+
+  const remove = async () => {
+    if (!window.confirm(t('confirmRemove'))) return;
+    setBusy(true);
+    try {
+      await authApi.deleteUser(u.id);
+      showToast(`${u.name || u.email} removed`, 'success');
+    } catch (err) {
+      showToast(err.response?.data?.error || t('failed'), 'error');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button className="btn btn-ghost btn-xs" style={{ color: 'var(--red)' }} onClick={remove} disabled={busy}>
+      {busy ? '…' : `🗑 ${t('remove')}`}
+    </button>
   );
 }
 

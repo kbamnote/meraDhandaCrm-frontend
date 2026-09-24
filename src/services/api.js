@@ -168,6 +168,7 @@ export const authApi = {
   createUser: (body)            => api.post('/auth/users', body).then(r => r.data),
   setRole:    (uid, b)          => api.patch(`/auth/users/${uid}/role`, b).then(r => r.data),
   updateUser: (uid, b)          => api.patch(`/auth/users/${uid}`, b).then(r => r.data),
+  deleteUser: (uid)             => api.delete(`/auth/users/${uid}`).then(r => r.data),
 };
 
 // The caller's own company (plan / trial status / branding).
