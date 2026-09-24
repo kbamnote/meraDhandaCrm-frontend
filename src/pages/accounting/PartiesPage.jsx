@@ -86,6 +86,7 @@ const S = {
   // Profile fields
   name:     { en: 'Name', hi: 'नाम', hinglish: 'Name' },
   phone:    { en: 'Phone', hi: 'फोन', hinglish: 'Phone' },
+  altMobile:{ en: 'Alternate Mobile', hi: 'वैकल्पिक मोबाइल', hinglish: 'Alternate Mobile' },
   email:    { en: 'Email', hi: 'ईमेल', hinglish: 'Email' },
   address:  { en: 'Address', hi: 'पता', hinglish: 'Address' },
   gst:      { en: 'GST No', hi: 'GST नंबर', hinglish: 'GST No' },
@@ -172,6 +173,16 @@ const S = {
   billingAddress:{ en: 'Billing Address', hi: 'बिलिंग पता', hinglish: 'Billing Address' },
   shippingAddress:{ en: 'Shipping Address', hi: 'शिपिंग पता', hinglish: 'Shipping Address' },
   sameAsBilling:{ en: 'Same as billing address', hi: 'बिलिंग पते जैसा', hinglish: 'Same as billing address' },
+  shippingAddresses:{ en: 'Shipping Addresses', hi: 'शिपिंग पते', hinglish: 'Shipping Addresses' },
+  addAddress:   { en: '+ Add another address', hi: '+ और पता जोड़ें', hinglish: '+ Aur address jodein' },
+  addrLabel:    { en: 'Label', hi: 'नाम', hinglish: 'Label' },
+  addrLabelHint:{ en: 'e.g. Warehouse, Site 2, Andheri branch', hi: 'जैसे गोदाम, साइट 2', hinglish: 'e.g. Warehouse, Site 2' },
+  setDefault:   { en: 'Default', hi: 'डिफ़ॉल्ट', hinglish: 'Default' },
+  defaultAddrHint:{
+    en: 'The default is the one filled in on a new invoice; the others can be picked on the bill.',
+    hi: 'डिफ़ॉल्ट पता नए इनवॉइस में आता है; बाकी बिल पर चुने जा सकते हैं।',
+    hinglish: 'Default address naye invoice mein aata hai; baaki bill par choose kar sakte hain.',
+  },
   creditPeriod: { en: 'Credit Period', hi: 'क्रेडिट अवधि', hinglish: 'Credit Period' },
   days:         { en: 'Days', hi: 'दिन', hinglish: 'Days' },
   creditLimit:  { en: 'Credit Limit', hi: 'क्रेडिट सीमा', hinglish: 'Credit Limit' },
@@ -388,7 +399,9 @@ function PartyDetail({ party, t, onBack }) {
   const balance = sum ? sum.outstanding : 0;
 
   const remind = () => {
-    const phone = String(p?.phone || '').replace(/\D/g, '');
+    // The alternate number is a fallback, not a second message: a party whose
+    // main number is blank (or was never collected) is still reachable.
+    const phone = String(p?.phone || p?.altPhone || '').replace(/\D/g, '');
     const due = inr(balance);
     const msg = `Hello ${p?.name || ''}, a gentle reminder: ${due} is outstanding on your account. Please arrange the payment. Thank you.`;
     const url = phone
@@ -741,6 +754,7 @@ function ProfileTab({ p, t }) {
       [t('category'), p.category],
       [t('accountGroup'), p.accountGroup ? p.accountGroup.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()) : null],
       [t('mobile'), p.phone],
+      [t('altMobile'), p.altPhone],
       [t('email'), p.email],
       [t('gstin'), p.gstNo],
       [t('stateFromGst'), p.gstState],
@@ -750,7 +764,15 @@ function ProfileTab({ p, t }) {
     ]],
     [t('addressSec'), [
       [t('billingAddress'), p.billingAddress],
-      [t('shippingAddress'), p.shippingAddress],
+      // Every delivery address, not just the default — the whole point of
+      // keeping more than one is being able to see them.
+      [t('shippingAddresses'), Array.isArray(p.shippingAddresses) && p.shippingAddresses.length
+        ? p.shippingAddresses.map((a) => [
+          (a.label ? `${a.label}${a.isDefault ? ' (default)' : ''}` : (a.isDefault ? 'Default' : '')),
+          a.address,
+          [a.contactName, a.phone].filter(Boolean).join(' · '),
+        ].filter(Boolean).join('\n')).join('\n' + '\n')
+        : p.shippingAddress],
       [t('creditPeriod'), p.creditPeriodDays != null ? `${p.creditPeriodDays} ${t('days')}` : null],
       [t('creditLimit'), p.creditLimit != null ? inr(p.creditLimit) : null],
     ]],
@@ -1071,14 +1093,22 @@ function ItemsTab({ party, t }) {
 
 const BLANK_BANK = { holderName: '', accountNumber: '', ifsc: '', bankName: '', branch: '' };
 
+// One delivery address. `id` is only for React keys and for the server to keep
+// rows apart; the address itself is what matters.
+const blankShipAddr = () => ({
+  id: `sa${Math.random().toString(36).slice(2, 9)}`,
+  label: '', address: '', contactName: '', phone: '', isDefault: false,
+});
+
 const blankPartyForm = (type) => ({
-  name: '', phone: '', email: '',
+  name: '', phone: '', altPhone: '', email: '',
   openingBalance: '', openingBalanceType: 'to_collect',
   gstNo: '', pan: '',
   partyType: type,
   accountGroup: type === 'vendor' ? 'sundry_creditors' : 'sundry_debtors',
   category: '',
   billingAddress: '', shippingAddress: '', shippingSameAsBilling: true,
+  shippingAddresses: [],
   creditPeriodDays: '', creditLimit: '',
   contactPersonName: '', dateOfBirth: '',
   bankAccounts: [],
@@ -1273,12 +1303,13 @@ function PartyPaymentModal({ t, party, isClient, outstanding, unpaidInvoices, on
   );
 }
 
-function PartyFormModal({ type, t, onClose, onCreated, party: editing }) {
+export function PartyFormModal({ type, t, onClose, onCreated, party: editing }) {
   const isEdit = !!editing;
   const [form, setForm] = useState(() => (editing
     ? {
       ...blankPartyForm(editing.type === 'vendor' ? 'vendor' : 'client'),
-      name: editing.name || '', phone: editing.phone || '', email: editing.email || '',
+      name: editing.name || '', phone: editing.phone || '', altPhone: editing.altPhone || '',
+      email: editing.email || '',
       openingBalance: editing.openingBalance != null ? String(editing.openingBalance) : '',
       openingBalanceType: editing.openingBalanceType || 'to_collect',
       gstNo: editing.gstNo || '', pan: editing.pan || '',
@@ -1291,6 +1322,13 @@ function PartyFormModal({ type, t, onClose, onCreated, party: editing }) {
       // would tick the box and overwrite a real shipping address on save.
       shippingSameAsBilling: !editing.shippingAddress
         || editing.shippingAddress === (editing.billingAddress || editing.address),
+      // Parties saved before this existed have one address in `shippingAddress`
+      // and no list; it becomes the first row so nothing is lost on the next save.
+      shippingAddresses: Array.isArray(editing.shippingAddresses) && editing.shippingAddresses.length
+        ? editing.shippingAddresses.map((a, i) => ({ ...blankShipAddr(), ...a, isDefault: a.isDefault || (i === 0 && !editing.shippingAddresses.some((x) => x.isDefault)) }))
+        : (editing.shippingAddress && editing.shippingAddress !== (editing.billingAddress || editing.address)
+          ? [{ ...blankShipAddr(), address: editing.shippingAddress, isDefault: true }]
+          : []),
       creditPeriodDays: editing.creditPeriodDays ?? '',
       creditLimit: editing.creditLimit ?? '',
       contactPersonName: editing.contactPersonName || '',
@@ -1375,13 +1413,40 @@ function PartyFormModal({ type, t, onClose, onCreated, party: editing }) {
     ...f, customFields: f.customFields.map((c, idx) => (idx === i ? { ...c, [k]: v } : c)),
   }));
 
+  const setShipAddr = (i, k, v) => setForm((f) => ({
+    ...f, shippingAddresses: f.shippingAddresses.map((a, idx) => (idx === i ? { ...a, [k]: v } : a)),
+  }));
+  const addShipAddr = () => setForm((f) => ({
+    ...f,
+    shippingSameAsBilling: false,
+    shippingAddresses: [...f.shippingAddresses, { ...blankShipAddr(), isDefault: !f.shippingAddresses.length }],
+  }));
+  const removeShipAddr = (i) => setForm((f) => {
+    const rest = f.shippingAddresses.filter((_, idx) => idx !== i);
+    // Removing the default promotes the first one left — a list with no default
+    // would leave new invoices with no address to prefill.
+    if (rest.length && !rest.some((a) => a.isDefault)) rest[0] = { ...rest[0], isDefault: true };
+    return { ...f, shippingAddresses: rest };
+  });
+  const makeDefaultShipAddr = (i) => setForm((f) => ({
+    ...f, shippingAddresses: f.shippingAddresses.map((a, idx) => ({ ...a, isDefault: idx === i })),
+  }));
+
   const build = () => {
     const billing = form.billingAddress.trim();
-    const shipping = form.shippingSameAsBilling ? billing : form.shippingAddress.trim();
+    // Rows the user opened but never typed an address into are not addresses.
+    const addrs = form.shippingSameAsBilling
+      ? []
+      : form.shippingAddresses.filter((a) => a.address.trim());
+    const defaultAddr = (addrs.find((a) => a.isDefault) || addrs[0] || {}).address || '';
+    // `shippingAddress` keeps holding the DEFAULT one, because the invoice form,
+    // the printed document and every report read that single field.
+    const shipping = form.shippingSameAsBilling ? billing : defaultAddr.trim();
     return {
       partyType: form.partyType, // decides clients vs vendors, server-side
       name: form.name.trim(),
       phone: form.phone.trim(),
+      altPhone: form.altPhone.trim(),
       email: form.email.trim(),
       openingBalance: round2(Number(form.openingBalance) || 0),
       openingBalanceType: form.openingBalanceType,
@@ -1396,6 +1461,11 @@ function PartyFormModal({ type, t, onClose, onCreated, party: editing }) {
       address: billing,
       billingAddress: billing,
       shippingAddress: shipping,
+      shippingAddresses: addrs.map((a) => ({
+        id: a.id, label: a.label.trim(), address: a.address.trim(),
+        contactName: (a.contactName || '').trim(), phone: (a.phone || '').trim(),
+        isDefault: !!a.isDefault,
+      })),
       shippingSameAsBilling: !!form.shippingSameAsBilling,
       creditPeriodDays: form.creditPeriodDays === '' ? null : Number(form.creditPeriodDays),
       creditLimit: form.creditLimit === '' ? null : round2(Number(form.creditLimit) || 0),
@@ -1466,6 +1536,11 @@ function PartyFormModal({ type, t, onClose, onCreated, party: editing }) {
             <div>
               <label style={lbl}>{t('mobile')}</label>
               <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="e.g. 98765 43210" />
+            </div>
+            <div>
+              <label style={lbl}>{t('altMobile')}</label>
+              <input className="input" value={form.altPhone} onChange={(e) => set('altPhone', e.target.value)}
+                placeholder="e.g. 98765 43211" />
             </div>
             <div>
               <label style={lbl}>{t('email')}</label>
@@ -1546,19 +1621,58 @@ function PartyFormModal({ type, t, onClose, onCreated, party: editing }) {
               </div>
               <div>
                 <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-                  <label style={{ ...lbl, marginBottom: 0 }}>{t('shippingAddress')}</label>
+                  <label style={{ ...lbl, marginBottom: 0 }}>{t('shippingAddresses')}</label>
                   <label style={{ fontSize: 11.5, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
                     <input type="checkbox" checked={form.shippingSameAsBilling}
-                      onChange={(e) => set('shippingSameAsBilling', e.target.checked)} />
+                      onChange={(e) => {
+                        const same = e.target.checked;
+                        // Unticking with nothing in the list opens one row, so
+                        // there is somewhere to type instead of an empty panel.
+                        setForm((f) => ({
+                          ...f,
+                          shippingSameAsBilling: same,
+                          shippingAddresses: same || f.shippingAddresses.length
+                            ? f.shippingAddresses
+                            : [{ ...blankShipAddr(), isDefault: true }],
+                        }));
+                      }} />
                     {t('sameAsBilling')}
                   </label>
                 </div>
-                <textarea className="input" rows={3}
-                  value={form.shippingSameAsBilling ? form.billingAddress : form.shippingAddress}
-                  disabled={form.shippingSameAsBilling}
-                  onChange={(e) => set('shippingAddress', e.target.value)}
-                  placeholder="Street, city, PIN"
-                  style={form.shippingSameAsBilling ? { opacity: .6 } : undefined} />
+                {form.shippingSameAsBilling ? (
+                  <textarea className="input" rows={3} value={form.billingAddress} disabled
+                    placeholder="Street, city, PIN" style={{ opacity: .6 }} />
+                ) : (
+                  <div data-testid="ship-addr-list">
+                    {form.shippingAddresses.map((a, i) => (
+                      <div key={a.id} data-testid="ship-addr" className="card"
+                        style={{ padding: 10, marginBottom: 8, background: 'var(--surface2)' }}>
+                        <div className="flex" style={{ gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                          <input className="input" style={{ flex: 1, minWidth: 0 }} value={a.label}
+                            placeholder={t('addrLabelHint')}
+                            onChange={(e) => setShipAddr(i, 'label', e.target.value)} />
+                          <label style={{ fontSize: 11.5, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            <input type="radio" name="defaultShipAddr" checked={!!a.isDefault}
+                              onChange={() => makeDefaultShipAddr(i)} />
+                            {t('setDefault')}
+                          </label>
+                          <button type="button" className="btn btn-ghost btn-xs" style={{ color: 'var(--red)' }}
+                            title="Remove this address" onClick={() => removeShipAddr(i)}>×</button>
+                        </div>
+                        <textarea className="input" rows={2} value={a.address} placeholder="Street, city, PIN"
+                          onChange={(e) => setShipAddr(i, 'address', e.target.value)} />
+                        <div className="flex" style={{ gap: 6, marginTop: 6 }}>
+                          <input className="input" style={{ flex: 1, minWidth: 0 }} value={a.contactName}
+                            placeholder={t('contactName')} onChange={(e) => setShipAddr(i, 'contactName', e.target.value)} />
+                          <input className="input" style={{ flex: 1, minWidth: 0 }} value={a.phone}
+                            placeholder={t('phone')} onChange={(e) => setShipAddr(i, 'phone', e.target.value)} />
+                        </div>
+                      </div>
+                    ))}
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={addShipAddr}>{t('addAddress')}</button>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{t('defaultAddrHint')}</div>
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ ...gridCols(), marginTop: 12 }}>

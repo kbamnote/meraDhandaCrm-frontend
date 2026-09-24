@@ -212,7 +212,7 @@ export default function CreatePurchaseFlow({ vendor, purchase, onClose, onCreate
   )));
   const pickCatalogItem = (i, p) => setItems((arr) => arr.map((it, idx) => (
     idx === i
-      ? { ...it, itemId: p.id, name: p.name, hsn: p.hsn || '', unit: p.unit || '', rate: String(p.purchasePrice ?? p.costPrice ?? p.price ?? '') }
+      ? { ...it, itemId: p.id, name: p.name, hsn: p.hsn || it.hsn || '', unit: p.unit || it.unit || '', rate: String(p.purchasePrice ?? p.costPrice ?? p.price ?? '') }
       : it
   )));
 
@@ -684,6 +684,7 @@ export default function CreatePurchaseFlow({ vendor, purchase, onClose, onCreate
           billingQty={items[newItemFor].qty}
           defaultRate={items[newItemFor].rate}
           defaultGst={items[newItemFor].taxRate}
+          defaultHsn={items[newItemFor].hsn}
           context="purchase"
           onCreated={(product) => linkNewItem(newItemFor, product)}
           onClose={() => setNewItemFor(null)}

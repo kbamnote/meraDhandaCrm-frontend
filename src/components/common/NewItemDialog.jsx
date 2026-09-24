@@ -19,6 +19,7 @@
  *   billingQty   — qty on that line, used only to show the after-figure
  *   defaultRate  — the line's price, prefilled as the sale price
  *   defaultGst   — the invoice's GST rate, prefilled
+ *   defaultHsn   — the HSN/SAC already typed on the line, prefilled
  *   context      — 'sales' (stock will be deducted) | 'purchase' (it will not)
  *   onCreated(product) — the created product, for linking itemId
  *   onClose()
@@ -32,7 +33,7 @@ const num = (v) => Number(v) || 0;
 const GST_RATES = ['0', '5', '12', '18', '28'];
 
 export default function NewItemDialog({
-  name, billingQty, defaultRate, defaultGst, context = 'sales', onCreated, onClose,
+  name, billingQty, defaultRate, defaultGst, defaultHsn, context = 'sales', onCreated, onClose,
 }) {
   const [f, setF] = useState({
     name: String(name || '').trim(),
@@ -40,7 +41,7 @@ export default function NewItemDialog({
     sku: '',
     category: '',
     unit: 'pcs',
-    hsn: '',
+    hsn: String(defaultHsn || '').trim(),
     price: defaultRate != null && defaultRate !== '' ? String(defaultRate) : '',
     purchasePrice: '',
     gst: defaultGst != null ? String(defaultGst) : '18',

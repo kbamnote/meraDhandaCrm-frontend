@@ -15,7 +15,7 @@
  *   onCreated(inv) — called with the created invoice before onClose()
  */
 import { useEffect, useMemo, useState } from 'react';
-import { accountingApi, ordersApi, uploadApi, describeError } from '../../services/api';
+import { accountingApi, ordersApi, uploadApi, dbApi, describeError } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
@@ -59,6 +59,8 @@ const EMPTY_PARTY = {
   clientPan: '',
   // Ship To defaults to the billing party; only sent when "different" is ticked.
   shipDifferent: false, shipToName: '', shipToAddress: '',
+  // The customer's saved delivery addresses, to pick from rather than retype.
+  shipOptions: [],
 };
 
 const TYPE_CARDS = [
@@ -90,6 +92,27 @@ export function effectiveRate(item, invoiceRate) {
   return Number(own) || 0;
 }
 const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer'];
+
+// Save HSN codes typed on the bill onto the catalog items that lack them.
+// Best-effort and after the invoice is saved: the bill is the thing that
+// matters, and an item that fails to update is no reason to lose it.
+export async function backfillItemHsn(lines, catalog, update = dbApi.update) {
+  const byId = new Map((catalog || []).map((c) => [c.id, c]));
+  const done = new Set();
+  const saved = [];
+  for (const line of lines || []) {
+    const hsn = String(line.hsn || '').trim();
+    const item = line.itemId ? byId.get(line.itemId) : null;
+    if (!hsn || !item || done.has(item.id)) continue;
+    if (String(item.hsn || '').trim()) continue;
+    done.add(item.id);
+    try {
+      await update('products', item.id, { hsn });
+      saved.push(item.id);
+    } catch (e) { console.error('[invoice] hsn backfill', item.id, e.message); }
+  }
+  return saved;
+}
 
 export default function CreateInvoiceFlow({ job, party: forParty, invoice, onClose, onCreated }) {
   const t = useT(S);
@@ -188,6 +211,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     clientPhone: forParty?.phone || '',
     clientAddress: forParty?.address || '',
     gstNo: forParty?.gstNo || job?.gstNo || '',
+    shipOptions: Array.isArray(forParty?.shippingAddresses)
+      ? forParty.shippingAddresses.filter((a) => a && a.address) : [],
   });
   const setP = (k, v) => setParty((p) => ({ ...p, [k]: v }));
 
@@ -290,10 +315,20 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const pickClient = (c) => {
     // Merge onto the existing party so fields the picker doesn't supply
     // (clientPan, shipTo*) keep their values instead of vanishing.
+    const options = Array.isArray(c.shippingAddresses) ? c.shippingAddresses.filter((a) => a && a.address) : [];
+    const preferred = options.find((a) => a.isDefault) || options[0] || null;
     setParty((p) => ({
       ...p,
       clientId: c.id, clientName: c.name || '', clientPhone: c.phone || '',
       clientAddress: c.address || '', gstNo: c.gstNo || '',
+      shipOptions: options,
+      // A customer with saved delivery addresses gets their default filled in;
+      // one without is left exactly as before.
+      ...(preferred && !p.shipDifferent ? {
+        shipDifferent: true,
+        shipToName: preferred.contactName || p.shipToName || (c.name || ''),
+        shipToAddress: preferred.address,
+      } : {}),
     }));
     setClientQ('');
   };
@@ -314,13 +349,25 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   // so stock won't be deducted for a name the user changed after picking.
   const setItem = (i, k, v) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, [k]: v, ...(k === 'name' ? { itemId: null } : {}) } : it)));
 
+  // Typing a name that exactly matches an item in the list links it, the same as
+  // picking it from the dropdown would. Without this, someone who types the name
+  // out in full (or pastes it) gets a free-text line: no HSN, no GST rate, and no
+  // stock movement — with nothing on screen saying so.
+  useEffect(() => {
+    const i = items.findIndex((it) => !it.itemId && String(it.name || '').trim().length > 1);
+    if (i === -1) return;
+    const typed = String(items[i].name).trim().toLowerCase();
+    const match = catalog.find((c) => String(c.name || '').trim().toLowerCase() === typed);
+    if (match) pickCatalogItem(i, match);
+  }, [items, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Picking a catalog product fills Name / HSN / Selling Price and links itemId
   // so the backend deducts that product's stock when the invoice is saved.
   // Also brings the item's own GST% when it has one recorded, so a catalog of
   // mixed-rate goods bills correctly without the rate being set by hand each
   // time. An item saved without a GST% keeps inheriting the invoice's rate.
   const pickCatalogItem = (i, p) => setItems((arr) => arr.map((it, idx) => (idx === i ? {
-    ...it, itemId: p.id, name: p.name, hsn: p.hsn || '', unit: p.unit || it.unit || '',
+    ...it, itemId: p.id, name: p.name, hsn: p.hsn || it.hsn || '', unit: p.unit || it.unit || '',
     rate: String(p.price ?? ''),
     taxRate: p.gst != null && p.gst !== '' ? String(Number(p.gst)) : it.taxRate,
   } : it)));
@@ -475,6 +522,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
       const inv = isEdit
         ? await accountingApi.updateInvoice(invoice.id, body)
         : await accountingApi.createInvoice(body);
+      // An HSN typed here against a catalog item that hasn't got one is worth
+      // keeping: the next bill then fills it in by itself. Only ever FILLS a
+      // blank — it never overwrites the HSN already recorded on the item, which
+      // would let a typo on one bill rewrite the item for everyone.
+      await backfillItemHsn(billed, catalog);
       showToast(
         `${inv.invoiceNo} ${isEdit ? 'updated' : 'created'}`
         + (inv.advanceApplied > 0 ? ` · ${inr(inv.advanceApplied)} advance applied` : ''),
@@ -573,16 +625,46 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
               </div>
             </div>
             {party.shipDifferent && (
+              <>
+              {party.shipOptions.length > 0 && (
+                <div className="form-group">
+                  <label>Deliver to</label>
+                  <select
+                    className="input"
+                    data-testid="ship-addr-pick"
+                    value={party.shipOptions.findIndex((a) => a.address === party.shipToAddress)}
+                    onChange={(e) => {
+                      const a = party.shipOptions[Number(e.target.value)];
+                      if (!a) return;
+                      setParty((p) => ({
+                        ...p, shipToAddress: a.address, shipToName: a.contactName || p.shipToName,
+                      }));
+                    }}
+                  >
+                    {/* Only shown while the typed address matches none of them —
+                        so a hand-edited address is not silently relabelled. */}
+                    {party.shipOptions.every((a) => a.address !== party.shipToAddress) && (
+                      <option value={-1}>Typed below</option>
+                    )}
+                    {party.shipOptions.map((a, i) => (
+                      <option key={a.id || i} value={i}>
+                        {a.label || `Address ${i + 1}`}{a.isDefault ? ' (default)' : ''} — {String(a.address).replace(/\s+/g, ' ').slice(0, 60)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex gap-2">
                 <div className="form-group" style={{ flex: 1 }}>
                   <label>Ship To — name</label>
-                  <input className="input" value={party.shipToName} onChange={(e) => setP('shipToName', e.target.value)} />
+                  <input className="input" data-testid="ship-to-name" value={party.shipToName} onChange={(e) => setP('shipToName', e.target.value)} />
                 </div>
                 <div className="form-group" style={{ flex: 2 }}>
                   <label>Ship To — address</label>
-                  <input className="input" value={party.shipToAddress} onChange={(e) => setP('shipToAddress', e.target.value)} />
+                  <input className="input" data-testid="ship-to-address" value={party.shipToAddress} onChange={(e) => setP('shipToAddress', e.target.value)} />
                 </div>
               </div>
+              </>
             )}
 
             <div className="flex gap-2">
@@ -935,7 +1017,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
           name={items[newItemFor].name}
           billingQty={items[newItemFor].qty}
           defaultRate={items[newItemFor].rate}
-          defaultGst={form.gstRate}
+          defaultGst={effectiveRate(items[newItemFor], form.gstRate)}
+          defaultHsn={items[newItemFor].hsn}
           context="sales"
           onCreated={(product) => linkNewItem(newItemFor, product)}
           onClose={() => setNewItemFor(null)}
