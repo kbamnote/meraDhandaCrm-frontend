@@ -58,10 +58,24 @@ function UserAttendanceModal({ user, onClose }) {
   const end = new Date(y, m, 0);
   const today = new Date();
   const maxDate = (today.getFullYear() == y && today.getMonth() == m - 1) ? today : end;
+  
   let workingDays = 0;
+  const allDays = [];
+  
   for (let d = 1; d <= maxDate.getDate(); d++) {
-    if (new Date(y, m - 1, d).getDay() !== 0) workingDays++;
+    const dateStr = `${y}-${m}-${String(d).padStart(2, '0')}`;
+    const isSunday = new Date(y, m - 1, d).getDay() === 0;
+    if (!isSunday) workingDays++;
+    
+    const record = records.find(r => r.date === dateStr);
+    allDays.push({
+      date: dateStr,
+      isSunday,
+      record
+    });
   }
+  
+  allDays.reverse(); // Show newest first
 
   const presentDays = records.filter(r => r.status && r.status !== 'absent').length;
   const absentDays = Math.max(0, workingDays - presentDays);
@@ -95,19 +109,40 @@ function UserAttendanceModal({ user, onClose }) {
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {loading ? <div style={{ padding: 20, textAlign: 'center' }}>Loading...</div> : 
-           !records.length ? <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)' }}>No records for this month</div> :
            (
              <table className="crm-table">
-               <thead><tr><th>Date</th><th>Status</th><th>In</th><th>Out</th></tr></thead>
+               <thead><tr><th>Date</th><th>Status</th><th>In</th><th>Out</th><th>In Selfie</th><th>Out Selfie</th></tr></thead>
                <tbody>
-                 {records.map(r => (
-                   <tr key={r.id}>
-                     <td>{r.date}</td>
-                     <td><span className={`badge ${STATUS_BADGE[String(r.status || '').toLowerCase()] || 'badge-blue'}`}>{r.status}</span></td>
-                     <td>{fmt(r.checkIn)}</td>
-                     <td>{fmt(r.checkOut)}</td>
-                   </tr>
-                 ))}
+                 {allDays.map(({ date, isSunday, record }) => {
+                   if (record) {
+                     return (
+                       <tr key={date}>
+                         <td>{date}</td>
+                         <td><span className={`badge ${STATUS_BADGE[String(record.status || '').toLowerCase()] || 'badge-blue'}`}>{record.status}</span></td>
+                         <td>{fmt(record.checkIn)}</td>
+                         <td>{fmt(record.checkOut)}</td>
+                         <td><Thumb uri={record.inSelfie} onOpen={() => window.open(record.inSelfie, '_blank')} /></td>
+                         <td><Thumb uri={record.outSelfie} onOpen={() => window.open(record.outSelfie, '_blank')} /></td>
+                       </tr>
+                     );
+                   }
+                   if (isSunday) {
+                     return (
+                       <tr key={date} style={{ background: 'var(--surface2)', opacity: 0.7 }}>
+                         <td>{date}</td>
+                         <td><span className="badge badge-gray">Sunday Off</span></td>
+                         <td>—</td><td>—</td><td>—</td><td>—</td>
+                       </tr>
+                     );
+                   }
+                   return (
+                     <tr key={date} style={{ background: '#fef2f2' }}>
+                       <td>{date}</td>
+                       <td><span className="badge badge-red">absent</span></td>
+                       <td>—</td><td>—</td><td>—</td><td>—</td>
+                     </tr>
+                   );
+                 })}
                </tbody>
              </table>
            )}
