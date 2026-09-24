@@ -19,6 +19,7 @@ const CATALOG = {
   p1: { name: 'Visiting Cards', hsn: '4909', price: 6, unit: 'pcs', stock: 500, trackStock: 'yes', type: 'product', gst: 12 },
   p2: { name: 'Letterheads', price: 9, unit: 'pcs', stock: 200, trackStock: 'yes', type: 'product' }, // no HSN recorded
   p3: { name: 'Design Charges', hsn: '9983', price: 500, type: 'service', trackStock: 'no' },
+  p4: { name: 'Brochures', hsn: '4909', price: 20, unit: 'pcs', stock: 80, trackStock: 'yes', type: 'product' },
 };
 
 vi.mock('../src/services/realtime.js', () => ({
@@ -97,6 +98,56 @@ describe('backfillItemHsn', () => {
       async (_c, id) => { if (id === 'p2') throw new Error('offline'); },
     );
     expect(saved).toEqual(['p3']);
+  });
+});
+
+describe('starting from the HSN', () => {
+  it('a code only one item carries fills that item in', async () => {
+    await openForm();
+    // 9983 belongs to Design Charges alone.
+    fireEvent.change(hsnBox(), { target: { value: '9983' } });
+    await waitFor(() => expect(nameBox().value).toBe('Design Charges'));
+    expect(priceBox().value).toBe('500');
+  });
+
+  it('a code several items share is offered, not guessed', async () => {
+    await openForm();
+    // 4909 is on both Visiting Cards and Brochures.
+    fireEvent.change(hsnBox(), { target: { value: '4909' } });
+    const list = await screen.findByTestId('hsn-matches');
+    expect(within(list).getAllByRole('generic').length).toBeGreaterThan(0);
+    expect(list.textContent).toContain('Visiting Cards');
+    expect(list.textContent).toContain('Brochures');
+    expect(nameBox().value, 'nothing is chosen for the user').toBe('');
+    fireEvent.click(within(list).getByText('Brochures'));
+    await waitFor(() => expect(nameBox().value).toBe('Brochures'));
+  });
+
+  it('a code no item carries leaves the line alone', async () => {
+    await openForm();
+    fireEvent.change(hsnBox(), { target: { value: '98213' } });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(nameBox().value).toBe('');
+    expect(screen.queryByTestId('hsn-matches')).toBeNull();
+    // …and the way to add it is on the row, not hidden in a dropdown that
+    // only appears once a name has been typed.
+    expect(screen.getAllByTestId('new-item-btn').length).toBeGreaterThan(0);
+  });
+
+  it('the + Item button opens the dialog with the typed code', async () => {
+    await openForm();
+    fireEvent.change(hsnBox(), { target: { value: '98213' } });
+    fireEvent.click(screen.getAllByTestId('new-item-btn')[0]);
+    const card = (await screen.findByText('Add a new item')).closest('.card');
+    expect(within(card).getByText('HSN / SAC').parentElement.querySelector('input').value).toBe('98213');
+  });
+
+  it('a typed name still wins over the HSN', async () => {
+    await openForm();
+    fireEvent.change(nameBox(), { target: { value: 'Custom job work' } });
+    fireEvent.change(hsnBox(), { target: { value: '9983' } });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(nameBox().value).toBe('Custom job work');
   });
 });
 

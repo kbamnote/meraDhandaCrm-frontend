@@ -354,11 +354,23 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   // out in full (or pastes it) gets a free-text line: no HSN, no GST rate, and no
   // stock movement — with nothing on screen saying so.
   useEffect(() => {
-    const i = items.findIndex((it) => !it.itemId && String(it.name || '').trim().length > 1);
-    if (i === -1) return;
-    const typed = String(items[i].name).trim().toLowerCase();
-    const match = catalog.find((c) => String(c.name || '').trim().toLowerCase() === typed);
-    if (match) pickCatalogItem(i, match);
+    for (let i = 0; i < items.length; i += 1) {
+      const it = items[i];
+      if (it.itemId) continue;
+      const typed = String(it.name || '').trim().toLowerCase();
+      if (typed.length > 1) {
+        const byName = catalog.find((c) => String(c.name || '').trim().toLowerCase() === typed);
+        if (byName) { pickCatalogItem(i, byName); return; }
+        continue; // a name was typed: it decides the line, not the HSN
+      }
+      // No name yet — an HSN that belongs to exactly ONE item picks that item.
+      // Several items sharing a code is normal (a whole HSN chapter can), so
+      // that case is offered in the dropdown instead of guessed at.
+      const hsn = String(it.hsn || '').trim();
+      if (hsn.length < 2) continue;
+      const byHsn = catalog.filter((c) => String(c.hsn || '').trim() === hsn);
+      if (byHsn.length === 1) { pickCatalogItem(i, byHsn[0]); return; }
+    }
   }, [items, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Picking a catalog product fills Name / HSN / Selling Price and links itemId
@@ -693,6 +705,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
               <span style={{ flex: 1.2, minWidth: 82, textAlign: 'right' }}>Price (₹)</span>
               {!isCash && !isComposition && !form.reverseCharge && <span style={{ width: 74 }}>GST %</span>}
               <span style={{ flex: 1.2, textAlign: 'right' }}>Amount</span>
+              <span style={{ width: 62 }} />
               <span style={{ width: 18 }} />
             </div>
             {items.map((it, i) => {
@@ -703,6 +716,12 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                 ? []
                 : catalog.filter((p) => (p.name || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q)).slice(0, 8);
               const picked = it.itemId ? catalog.find((c) => c.id === it.itemId) : null;
+              // Items carrying this HSN, offered while the line is still
+              // unlinked and no name has been typed to search by instead.
+              const hsnQ = String(it.hsn || '').trim();
+              const hsnMatches = (!it.itemId && hsnQ.length >= 2 && q.length < 1)
+                ? catalog.filter((p2) => String(p2.hsn || '').trim().startsWith(hsnQ)).slice(0, 8)
+                : [];
               // Worth offering only when there is a name, it is not already a
               // catalog line, and nothing in the catalog already has that name.
               const canCreate = q.length >= 2 && !it.itemId && !exactMatch
@@ -759,7 +778,24 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                       </div>
                     )}
                   </div>
-                  <input className="input" style={{ flex: 1.2, minWidth: 60 }} placeholder="HSN/SAC" value={it.hsn} onChange={(e) => setItem(i, 'hsn', e.target.value)} />
+                  {/* HSN is a way IN to the catalog, not just a field to fill:
+                      people work from a rate chart and know the code before the
+                      name. Typing one that belongs to an item offers it. */}
+                  <div style={{ position: 'relative', flex: 1.2, minWidth: 60 }}>
+                    <input className="input" style={{ width: '100%' }} placeholder="HSN/SAC" value={it.hsn}
+                      onChange={(e) => setItem(i, 'hsn', e.target.value)} />
+                    {hsnMatches.length > 0 && (
+                      <div className="card" data-testid="hsn-matches" style={{ position: 'absolute', zIndex: 5, left: 0, minWidth: 220, top: '100%', marginTop: 2, padding: 0, maxHeight: 200, overflow: 'auto' }}>
+                        {hsnMatches.map((pr) => (
+                          <div key={pr.id} onClick={() => pickCatalogItem(i, pr)}
+                            style={{ padding: '7px 9px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
+                            <b>{pr.name}</b>
+                            <span style={{ float: 'right', color: 'var(--text2)' }}>{pr.hsn}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <input className="input input-num" style={{ width: 68 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
                   <input className="input" style={{ width: 58 }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
                   <input className="input input-num" style={{ flex: 1.2, minWidth: 82 }} placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
@@ -779,6 +815,21 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     </select>
                   )}
                   <span style={{ flex: 1.2, textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{inr(amount)}</span>
+                  {/* The offer inside the name dropdown is easy to miss, and it
+                      never appears at all for someone who starts from the HSN.
+                      This is the same dialog, always reachable. */}
+                  {!it.itemId && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs"
+                      data-testid="new-item-btn"
+                      style={{ whiteSpace: 'nowrap', color: 'var(--primary, #2563EB)' }}
+                      title="Add this line to your items list"
+                      onClick={() => setNewItemFor(i)}
+                    >
+                      + Item
+                    </button>
+                  )}
                   <button className="btn btn-ghost btn-xs" style={{ width: 18 }} onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))} disabled={items.length === 1}>×</button>
                 </div>
                 {/* Optional second line printed under the item name on the invoice. */}
