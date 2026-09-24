@@ -79,7 +79,7 @@ describe('Purchases page', () => {
   it('KPIs add up the received bills only', async () => {
     renderScreen(PurchasesPage);
     // 1000 + 500 + 300; the unreceived order's ₹7,777 must not be in it.
-    expect(kpi('Purchases')).toBe('₹1,800');
+    expect(kpi('Purchase Invoices')).toBe('₹1,800');
     // 1000 + 300 still owed on B-2; B-3 is settled.
     expect(kpi('Payable')).toBe('₹1,300');
     expect(kpi('Overdue')).toBe('1');

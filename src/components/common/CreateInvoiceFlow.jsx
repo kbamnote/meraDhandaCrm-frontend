@@ -67,11 +67,13 @@ const TYPE_CARDS = [
   { type: 'cash',     icon: '💵', titleKey: 'cashTitle',     descKey: 'cashDesc' },
 ];
 
-// No per-item taxRate — GST is now a single invoice-level rate (GST Rate
-// dropdown on the right), so a line is just what's being billed and how much.
+// `taxRate: ''` means "use the invoice's GST Rate" — the common case, and what
+// every invoice did before lines could carry their own rate. Set it on a line
+// (the GST% box on that row) and only that line is taxed differently, which is
+// what a bill mixing, say, 5% printing with 18% design work needs.
 // itemId links the line to the Items catalog (products); lines without an
 // itemId (free-text or job work) invoice as-is and don't move stock.
-const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', itemId: null });
+const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', taxRate: '', itemId: null });
 
 const DOC_TYPES = [
   { value: 'proforma', label: 'Proforma Invoice' },
@@ -79,6 +81,14 @@ const DOC_TYPES = [
   { value: 'cash', label: 'Cash / Non-GST Bill' },
 ];
 const GST_RATES = ['0', '5', '12', '18', '28'];
+
+// What a line is actually taxed at: its own rate when it has one, else the
+// invoice's. Exported so the form and its tests agree on one rule.
+export function effectiveRate(item, invoiceRate) {
+  const own = item && item.taxRate;
+  if (own === '' || own == null) return Number(invoiceRate) || 0;
+  return Number(own) || 0;
+}
 const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer'];
 
 export default function CreateInvoiceFlow({ job, party: forParty, invoice, onClose, onCreated }) {
@@ -214,6 +224,10 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         name: it.name || '', hsn: it.hsn || '',
         qty: it.qty != null ? String(it.qty) : '',
         rate: it.rate != null ? String(it.rate) : '',
+        // Only a line that was saved with its OWN rate keeps one; on an invoice
+        // taxed at a single rate the lines go on inheriting it, so changing the
+        // invoice rate still moves every line.
+        taxRate: invoice.gstRate == null && it.taxRate != null ? String(it.taxRate) : '',
         itemId: it.itemId || null,
       }))
       : [job ? { ...blankItem(), name: job.work || '' } : blankItem()]
@@ -302,7 +316,14 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
 
   // Picking a catalog product fills Name / HSN / Selling Price and links itemId
   // so the backend deducts that product's stock when the invoice is saved.
-  const pickCatalogItem = (i, p) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, itemId: p.id, name: p.name, hsn: p.hsn || '', rate: String(p.price ?? '') } : it)));
+  // Also brings the item's own GST% when it has one recorded, so a catalog of
+  // mixed-rate goods bills correctly without the rate being set by hand each
+  // time. An item saved without a GST% keeps inheriting the invoice's rate.
+  const pickCatalogItem = (i, p) => setItems((arr) => arr.map((it, idx) => (idx === i ? {
+    ...it, itemId: p.id, name: p.name, hsn: p.hsn || '', unit: p.unit || it.unit || '',
+    rate: String(p.price ?? ''),
+    taxRate: p.gst != null && p.gst !== '' ? String(Number(p.gst)) : it.taxRate,
+  } : it)));
 
   // A newly created item is linked exactly like an existing one — same
   // function, so there is no second path that could drift. The catalog is a
@@ -316,6 +337,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
       name: product.name,
       hsn: product.hsn || it.hsn || '',
       unit: product.unit || it.unit || '',
+      taxRate: product.gst != null && product.gst !== '' ? String(Number(product.gst)) : it.taxRate,
       // Keep whatever price was already typed on the line — the person is
       // mid-bill and retyping it would be a nuisance.
       rate: it.rate !== '' && it.rate != null ? it.rate : String(product.price ?? ''),
@@ -331,14 +353,27 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const interStatePreview = !isCash && !!defaults?.companyState && !!posPreview && posPreview !== '—' && posPreview !== defaults.companyState;
 
   const totals = useMemo(() => {
-    let st = 0;
-    items.forEach((it) => { st += (Number(it.qty) || 0) * (Number(it.rate) || 0); });
+    const noTax = isCash || isComposition || form.reverseCharge;
+    let st = 0; let tx = 0;
+    // Taxable value per GST rate, so the panel can show the split on a bill
+    // that mixes rates — one "GST" figure would hide which rate applied where.
+    const byRate = new Map();
+    items.forEach((it) => {
+      const amount = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+      const r = noTax ? 0 : effectiveRate(it, form.gstRate);
+      st += amount;
+      tx += (amount * r) / 100;
+      byRate.set(r, round2((byRate.get(r) || 0) + amount));
+    });
     const subtotal = round2(st);
-    const rate = (isCash || isComposition || form.reverseCharge) ? 0 : (Number(form.gstRate) || 0);
-    const taxTotal = round2((subtotal * rate) / 100);
+    const taxTotal = round2(tx);
     const cgst = interStatePreview ? 0 : round2(taxTotal / 2);
-    const sgst = interStatePreview ? 0 : round2(taxTotal / 2);
+    const sgst = interStatePreview ? 0 : round2(taxTotal - round2(taxTotal / 2));
     const igst = interStatePreview ? taxTotal : 0;
+    const rates = [...byRate.entries()]
+      .filter(([, taxable]) => taxable > 0)
+      .map(([r, taxable]) => ({ rate: r, taxable, tax: round2((taxable * r) / 100) }))
+      .sort((a, b) => a.rate - b.rate);
     const discount = round2(Number(form.discount) || 0);
     const rawTotal = round2(Math.max(0, subtotal + taxTotal - discount));
     // Mirror the server's rounding so the figure on screen IS the figure that
@@ -353,7 +388,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const roundOff = round2(total - rawTotal);
     const received = form.markFullyPaid ? total : round2(Number(form.amountReceived) || 0);
     const balance = round2(Math.max(0, total - Math.min(received, total)));
-    return { subtotal, taxTotal, cgst, sgst, igst, discount, rawTotal, roundOff, total, received, balance };
+    return { subtotal, taxTotal, cgst, sgst, igst, rates, discount, rawTotal, roundOff, total, received, balance };
   }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview, defaults]);
 
   // Look up the customer's advance when one is selected. Not for an edit: the
@@ -391,6 +426,13 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     if (!items.some((it) => it.name.trim() && Number(it.rate) > 0)) return showToast('Add at least one item', 'error');
     setBusy(true);
     try {
+      const billed = items.filter((it) => it.name.trim());
+      // One rate across the whole bill is still sent as the invoice-level
+      // gstRate — the server's original path, and what every existing invoice,
+      // report and printed document reads. Only a bill that genuinely mixes
+      // rates switches to per-line tax, where gstRate would be a lie.
+      const noTaxDoc = isCash || isComposition || form.reverseCharge;
+      const mixed = !noTaxDoc && new Set(billed.map((it) => effectiveRate(it, form.gstRate))).size > 1;
       const body = {
         type,
         // Set only after the user confirms the credit-limit warning below.
@@ -414,7 +456,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         invoiceNumber: form.invoiceNumber !== prefilledNumber ? form.invoiceNumber : undefined,
         paymentTermDays: form.paymentTermDays, dueDate: form.dueDate,
         placeOfSupply: form.placeOfSupply,
-        gstRate: (isCash || isComposition || form.reverseCharge) ? 0 : Number(form.gstRate) || 0,
+        gstRate: mixed ? undefined : ((isCash || isComposition || form.reverseCharge) ? 0 : Number(form.gstRate) || 0),
         reverseCharge: !!form.reverseCharge,
         discount: totals.discount,
         markFullyPaid: form.markFullyPaid,
@@ -424,7 +466,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         bankAccountId: form.bankAccountId || undefined,
         sendPaymentLink: form.sendPaymentLink,
         notes: form.notes, terms: form.terms, attachments,
-        items: items.filter((it) => it.name.trim()).map((it) => ({ name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate), itemId: it.itemId || null })),
+        items: billed.map((it) => ({
+          name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate),
+          unit: it.unit || null, description: it.description || null,
+          taxRate: effectiveRate(it, form.gstRate), itemId: it.itemId || null,
+        })),
       };
       const inv = isEdit
         ? await accountingApi.updateInvoice(invoice.id, body)
@@ -563,6 +609,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
               <span style={{ width: 68, textAlign: 'right' }}>Qty</span>
               <span style={{ width: 58 }}>Unit</span>
               <span style={{ flex: 1.2, minWidth: 82, textAlign: 'right' }}>Price (₹)</span>
+              {!isCash && !isComposition && !form.reverseCharge && <span style={{ width: 74 }}>GST %</span>}
               <span style={{ flex: 1.2, textAlign: 'right' }}>Amount</span>
               <span style={{ width: 18 }} />
             </div>
@@ -634,6 +681,21 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                   <input className="input input-num" style={{ width: 68 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
                   <input className="input" style={{ width: 58 }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
                   <input className="input input-num" style={{ flex: 1.2, minWidth: 82 }} placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
+                  {/* Blank = whatever the invoice's GST Rate is, so a normal
+                      single-rate bill needs nothing here. */}
+                  {!isCash && !isComposition && !form.reverseCharge && (
+                    <select
+                      className="input"
+                      data-testid="line-gst"
+                      title={it.taxRate === '' ? `Taxed at the invoice rate (${form.gstRate}%)` : 'This line has its own GST rate'}
+                      style={{ width: 74, fontSize: 12, color: it.taxRate === '' ? 'var(--text3)' : 'var(--text)' }}
+                      value={it.taxRate}
+                      onChange={(e) => setItem(i, 'taxRate', e.target.value)}
+                    >
+                      <option value="">{form.gstRate}% ▾</option>
+                      {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+                    </select>
+                  )}
                   <span style={{ flex: 1.2, textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{inr(amount)}</span>
                   <button className="btn btn-ghost btn-xs" style={{ width: 18 }} onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))} disabled={items.length === 1}>×</button>
                 </div>
@@ -767,12 +829,25 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                       {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
                     </select>
                   </div>
+                  {/* Lines that set their own rate make the single figure below
+                      ambiguous, so the taxable value is listed rate by rate —
+                      the same split the printed invoice and GSTR-1 show. */}
+                  {totals.rates.length > 1 && (
+                    <div data-testid="gst-split" style={{ padding: '2px 0 4px' }}>
+                      {totals.rates.map((r) => (
+                        <div key={r.rate} className="flex items-center justify-between" style={{ fontSize: 11.5, color: 'var(--text2)' }}>
+                          <span>GST @{r.rate}% on {inr(r.taxable)}</span>
+                          <span>{inr(r.tax)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {interStatePreview ? (
-                    <Row label={`IGST @${form.gstRate}%`} value={inr(totals.igst)} />
+                    <Row label={totals.rates.length > 1 ? 'IGST' : `IGST @${form.gstRate}%`} value={inr(totals.igst)} />
                   ) : (
                     <>
-                      <Row label={`CGST @${round2(Number(form.gstRate) / 2)}%`} value={inr(totals.cgst)} />
-                      <Row label={`SGST @${round2(Number(form.gstRate) / 2)}%`} value={inr(totals.sgst)} />
+                      <Row label={totals.rates.length > 1 ? 'CGST' : `CGST @${round2(Number(form.gstRate) / 2)}%`} value={inr(totals.cgst)} />
+                      <Row label={totals.rates.length > 1 ? 'SGST' : `SGST @${round2(Number(form.gstRate) / 2)}%`} value={inr(totals.sgst)} />
                     </>
                   )}
                 </>

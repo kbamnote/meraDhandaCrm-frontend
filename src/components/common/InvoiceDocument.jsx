@@ -45,23 +45,39 @@ export default function InvoiceDocument({ invoice }) {
   const cancelled = inv.status === 'void' || inv.voided === true;
   const items = Array.isArray(inv.items) ? inv.items : [];
 
+  // What a line is taxed at. An invoice billed at one rate carries it at the
+  // top (`gstRate`) and its lines have none; a bill that mixes rates carries
+  // the rate on each line. Reading the line first keeps both kinds correct.
+  const lineRate = (it) => (
+    it && it.taxRate != null && it.taxRate !== '' ? Number(it.taxRate) || 0 : Number(inv.gstRate) || 0
+  );
+  // True when the lines do not all share one rate — the tax rows can then no
+  // longer be labelled with a single percentage.
+  const mixedRates = useMemo(
+    () => new Set(items.filter((it) => (Number(it.amount) || 0) > 0).map(lineRate)).size > 1,
+    [items, inv.gstRate]
+  );
+
   // HSN-wise tax summary — derived here rather than stored, so it always agrees
   // with the line items even for invoices saved before this view existed.
+  // Grouped by HSN *and rate*: the same HSN billed at two rates is two rows on
+  // GSTR-1, and merging them would misstate the tax.
   const hsnRows = useMemo(() => {
-    const rate = Number(inv.gstRate) || 0;
-    const half = round2(rate / 2);
     const map = new Map();
     items.forEach((it) => {
-      const key = it.hsn || '—';
-      const cur = map.get(key) || { hsn: key, taxable: 0 };
+      const rate = lineRate(it);
+      const hsn = it.hsn || '—';
+      const key = `${hsn}|${rate}`;
+      const cur = map.get(key) || { hsn, rate, taxable: 0 };
       cur.taxable = round2(cur.taxable + (Number(it.amount) || 0));
       map.set(key, cur);
     });
     return [...map.values()].map((r) => {
       if (inv.interState) {
-        const igst = round2((r.taxable * rate) / 100);
-        return { ...r, igstRate: rate, igst, totalTax: igst };
+        const igst = round2((r.taxable * r.rate) / 100);
+        return { ...r, igstRate: r.rate, igst, totalTax: igst };
       }
+      const half = round2(r.rate / 2);
       const cgst = round2((r.taxable * half) / 100);
       return { ...r, cgstRate: half, cgst, sgstRate: half, sgst: cgst, totalTax: round2(cgst * 2) };
     });
@@ -76,6 +92,8 @@ export default function InvoiceDocument({ invoice }) {
   }), { taxable: 0, cgst: 0, sgst: 0, igst: 0, totalTax: 0 });
 
   const qtyTotal = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
+  // Columns the tax/discount/total labels span, one wider with a GST column.
+  const labelSpan = mixedRates ? 6 : 5;
   const halfRate = round2((Number(inv.gstRate) || 0) / 2);
   const qr = upiQrUrl(inv);
   const co = inv.company || {};
@@ -232,6 +250,7 @@ export default function InvoiceDocument({ invoice }) {
                   <th style={{ width: 72 }}>HSN</th>
                   <th style={{ width: 60 }}>QTY.</th>
                   <th style={{ width: 60 }}>RATE</th>
+                  {mixedRates && <th style={{ width: 44 }}>GST</th>}
                   <th style={{ width: 78 }}>AMOUNT</th>
                 </tr>
               </thead>
@@ -246,23 +265,24 @@ export default function InvoiceDocument({ invoice }) {
                     <td className="inv-c">{it.hsn || '—'}</td>
                     <td className="inv-c">{plain(it.qty)}{it.unit ? ` ${it.unit}` : ''}</td>
                     <td className="inv-r">{plain(it.rate)}</td>
+                    {mixedRates && <td className="inv-c">{lineRate(it)}%</td>}
                     <td className="inv-r">{plain(it.amount)}</td>
                   </tr>
                 ))}
 
                 {!isCash && (inv.interState ? (
                   <tr>
-                    <td colSpan={5} className="inv-r"><i>IGST@{inv.gstRate || 0}%</i></td>
+                    <td colSpan={labelSpan} className="inv-r"><i>IGST{mixedRates ? '' : `@${inv.gstRate || 0}%`}</i></td>
                     <td className="inv-r">{money(inv.igst)}</td>
                   </tr>
                 ) : (
                   <>
                     <tr>
-                      <td colSpan={5} className="inv-r"><i>CGST@{halfRate}%</i></td>
+                      <td colSpan={labelSpan} className="inv-r"><i>CGST{mixedRates ? '' : `@${halfRate}%`}</i></td>
                       <td className="inv-r">{money(inv.cgst)}</td>
                     </tr>
                     <tr>
-                      <td colSpan={5} className="inv-r"><i>SGST@{halfRate}%</i></td>
+                      <td colSpan={labelSpan} className="inv-r"><i>SGST{mixedRates ? '' : `@${halfRate}%`}</i></td>
                       <td className="inv-r">{money(inv.sgst)}</td>
                     </tr>
                   </>
@@ -270,7 +290,7 @@ export default function InvoiceDocument({ invoice }) {
 
                 {Number(inv.discount) > 0 && (
                   <tr>
-                    <td colSpan={5} className="inv-r"><i>Discount</i></td>
+                    <td colSpan={labelSpan} className="inv-r"><i>Discount</i></td>
                     <td className="inv-r">− {plain(inv.discount)}</td>
                   </tr>
                 )}
@@ -280,7 +300,7 @@ export default function InvoiceDocument({ invoice }) {
                     the exact one. Shown with its sign so the reader can check it. */}
                 {Number(inv.roundOff) !== 0 && inv.roundOff != null && (
                   <tr>
-                    <td colSpan={5} className="inv-r"><i>Round Off</i></td>
+                    <td colSpan={labelSpan} className="inv-r"><i>Round Off</i></td>
                     <td className="inv-r">
                       {Number(inv.roundOff) > 0 ? '+ ' : '− '}{plain(Math.abs(Number(inv.roundOff)))}
                     </td>
@@ -291,6 +311,7 @@ export default function InvoiceDocument({ invoice }) {
                   <td colSpan={3} className="inv-r">TOTAL</td>
                   <td className="inv-c">{plain(qtyTotal)}</td>
                   <td />
+                  {mixedRates && <td />}
                   <td className="inv-r">{money(inv.total)}</td>
                 </tr>
               </tbody>
