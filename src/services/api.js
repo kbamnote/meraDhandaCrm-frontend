@@ -210,6 +210,7 @@ export const hrApi = {
   payrollGenerate: (month)    => api.post('/hr/payroll/generate', { month }).then(r => r.data),
   productivity:    (params)   => api.get('/hr/productivity', { params }).then(r => r.data),
   attendance:      (date)     => api.get('/hr/attendance', { params: date ? { date } : {} }).then(r => r.data),
+  userAttendance:  (uid, month) => api.get(`/hr/attendance/${uid}`, { params: month ? { month } : {} }).then(r => r.data),
 };
 
 export const paymentApi = {

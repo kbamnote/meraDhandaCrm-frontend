@@ -40,6 +40,83 @@ function Thumb({ uri, onOpen }) {
   );
 }
 
+function UserAttendanceModal({ user, onClose }) {
+  const todayStr = new Date().toISOString().slice(0, 7);
+  const [month, setMonth] = useState(todayStr);
+  const [loading, setLoading] = useState(false);
+  const [records, setRecords] = useState([]);
+
+  useEffect(() => {
+    setLoading(true);
+    hrApi.userAttendance(user.userId, month)
+      .then((res) => setRecords(Array.isArray(res) ? res : []))
+      .catch((e) => showToast('Failed to load user attendance', 'error'))
+      .finally(() => setLoading(false));
+  }, [user.userId, month]);
+
+  const [y, m] = month.split('-');
+  const end = new Date(y, m, 0);
+  const today = new Date();
+  const maxDate = (today.getFullYear() == y && today.getMonth() == m - 1) ? today : end;
+  let workingDays = 0;
+  for (let d = 1; d <= maxDate.getDate(); d++) {
+    if (new Date(y, m - 1, d).getDay() !== 0) workingDays++;
+  }
+
+  const presentDays = records.filter(r => r.status && r.status !== 'absent').length;
+  const absentDays = Math.max(0, workingDays - presentDays);
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="card" style={{ width: '100%', maxWidth: 500, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 600 }}>{user.username}'s Attendance</h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 24, cursor: 'pointer', color: 'var(--text3)' }}>&times;</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+          <input type="month" className="input" value={month} max={todayStr} onChange={(e) => setMonth(e.target.value)} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 16, marginBottom: 16, background: 'var(--surface2)', padding: 12, borderRadius: 8 }}>
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text2)' }}>Present</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>{presentDays}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text2)' }}>Absent (approx)</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--red)' }}>{absentDays}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text2)' }}>Working Days</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{workingDays}</div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {loading ? <div style={{ padding: 20, textAlign: 'center' }}>Loading...</div> : 
+           !records.length ? <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)' }}>No records for this month</div> :
+           (
+             <table className="crm-table">
+               <thead><tr><th>Date</th><th>Status</th><th>In</th><th>Out</th></tr></thead>
+               <tbody>
+                 {records.map(r => (
+                   <tr key={r.id}>
+                     <td>{r.date}</td>
+                     <td><span className={`badge ${STATUS_BADGE[String(r.status || '').toLowerCase()] || 'badge-blue'}`}>{r.status}</span></td>
+                     <td>{fmt(r.checkIn)}</td>
+                     <td>{fmt(r.checkOut)}</td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HrAttendancePage() {
   const t = useT(S);
   const today = new Date().toISOString().slice(0, 10);
@@ -47,6 +124,7 @@ export default function HrAttendancePage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [zoom, setZoom] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
 
   const load = useCallback(async (d) => {
     setLoading(true);
@@ -108,8 +186,10 @@ export default function HrAttendancePage() {
               {rows.map((r) => (
                 <tr key={r.userId}>
                   <td>
-                    <b style={{ color: 'var(--text)' }}>{r.username}</b>
-                    {r.department ? <div style={{ fontSize: 11, color: 'var(--text3)' }}>{r.department}</div> : null}
+                    <div onClick={() => setSelectedUser(r)} style={{ cursor: 'pointer', display: 'inline-block' }}>
+                      <b style={{ color: 'var(--primary)', textDecoration: 'underline' }}>{r.username}</b>
+                      {r.department ? <div style={{ fontSize: 11, color: 'var(--text3)' }}>{r.department}</div> : null}
+                    </div>
                   </td>
                   <td><span className={`badge ${STATUS_BADGE[String(r.status || '').toLowerCase()] || 'badge-blue'}`}>{r.status}</span></td>
                   <td>{fmt(r.checkIn)}{r.inDistance != null ? <span style={{ color: 'var(--text3)', fontSize: 11 }}> · {r.inDistance}m</span> : null}</td>
@@ -132,6 +212,8 @@ export default function HrAttendancePage() {
           <img src={zoom} alt="selfie" style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: 12 }} />
         </div>
       )}
+
+      {selectedUser && <UserAttendanceModal user={selectedUser} onClose={() => setSelectedUser(null)} />}
     </div>
   );
 }
