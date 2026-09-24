@@ -105,29 +105,40 @@ function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
 
   const cardStyle = {
     position: 'relative',
-    display: 'inline-flex',
-    flexDirection: 'column',
+    display: 'flex',
+    alignItems: 'center',
     background: isTarget
       ? 'var(--primary-light, #eff6ff)'
       : 'var(--surface)',
     border: isTarget
       ? '2px dashed var(--primary)'
-      : `2px solid ${isDragging ? 'var(--primary)' : 'var(--border)'}`,
-    borderRadius: 10,
-    padding: '10px 14px',
-    minWidth: 200,
-    maxWidth: 240,
+      : `1px solid ${isDragging ? 'var(--primary)' : 'var(--border)'}`,
+    borderRadius: 8,
+    padding: '8px 12px',
+    marginBottom: 8,
     cursor: canEdit ? 'grab' : 'default',
     opacity: isDragging ? 0.45 : 1,
     transition: 'border-color .15s, background .15s, opacity .15s',
     boxShadow: isTarget
       ? '0 0 0 4px rgba(59,130,246,.18)'
-      : '0 1px 4px rgba(0,0,0,.06)',
+      : '0 1px 2px rgba(0,0,0,.04)',
     userSelect: 'none',
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div style={{ marginLeft: depth > 0 ? 32 : 0, position: 'relative' }}>
+      {/* ── branch line from parent ── */}
+      {depth > 0 && (
+        <div style={{
+          position: 'absolute', left: -20, top: 24, width: 16, height: 2, background: 'var(--border)',
+        }} />
+      )}
+      {depth > 0 && (
+        <div style={{
+          position: 'absolute', left: -20, top: -8, width: 2, bottom: 24, background: 'var(--border)',
+        }} />
+      )}
+
       {/* ── card ── */}
       <div
         draggable={canEdit}
@@ -139,54 +150,48 @@ function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
         style={cardStyle}
         title={canEdit ? 'Drag to reassign manager' : ''}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
           {/* avatar */}
           <div style={{
-            width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+            width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
             background: `${roleColor(node.role)}22`,
-            border: `2px solid ${roleColor(node.role)}`,
+            border: `1px solid ${roleColor(node.role)}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 700, color: roleColor(node.role),
+            fontSize: 12, fontWeight: 700, color: roleColor(node.role),
           }}>
             {initials(node.name, node.email)}
           </div>
           {/* info */}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>
+          <div style={{ minWidth: 0, flex: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 12px' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {node.name || node.email || node.id}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>
-              {node.email && node.name ? node.email : node.department || ''}
+            {(node.email && node.name || node.department) && (
+              <div style={{ fontSize: 12, color: 'var(--text3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {node.email && node.name ? node.email : node.department || ''}
+              </div>
+            )}
+            
+            {/* badges */}
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: .4, textTransform: 'uppercase',
+                background: `${roleColor(node.role)}22`, color: roleColor(node.role),
+                borderRadius: 4, padding: '2px 6px',
+              }}>
+                {node.role || 'pending'}
+              </span>
+              {node.customRole && (
+                <span style={{
+                  fontSize: 10, fontWeight: 600, letterSpacing: .4, textTransform: 'uppercase',
+                  background: 'var(--surface2)', color: 'var(--text2)',
+                  borderRadius: 4, padding: '2px 6px',
+                }}>
+                  {node.customRole}
+                </span>
+              )}
             </div>
           </div>
-        </div>
-
-        {/* role + custom badge */}
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
-          <span style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: .4, textTransform: 'uppercase',
-            background: `${roleColor(node.role)}22`, color: roleColor(node.role),
-            borderRadius: 4, padding: '2px 6px',
-          }}>
-            {node.role || 'pending'}
-          </span>
-          {node.customRole && (
-            <span style={{
-              fontSize: 10, fontWeight: 600, letterSpacing: .4, textTransform: 'uppercase',
-              background: 'var(--surface2)', color: 'var(--text2)',
-              borderRadius: 4, padding: '2px 6px',
-            }}>
-              {node.customRole}
-            </span>
-          )}
-          {node.department && (
-            <span style={{
-              fontSize: 10, color: 'var(--text3)',
-              borderRadius: 4, padding: '2px 6px', background: 'var(--surface2)',
-            }}>
-              {node.department}
-            </span>
-          )}
         </div>
 
         {/* collapse toggle if there are children */}
@@ -194,11 +199,10 @@ function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
           <button
             onClick={(e) => { e.stopPropagation(); setCollapsed((v) => !v); }}
             style={{
-              position: 'absolute', bottom: -12, left: '50%', transform: 'translateX(-50%)',
-              width: 22, height: 22, borderRadius: '50%', border: '1px solid var(--border)',
-              background: 'var(--surface)', cursor: 'pointer', fontSize: 11,
+              marginLeft: 12, width: 24, height: 24, borderRadius: '50%', border: '1px solid var(--border)',
+              background: 'var(--surface2)', cursor: 'pointer', fontSize: 12,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--text2)', zIndex: 2,
+              color: 'var(--text2)',
             }}
           >
             {collapsed ? '+' : '−'}
@@ -208,38 +212,19 @@ function TreeNode({ node, depth, canEdit, onDrop, dragId, setDragId, saving }) {
 
       {/* ── children branch ── */}
       {!collapsed && node.children.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          {/* vertical connector down */}
-          <div style={{ width: 2, height: 24, background: 'var(--border)' }} />
-          {/* horizontal bar */}
-          {node.children.length > 1 && (
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-              <div style={{
-                position: 'absolute', top: 0,
-                left: `calc(50% - ${(node.children.length - 1) * 50}%)`,
-                width: `calc(${(node.children.length - 1) * 100}%)`,
-                height: 2, background: 'var(--border)',
-              }} />
-            </div>
-          )}
-          {/* children row */}
-          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', paddingTop: node.children.length > 1 ? 2 : 0 }}>
-            {node.children.map((child) => (
-              <div key={child.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                {/* vertical connector to each child */}
-                <div style={{ width: 2, height: 20, background: 'var(--border)' }} />
-                <TreeNode
-                  node={child}
-                  depth={depth + 1}
-                  canEdit={canEdit}
-                  onDrop={onDrop}
-                  dragId={dragId}
-                  setDragId={setDragId}
-                  saving={saving}
-                />
-              </div>
-            ))}
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {node.children.map((child) => (
+            <TreeNode
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              canEdit={canEdit}
+              onDrop={onDrop}
+              dragId={dragId}
+              setDragId={setDragId}
+              saving={saving}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -339,20 +324,13 @@ export default function HierarchyPage() {
             </div>
           )}
 
-          {/* ── scrollable tree canvas ── */}
-          <div style={{ overflowX: 'auto', overflowY: 'visible', paddingBottom: 40 }}>
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 0,
-              minWidth: 'max-content',
-              paddingTop: 8,
-            }}>
-              {roots.length === 1 ? (
-                /* single root — render inline */
+          {/* ── vertical tree canvas ── */}
+          <div style={{ paddingBottom: 40, maxWidth: 900 }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {roots.map((root) => (
                 <TreeNode
-                  node={roots[0]}
+                  key={root.id}
+                  node={root}
                   depth={0}
                   canEdit={canEdit}
                   onDrop={onDrop}
@@ -360,23 +338,7 @@ export default function HierarchyPage() {
                   setDragId={setDragId}
                   saving={saving}
                 />
-              ) : (
-                /* multiple roots — lay them horizontally */
-                <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {roots.map((root) => (
-                    <TreeNode
-                      key={root.id}
-                      node={root}
-                      depth={0}
-                      canEdit={canEdit}
-                      onDrop={onDrop}
-                      dragId={dragId}
-                      setDragId={setDragId}
-                      saving={saving}
-                    />
-                  ))}
-                </div>
-              )}
+              ))}
             </div>
           </div>
         </>
