@@ -211,6 +211,10 @@ export const hrApi = {
   productivity:    (params)   => api.get('/hr/productivity', { params }).then(r => r.data),
   attendance:      (date)     => api.get('/hr/attendance', { params: date ? { date } : {} }).then(r => r.data),
   userAttendance:  (uid, month) => api.get(`/hr/attendance/${uid}`, { params: month ? { month } : {} }).then(r => r.data),
+  // Custom date range (inclusive, YYYY-MM-DD). Per-teammate totals for the range…
+  attendanceSummary: (from, to) => api.get('/hr/attendance/summary', { params: { from, to } }).then(r => r.data),
+  // …and one teammate's records within it.
+  userAttendanceRange: (uid, from, to) => api.get(`/hr/attendance/${uid}`, { params: { from, to } }).then(r => r.data),
 };
 
 export const paymentApi = {
