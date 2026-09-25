@@ -3,7 +3,10 @@
  *
  * - "+ Add Teammate" creates a new user (email + password + role) via authApi.createUser.
  * - Real-time list of every user (onValue mpw/users) with an inline role editor
- *   (built-in role select + customRole) that calls authApi.setRole.
+ *   (built-in role select + designation picked from the list) that calls
+ *   authApi.setRole.
+ * - "Designations" panel: the company's list of job titles (add / rename /
+ *   delete). A designation is a label only — permissions stay per person.
  * All write controls require admin / superadmin / owner.
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -25,7 +28,19 @@ const S = {
   thName: { en: 'Name', hi: 'नाम', hinglish: 'Naam', gu: 'નામ', mr: 'नाव', mwr: 'नाम' },
   thEmail: { en: 'Email', hi: 'ईमेल', hinglish: 'Email', gu: 'ઈમેલ', mr: 'ईमेल', mwr: 'ईमेल' },
   thCurrentRole: { en: 'Current role', hi: 'मौजूदा रोल', hinglish: 'Current role', gu: 'વર્તમાન રોલ', mr: 'सध्याची भूमिका', mwr: 'मौजूदा रोल' },
-  thCustomRole: { en: 'Custom role', hi: 'कस्टम रोल', hinglish: 'Custom role', gu: 'કસ્ટમ રોલ', mr: 'कस्टम भूमिका', mwr: 'कस्टम रोल' },
+  thCustomRole: { en: 'Designation', hi: 'पद', hinglish: 'Designation', gu: 'હોદ્દો', mr: 'पद', mwr: 'पद' },
+  designations: { en: '🏷 Designations', hi: '🏷 पद', hinglish: '🏷 Designations', gu: '🏷 હોદ્દા', mr: '🏷 पदे', mwr: '🏷 पद' },
+  designationsHint: { en: 'Job titles you can give teammates. A designation is a label only — access is still set per person.', hi: 'टीममेट्स को दिए जा सकने वाले पद। पद केवल एक लेबल है — एक्सेस हर व्यक्ति के लिए अलग से सेट होता है।', hinglish: 'Teammates ko diye ja sakne wale job titles. Designation sirf label hai — access har person ke liye alag set hota hai.', gu: 'ટીમમેટ્સને આપી શકાય તેવા હોદ્દા. હોદ્દો માત્ર લેબલ છે — ઍક્સેસ દરેક વ્યક્તિ માટે અલગ સેટ થાય છે.', mr: 'टीममेट्सना देता येणारी पदे. पद फक्त लेबल आहे — ॲक्सेस प्रत्येक व्यक्तीसाठी वेगळा सेट होतो.', mwr: 'टीममेट्स ने दिया जा सके वाला पद। पद सिर्फ लेबल है — एक्सेस हर मिनख खातर अलग सेट होवे।' },
+  newDesignation: { en: 'New designation, e.g. Machine Operator', hi: 'नया पद, जैसे मशीन ऑपरेटर', hinglish: 'Naya designation, jaise Machine Operator', gu: 'નવો હોદ્દો, દા.ત. મશીન ઓપરેટર', mr: 'नवीन पद, उदा. मशीन ऑपरेटर', mwr: 'नयो पद, जियां मशीन ऑपरेटर' },
+  addDesignation: { en: '+ Add', hi: '+ जोड़ें', hinglish: '+ Add', gu: '+ ઉમેરો', mr: '+ जोडा', mwr: '+ जोड़ो' },
+  people: { en: 'people', hi: 'लोग', hinglish: 'log', gu: 'લોકો', mr: 'लोक', mwr: 'मिनख' },
+  rename: { en: 'Rename', hi: 'नाम बदलें', hinglish: 'Rename', gu: 'નામ બદલો', mr: 'नाव बदला', mwr: 'नाम बदळो' },
+  noDesignations: { en: 'No designations yet — add the first one above.', hi: 'अभी कोई पद नहीं — ऊपर पहला जोड़ें।', hinglish: 'Abhi koi designation nahi — upar pehla add karein.', gu: 'હજુ કોઈ હોદ્દો નથી — ઉપર પહેલો ઉમેરો.', mr: 'अद्याप पद नाही — वर पहिले जोडा.', mwr: 'अजे कोई पद कोनी — ऊपर पैलो जोड़ो।' },
+  noDesignation: { en: '— No designation —', hi: '— कोई पद नहीं —', hinglish: '— Koi designation nahi —', gu: '— કોઈ હોદ્દો નહીં —', mr: '— पद नाही —', mwr: '— कोई पद कोनी —' },
+  renamePrompt: { en: 'New name for this designation (everyone who has it will be updated):', hi: 'इस पद का नया नाम (जिनके पास यह है, सबका बदल जाएगा):', hinglish: 'Is designation ka naya naam (jinke paas yeh hai, sabka update hoga):', gu: 'આ હોદ્દાનું નવું નામ (જેમની પાસે છે તે બધાનું બદલાશે):', mr: 'या पदाचे नवीन नाव (ज्यांच्याकडे आहे त्या सर्वांचे बदलेल):', mwr: 'इण पद रो नयो नाम (जिकां कने है, सगळां रो बदळ जासी):' },
+  deleteConfirm: { en: 'Delete this designation? It will be removed from', hi: 'यह पद हटाएं? यह हटाया जाएगा', hinglish: 'Yeh designation delete karein? Isse hataya jayega', gu: 'આ હોદ્દો કાઢી નાખીએ? તે દૂર થશે', mr: 'हे पद हटवायचे? ते काढले जाईल', mwr: 'यो पद हटावां? यो हटायो जासी' },
+  saved: { en: 'Saved', hi: 'सेव हो गया', hinglish: 'Save ho gaya', gu: 'સેવ થયું', mr: 'सेव्ह झाले', mwr: 'सेव हो ग्यो' },
+  notSaved: { en: 'in use — not on the list yet', hi: 'उपयोग में — अभी सूची में नहीं', hinglish: 'use me hai — list me nahi', gu: 'વપરાશમાં — હજુ યાદીમાં નથી', mr: 'वापरात — अद्याप यादीत नाही', mwr: 'काम में — अजे लिस्ट में कोनी' },
   thChangeRole: { en: 'Change role', hi: 'रोल बदलें', hinglish: 'Role change karein', gu: 'રોલ બદલો', mr: 'भूमिका बदला', mwr: 'रोल बदलो' },
   roleUpdated: { en: 'Role updated', hi: 'रोल अपडेट हो गया', hinglish: 'Role update ho gaya', gu: 'રોલ અપડેટ થયો', mr: 'भूमिका अपडेट झाली', mwr: 'रोल अपडेट हो ग्यो' },
   failed: { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua', gu: 'નિષ્ફળ', mr: 'अयशस्वी', mwr: 'कोनी हुयो' },
@@ -136,6 +151,7 @@ export default function PermissionsPage() {
   const [users, setUsers] = useState({});
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [designations, setDesignations] = useState([]);
 
   const canEdit = hasRole('admin', 'superadmin', 'owner');
 
@@ -143,6 +159,13 @@ export default function PermissionsPage() {
     const u = onValue(ref(db, 'mpw/users'), (snap) => setUsers(snap.val() || {}));
     return () => u();
   }, []);
+
+  // The designation list, with how many teammates carry each. Reloaded when the
+  // team changes, since assigning or renaming moves those counts.
+  const loadDesignations = () => authApi.designations()
+    .then((d) => setDesignations(Array.isArray(d) ? d : []))
+    .catch(() => {});
+  useEffect(() => { loadDesignations(); }, [users]);
 
   const rows = useMemo(
     () => Object.entries(users).map(([id, u]) => ({ ...u, id })),
@@ -177,6 +200,8 @@ export default function PermissionsPage() {
         )}
       </div>
 
+      {canEdit && <DesignationsPanel t={t} designations={designations} reload={loadDesignations} />}
+
       <input
         className="input mb-4"
         placeholder={t('searchPlaceholder')}
@@ -205,21 +230,109 @@ export default function PermissionsPage() {
             </thead>
             <tbody>
               {filtered.map((u) => (
-                <RoleRow key={u.id} u={u} canEdit={canEdit} t={t} meId={profile?.id} />
+                <RoleRow key={u.id} u={u} canEdit={canEdit} t={t} meId={profile?.id} designations={designations} />
               ))}
             </tbody>
           </table>
         )}
       </div>
 
-      {showAdd && <AddTeammateModal onClose={() => setShowAdd(false)} t={t} />}
+      {showAdd && <AddTeammateModal onClose={() => setShowAdd(false)} t={t} designations={designations} />}
     </div>
   );
 }
 
-function RoleRow({ u, canEdit, t, meId }) {
+// The list's own spelling of a stored designation ('' when none / not listed),
+// so the dropdown shows the right option even if the stored text differs in
+// case or spacing.
+export function matchDesignation(value, list) {
+  const k = String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!k) return '';
+  const hit = (list || []).find((d) => d.name.toLowerCase() === k);
+  return hit ? hit.name : '';
+}
+
+function DesignationSelect({ value, designations, onChange, t, style }) {
+  return (
+    <select className="input" data-testid="designation-select" style={style} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{t('noDesignation')}</option>
+      {designations.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+    </select>
+  );
+}
+
+// Add / rename / delete the company's designations.
+function DesignationsPanel({ t, designations, reload }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const run = async (fn, okMsg) => {
+    setBusy(true);
+    try { await fn(); if (okMsg) showToast(okMsg, 'success'); await reload(); }
+    catch (err) { showToast(err.response?.data?.error || t('failed'), 'error'); }
+    finally { setBusy(false); }
+  };
+  const add = (e) => {
+    e.preventDefault();
+    const n = name.trim();
+    if (!n) return;
+    run(() => authApi.createDesignation(n), t('saved')).then(() => setName(''));
+  };
+  const rename = (d) => {
+    const to = window.prompt(t('renamePrompt'), d.name);
+    if (!to || !to.trim() || to.trim() === d.name) return;
+    run(() => authApi.renameDesignation(d.name, to.trim()), t('saved'));
+  };
+  const remove = (d) => {
+    if (!window.confirm(`${t('deleteConfirm')} ${d.count} ${t('people')}.`)) return;
+    run(() => authApi.deleteDesignation(d.name), t('saved'));
+  };
+
+  return (
+    <div className="card mb-4" data-testid="designations-panel">
+      <div className="flex items-center justify-between" style={{ cursor: 'pointer' }} onClick={() => setOpen((o) => !o)}>
+        <b>{t('designations')} ({designations.length})</b>
+        <span style={{ color: 'var(--text3)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>{t('designationsHint')}</div>
+          <form className="flex gap-2 mb-2" onSubmit={add}>
+            <input className="input" data-testid="new-designation" maxLength={40} placeholder={t('newDesignation')} value={name} onChange={(e) => setName(e.target.value)} />
+            <button type="submit" className="btn btn-primary btn-sm" disabled={busy || !name.trim()}>{t('addDesignation')}</button>
+          </form>
+          {!designations.length ? (
+            <div style={{ fontSize: 13, color: 'var(--text3)', padding: '6px 0' }}>{t('noDesignations')}</div>
+          ) : designations.map((d) => (
+            <div key={d.name} className="flex items-center justify-between" style={{ padding: '6px 0', borderTop: '1px solid var(--border)' }}>
+              <div>
+                <b>{d.name}</b>
+                <span style={{ fontSize: 12, color: 'var(--text3)', marginLeft: 8 }}>
+                  {d.count} {t('people')}{!d.saved ? ` · ${t('notSaved')}` : ''}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <button className="btn btn-ghost btn-xs" disabled={busy} onClick={() => rename(d)}>{t('rename')}</button>
+                <button className="btn btn-ghost btn-xs" style={{ color: 'var(--red)' }} disabled={busy} onClick={() => remove(d)}>{t('remove')}</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RoleRow({ u, canEdit, t, meId, designations = [] }) {
   const [role, setRole] = useState(u.role || 'pending');
-  const [customRole, setCustomRole] = useState(u.customRole || '');
+  // The stored designation in the list's spelling. It only changes when the
+  // saved value does (the list loading, a rename, someone else's save) — not
+  // when the list is merely reloaded — so re-syncing on it never wipes a pick
+  // the admin has made but not saved yet.
+  const stored = matchDesignation(u.customRole, designations);
+  const [customRole, setCustomRole] = useState(stored);
+  useEffect(() => { setCustomRole(stored); }, [stored]);
   const [busy, setBusy] = useState(false);
   const [showAccess, setShowAccess] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -229,7 +342,7 @@ function RoleRow({ u, canEdit, t, meId }) {
   const save = async () => {
     setBusy(true);
     try {
-      await authApi.setRole(u.id, { role, customRole: customRole.trim() || null });
+      await authApi.setRole(u.id, { role, customRole: customRole || null });
       showToast(t('roleUpdated'), 'success');
     } catch (err) {
       showToast(err.response?.data?.error || t('failed'), 'error');
@@ -250,7 +363,7 @@ function RoleRow({ u, canEdit, t, meId }) {
             <select className="input" style={{ maxWidth: 150 }} value={role} onChange={(e) => setRole(e.target.value)}>
               {BUILTIN_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
-            <input className="input" style={{ maxWidth: 130 }} placeholder="customRole" value={customRole} onChange={(e) => setCustomRole(e.target.value)} />
+            <DesignationSelect value={customRole} designations={designations} onChange={setCustomRole} t={t} style={{ maxWidth: 170 }} />
             <button className="btn btn-primary btn-xs" onClick={save} disabled={busy}>
               {busy ? t('saving') : t('save')}
             </button>
@@ -485,8 +598,8 @@ function EditUserModal({ u, t, onClose, meId }) {
   );
 }
 
-function AddTeammateModal({ onClose, t }) {
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff', department: '' });
+function AddTeammateModal({ onClose, t, designations = [] }) {
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff', department: '', customRole: '' });
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -502,6 +615,7 @@ function AddTeammateModal({ onClose, t }) {
         name: form.name.trim(),
         role: form.role,
         department: form.department.trim() || null,
+        customRole: form.customRole || null,
       });
       showToast(`${t('teammateCreatedPrefix')} ${form.email.trim()} ${t('teammateCreatedSuffix')}`, 'success');
       onClose();
@@ -538,6 +652,10 @@ function AddTeammateModal({ onClose, t }) {
             <label>{t('department')}</label>
             <input className="input" value={form.department} onChange={(e) => set('department', e.target.value)} />
           </div>
+        </div>
+        <div className="form-group">
+          <label>{t('thCustomRole')}</label>
+          <DesignationSelect value={form.customRole} designations={designations} onChange={(v) => set('customRole', v)} t={t} />
         </div>
 
         <div className="flex gap-2 mt-2">
