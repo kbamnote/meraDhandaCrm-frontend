@@ -95,8 +95,19 @@ export default function InvoiceDocument({ invoice }) {
   }), { taxable: 0, cgst: 0, sgst: 0, igst: 0, totalTax: 0 });
 
   const qtyTotal = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
-  // Columns the tax/discount/total labels span, one wider with a GST column.
-  const labelSpan = mixedRates ? 6 : 5;
+  // Per-product discounts get their own column (only when any line has one),
+  // and AMOUNT then shows each line after its discount. The Discount row below
+  // is the bill-level part only; older invoices, from before per-line
+  // discounts, have no billDiscount and their `discount` is all bill-level.
+  const lineDisc = (it) => Number(it.itemDiscount) || 0;
+  const hasLineDisc = items.some((it) => lineDisc(it) > 0);
+  const billDiscount = inv.billDiscount != null ? Number(inv.billDiscount) || 0 : Number(inv.discount) || 0;
+  const discLabel = (it) => (it.discountType === 'percent' && Number(it.discountValue) > 0
+    ? `${plain(it.discountValue)}%`
+    : plain(lineDisc(it)));
+  // Columns the tax/discount/total labels span: one wider for each of the GST
+  // and DISC columns.
+  const labelSpan = 5 + (mixedRates ? 1 : 0) + (hasLineDisc ? 1 : 0);
   const halfRate = round2((Number(inv.gstRate) || 0) / 2);
   const qr = upiQrUrl(inv);
   const co = inv.company || {};
@@ -253,6 +264,7 @@ export default function InvoiceDocument({ invoice }) {
                   <th style={{ width: 72 }}>HSN</th>
                   <th style={{ width: 60 }}>QTY.</th>
                   <th style={{ width: 60 }}>RATE</th>
+                  {hasLineDisc && <th style={{ width: 56 }}>DISC.</th>}
                   {mixedRates && <th style={{ width: 44 }}>GST</th>}
                   <th style={{ width: 78 }}>AMOUNT</th>
                 </tr>
@@ -268,15 +280,16 @@ export default function InvoiceDocument({ invoice }) {
                     <td className="inv-c">{it.hsn || '—'}</td>
                     <td className="inv-c">{plain(it.qty)}{it.unit ? ` ${it.unit}` : ''}</td>
                     <td className="inv-r">{plain(it.rate)}</td>
+                    {hasLineDisc && <td className="inv-c">{lineDisc(it) > 0 ? discLabel(it) : '—'}</td>}
                     {mixedRates && <td className="inv-c">{lineRate(it)}%</td>}
-                    <td className="inv-r">{plain(it.amount)}</td>
+                    <td className="inv-r">{plain(round2((Number(it.amount) || 0) - lineDisc(it)))}</td>
                   </tr>
                 ))}
 
-                {Number(inv.discount) > 0 && (
+                {billDiscount > 0 && (
                   <tr>
                     <td colSpan={labelSpan} className="inv-r"><i>Discount</i></td>
-                    <td className="inv-r">− {plain(inv.discount)}</td>
+                    <td className="inv-r">− {plain(billDiscount)}</td>
                   </tr>
                 )}
 
@@ -314,6 +327,7 @@ export default function InvoiceDocument({ invoice }) {
                   <td colSpan={3} className="inv-r">TOTAL</td>
                   <td className="inv-c">{plain(qtyTotal)}</td>
                   <td />
+                  {hasLineDisc && <td />}
                   {mixedRates && <td />}
                   <td className="inv-r">{money(inv.total)}</td>
                 </tr>

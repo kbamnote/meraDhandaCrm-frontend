@@ -75,7 +75,10 @@ const TYPE_CARDS = [
 // what a bill mixing, say, 5% printing with 18% design work needs.
 // itemId links the line to the Items catalog (products); lines without an
 // itemId (free-text or job work) invoice as-is and don't move stock.
-const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', taxRate: '', itemId: null });
+// discountType/discountValue: an optional discount on THIS line only, as a %
+// of the line or a flat ₹ amount. It comes off before GST, and before the
+// bill-level Discount is spread over what is left (the server does the same).
+const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', taxRate: '', itemId: null, discountType: 'percent', discountValue: '' });
 
 const DOC_TYPES = [
   { value: 'proforma', label: 'Proforma Invoice' },
@@ -102,6 +105,18 @@ export function allocateDiscount(amounts, discount, subtotal) {
   });
   if (last >= 0 && given !== d) shares[last] = round2(shares[last] + (d - given));
   return shares;
+}
+
+/**
+ * A line's own discount in rupees: `discountValue` % of the line when
+ * discountType is 'percent', else a flat amount. Clamped to the line so it can
+ * never go negative. Mirrors lineItemDiscount() on the server.
+ */
+export function lineDiscount(item, amount) {
+  const v = Number(item && item.discountValue);
+  if (!(v > 0) || !(amount > 0)) return 0;
+  const d = item.discountType === 'percent' ? (amount * Math.min(v, 100)) / 100 : v;
+  return round2(Math.min(amount, d));
 }
 
 // What a line is actually taxed at: its own rate when it has one, else the
@@ -249,7 +264,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     placeOfSupply: invoice?.placeOfSupply || 'auto',
     reverseCharge: !!invoice?.reverseCharge,
     gstRate: invoice?.gstRate != null ? String(invoice.gstRate) : '18',
-    discount: invoice?.discount != null ? String(invoice.discount) : '0',
+    // The bill-level part only. `discount` on a saved invoice is the TOTAL (line
+    // discounts included); invoices from before per-line discounts have no
+    // billDiscount, and there the two are the same thing.
+    discount: invoice?.billDiscount != null ? String(invoice.billDiscount)
+      : (invoice?.discount != null ? String(invoice.discount) : '0'),
     // Payment capture belongs to creation only — the edit endpoint refuses any
     // invoice that already has a receipt against it.
     markFullyPaid: false,
@@ -274,6 +293,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         // invoice rate still moves every line.
         taxRate: invoice.gstRate == null && it.taxRate != null ? String(it.taxRate) : '',
         itemId: it.itemId || null,
+        discountType: it.discountType === 'amount' ? 'amount' : 'percent',
+        discountValue: it.discountValue != null ? String(it.discountValue) : '',
       }))
       : [job ? { ...blankItem(), name: job.work || '' } : blankItem()]
   );
@@ -435,11 +456,19 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const noTax = isCash || isComposition || form.reverseCharge;
     const amounts = items.map((it) => round2((Number(it.qty) || 0) * (Number(it.rate) || 0)));
     const subtotal = round2(amounts.reduce((a, n) => a + n, 0));
-    const discount = round2(Number(form.discount) || 0);
-    // GST is charged on what the customer actually pays, so a bill discount
-    // comes off each line BEFORE its tax — s.15(3)(a) of the CGST Act. The
-    // server does the same sum; this mirrors it so the screen shows what saves.
-    const shares = allocateDiscount(amounts, discount, subtotal);
+    // Each line's own discount first, then the bill discount spread over what
+    // the lines come to after it — capped there so the two can't exceed the bill.
+    const itemDiscs = items.map((it, i) => lineDiscount(it, amounts[i]));
+    const itemDiscount = round2(itemDiscs.reduce((a, n) => a + n, 0));
+    const nets = amounts.map((a, i) => round2(a - itemDiscs[i]));
+    const netSubtotal = round2(subtotal - itemDiscount);
+    const billDiscount = round2(Math.min(Math.max(0, Number(form.discount) || 0), netSubtotal));
+    const discount = round2(itemDiscount + billDiscount);
+    // GST is charged on what the customer actually pays, so discounts come off
+    // each line BEFORE its tax — s.15(3)(a) of the CGST Act. The server does
+    // the same sum; this mirrors it so the screen shows what saves.
+    const billShares = allocateDiscount(nets, billDiscount, netSubtotal);
+    const shares = itemDiscs.map((d, i) => round2(d + billShares[i]));
     let tx = 0;
     // Taxable value per GST rate, so the panel can show the split on a bill
     // that mixes rates — one "GST" figure would hide which rate applied where.
@@ -472,7 +501,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const roundOff = round2(total - rawTotal);
     const received = form.markFullyPaid ? total : round2(Number(form.amountReceived) || 0);
     const balance = round2(Math.max(0, total - Math.min(received, total)));
-    return { subtotal, taxableValue, taxTotal, cgst, sgst, igst, rates, discount, rawTotal, roundOff, total, received, balance };
+    return { subtotal, taxableValue, taxTotal, cgst, sgst, igst, rates, discount, itemDiscount, billDiscount, itemDiscs, rawTotal, roundOff, total, received, balance };
   }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview, defaults]);
 
   // Look up the customer's advance when one is selected. Not for an edit: the
@@ -542,7 +571,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         placeOfSupply: form.placeOfSupply,
         gstRate: mixed ? undefined : ((isCash || isComposition || form.reverseCharge) ? 0 : Number(form.gstRate) || 0),
         reverseCharge: !!form.reverseCharge,
-        discount: totals.discount,
+        // Bill-level only; each line carries its own below. The server adds the
+        // two up into the invoice's total `discount`.
+        discount: totals.billDiscount,
         markFullyPaid: form.markFullyPaid,
         applyAdvance: useAdvance || undefined,
         amountReceived: form.markFullyPaid ? undefined : Number(form.amountReceived) || 0,
@@ -554,6 +585,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
           name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate),
           unit: it.unit || null, description: it.description || null,
           taxRate: effectiveRate(it, form.gstRate), itemId: it.itemId || null,
+          ...(Number(it.discountValue) > 0
+            ? { discountType: it.discountType === 'amount' ? 'amount' : 'percent', discountValue: Number(it.discountValue) }
+            : {}),
         })),
       };
       const inv = isEdit
@@ -728,13 +762,16 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
               <span style={{ width: 68, textAlign: 'right' }}>Qty</span>
               <span style={{ width: 58 }}>Unit</span>
               <span style={{ flex: 1.2, minWidth: 82, textAlign: 'right' }}>Price (₹)</span>
+              <span style={{ width: 118 }}>Disc.</span>
               {!isCash && !isComposition && !form.reverseCharge && <span style={{ width: 74 }}>GST %</span>}
               <span style={{ flex: 1.2, textAlign: 'right' }}>Amount</span>
               <span style={{ width: 62 }} />
               <span style={{ width: 18 }} />
             </div>
             {items.map((it, i) => {
-              const amount = round2((Number(it.qty) || 0) * (Number(it.rate) || 0));
+              const gross = round2((Number(it.qty) || 0) * (Number(it.rate) || 0));
+              const itemDisc = lineDiscount(it, gross);
+              const amount = round2(gross - itemDisc);
               const q = (it.name || '').trim().toLowerCase();
               const exactMatch = catalog.some((c) => c.name === it.name);
               const itemMatches = (q.length < 1 || exactMatch)
@@ -824,6 +861,31 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                   <input className="input input-num" style={{ width: 68 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
                   <input className="input" style={{ width: 58 }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
                   <input className="input input-num" style={{ flex: 1.2, minWidth: 82 }} placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
+                  {/* Discount on this product only — % of the line or flat ₹.
+                      Blank = none; the bill Discount below still applies. */}
+                  <div className="flex" style={{ width: 118, gap: 2 }}>
+                    <input
+                      className="input input-num"
+                      data-testid="line-disc"
+                      style={{ width: 66 }}
+                      placeholder="Disc"
+                      type="number"
+                      min="0"
+                      value={it.discountValue}
+                      onChange={(e) => setItem(i, 'discountValue', e.target.value)}
+                    />
+                    <select
+                      className="input"
+                      data-testid="line-disc-type"
+                      title="Discount as a % of this line, or a flat ₹ amount"
+                      style={{ width: 50, fontSize: 12, padding: '0 2px' }}
+                      value={it.discountType}
+                      onChange={(e) => setItem(i, 'discountType', e.target.value)}
+                    >
+                      <option value="percent">%</option>
+                      <option value="amount">₹</option>
+                    </select>
+                  </div>
                   {/* Blank = whatever the invoice's GST Rate is, so a normal
                       single-rate bill needs nothing here. */}
                   {!isCash && !isComposition && !form.reverseCharge && (
@@ -839,7 +901,14 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                       {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
                     </select>
                   )}
-                  <span style={{ flex: 1.2, textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{inr(amount)}</span>
+                  <span style={{ flex: 1.2, textAlign: 'right', fontSize: 13, fontWeight: 600 }} data-testid="line-amount">
+                    {inr(amount)}
+                    {itemDisc > 0 && (
+                      <span style={{ display: 'block', fontSize: 10.5, fontWeight: 400, color: 'var(--text3)' }}>
+                        <s>{inr(gross)}</s> − {inr(itemDisc)}
+                      </span>
+                    )}
+                  </span>
                   {/* The offer inside the name dropdown is easy to miss, and it
                       never appears at all for someone who starts from the HSN.
                       This is the same dialog, always reachable. */}
@@ -1010,7 +1079,12 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                   )}
                 </>
               )}
-              <div className="flex items-center justify-between" style={{ padding: '3px 0' }}>
+              {totals.itemDiscount > 0 && (
+                <div data-testid="item-discount-total">
+                  <Row label="Item discounts" value={`− ${inr(totals.itemDiscount)}`} />
+                </div>
+              )}
+              <div className="flex items-center justify-between" style={{ padding: '3px 0' }} title="Discount on the whole bill, spread over the items">
                 <span>Discount</span>
                 <input className="input" type="number" style={{ width: 90, textAlign: 'right' }} value={form.discount} onChange={(e) => setF('discount', e.target.value)} />
               </div>
