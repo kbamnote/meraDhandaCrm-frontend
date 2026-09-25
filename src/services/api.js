@@ -169,6 +169,11 @@ export const authApi = {
   setRole:    (uid, b)          => api.patch(`/auth/users/${uid}/role`, b).then(r => r.data),
   updateUser: (uid, b)          => api.patch(`/auth/users/${uid}`, b).then(r => r.data),
   deleteUser: (uid)             => api.delete(`/auth/users/${uid}`).then(r => r.data),
+  // Designations — the job-title list a teammate's designation is picked from.
+  designations:      ()         => api.get('/auth/designations').then(r => r.data),
+  createDesignation: (name)     => api.post('/auth/designations', { name }).then(r => r.data),
+  renameDesignation: (from, to) => api.patch('/auth/designations', { from, to }).then(r => r.data),
+  deleteDesignation: (name)     => api.delete('/auth/designations', { params: { name } }).then(r => r.data),
 };
 
 // The caller's own company (plan / trial status / branding).
