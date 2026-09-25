@@ -84,6 +84,26 @@ const DOC_TYPES = [
 ];
 const GST_RATES = ['0', '5', '12', '18', '28'];
 
+/**
+ * Spread a bill-level discount across the lines in proportion to their value,
+ * the last one taking the rounding remainder so the shares add back exactly.
+ * Mirrors the server, which does the same before charging GST.
+ */
+export function allocateDiscount(amounts, discount, subtotal) {
+  const shares = (amounts || []).map(() => 0);
+  const d = round2(Math.min(Math.max(0, Number(discount) || 0), subtotal));
+  if (!(d > 0) || !(subtotal > 0)) return shares;
+  let given = 0; let last = -1;
+  amounts.forEach((amt, i) => {
+    if (!(amt > 0)) return;
+    shares[i] = round2((d * amt) / subtotal);
+    given = round2(given + shares[i]);
+    last = i;
+  });
+  if (last >= 0 && given !== d) shares[last] = round2(shares[last] + (d - given));
+  return shares;
+}
+
 // What a line is actually taxed at: its own rate when it has one, else the
 // invoice's. Exported so the form and its tests agree on one rule.
 export function effectiveRate(item, invoiceRate) {
@@ -413,28 +433,33 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
 
   const totals = useMemo(() => {
     const noTax = isCash || isComposition || form.reverseCharge;
-    let st = 0; let tx = 0;
+    const amounts = items.map((it) => round2((Number(it.qty) || 0) * (Number(it.rate) || 0)));
+    const subtotal = round2(amounts.reduce((a, n) => a + n, 0));
+    const discount = round2(Number(form.discount) || 0);
+    // GST is charged on what the customer actually pays, so a bill discount
+    // comes off each line BEFORE its tax — s.15(3)(a) of the CGST Act. The
+    // server does the same sum; this mirrors it so the screen shows what saves.
+    const shares = allocateDiscount(amounts, discount, subtotal);
+    let tx = 0;
     // Taxable value per GST rate, so the panel can show the split on a bill
     // that mixes rates — one "GST" figure would hide which rate applied where.
     const byRate = new Map();
-    items.forEach((it) => {
-      const amount = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+    items.forEach((it, i) => {
+      const taxable = round2(amounts[i] - shares[i]);
       const r = noTax ? 0 : effectiveRate(it, form.gstRate);
-      st += amount;
-      tx += (amount * r) / 100;
-      byRate.set(r, round2((byRate.get(r) || 0) + amount));
+      tx += (taxable * r) / 100;
+      byRate.set(r, round2((byRate.get(r) || 0) + taxable));
     });
-    const subtotal = round2(st);
     const taxTotal = round2(tx);
     const cgst = interStatePreview ? 0 : round2(taxTotal / 2);
     const sgst = interStatePreview ? 0 : round2(taxTotal - round2(taxTotal / 2));
     const igst = interStatePreview ? taxTotal : 0;
+    const taxableValue = round2(Math.max(0, subtotal - discount));
     const rates = [...byRate.entries()]
       .filter(([, taxable]) => taxable > 0)
       .map(([r, taxable]) => ({ rate: r, taxable, tax: round2((taxable * r) / 100) }))
       .sort((a, b) => a.rate - b.rate);
-    const discount = round2(Number(form.discount) || 0);
-    const rawTotal = round2(Math.max(0, subtotal + taxTotal - discount));
+    const rawTotal = round2(Math.max(0, taxableValue + taxTotal));
     // Mirror the server's rounding so the figure on screen IS the figure that
     // gets saved. The server recomputes authoritatively; this is display only.
     const mode = defaults?.invoiceRounding || 'nearest';
@@ -447,7 +472,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const roundOff = round2(total - rawTotal);
     const received = form.markFullyPaid ? total : round2(Number(form.amountReceived) || 0);
     const balance = round2(Math.max(0, total - Math.min(received, total)));
-    return { subtotal, taxTotal, cgst, sgst, igst, rates, discount, rawTotal, roundOff, total, received, balance };
+    return { subtotal, taxableValue, taxTotal, cgst, sgst, igst, rates, discount, rawTotal, roundOff, total, received, balance };
   }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview, defaults]);
 
   // Look up the customer's advance when one is selected. Not for an edit: the
@@ -989,6 +1014,13 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                 <span>Discount</span>
                 <input className="input" type="number" style={{ width: 90, textAlign: 'right' }} value={form.discount} onChange={(e) => setF('discount', e.target.value)} />
               </div>
+              {/* Says which figure the GST above was charged on — without it a
+                  discounted bill looks like the tax does not match the rate. */}
+              {totals.discount > 0 && (
+                <div style={{ fontSize: 11, color: 'var(--text3)', paddingBottom: 4 }} data-testid="taxable-note">
+                  GST charged on {inr(totals.taxableValue)} (after discount)
+                </div>
+              )}
               <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
               {totals.roundOff !== 0 && (
                 <Row label="Round Off" value={`${totals.roundOff > 0 ? '+' : '−'} ${inr(Math.abs(totals.roundOff))}`} />

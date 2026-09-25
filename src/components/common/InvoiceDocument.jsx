@@ -69,7 +69,10 @@ export default function InvoiceDocument({ invoice }) {
       const hsn = it.hsn || '—';
       const key = `${hsn}|${rate}`;
       const cur = map.get(key) || { hsn, rate, taxable: 0 };
-      cur.taxable = round2(cur.taxable + (Number(it.amount) || 0));
+      // A discounted line is reported at its discounted value: GST is charged
+      // on that, so the summary has to agree with the tax rows above it.
+      // Older invoices carry no per-line `taxable` and were taxed on `amount`.
+      cur.taxable = round2(cur.taxable + (Number(it.taxable != null ? it.taxable : it.amount) || 0));
       map.set(key, cur);
     });
     return [...map.values()].map((r) => {
@@ -270,6 +273,13 @@ export default function InvoiceDocument({ invoice }) {
                   </tr>
                 ))}
 
+                {Number(inv.discount) > 0 && (
+                  <tr>
+                    <td colSpan={labelSpan} className="inv-r"><i>Discount</i></td>
+                    <td className="inv-r">− {plain(inv.discount)}</td>
+                  </tr>
+                )}
+
                 {!isCash && (inv.interState ? (
                   <tr>
                     <td colSpan={labelSpan} className="inv-r"><i>IGST{mixedRates ? '' : `@${inv.gstRate || 0}%`}</i></td>
@@ -287,13 +297,6 @@ export default function InvoiceDocument({ invoice }) {
                     </tr>
                   </>
                 ))}
-
-                {Number(inv.discount) > 0 && (
-                  <tr>
-                    <td colSpan={labelSpan} className="inv-r"><i>Discount</i></td>
-                    <td className="inv-r">− {plain(inv.discount)}</td>
-                  </tr>
-                )}
 
                 {/* Without this line the invoice doesn't add up: TOTAL is the
                     rounded figure, while the taxable value and tax above sum to
