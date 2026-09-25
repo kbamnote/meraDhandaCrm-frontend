@@ -7,6 +7,7 @@
  * The job LIST is read live from `mpw/jobs` via the realtime shim.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { DATE_PRESETS, presetRange, inDateRange, isoDay } from '../utils/jobDateFilter';
 import { ref, onValue, db } from '../services/realtime';
 import { ordersApi, dbApi, uploadApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +31,8 @@ const STAGE_META = {
   cancelled:  { label: 'Cancelled', emoji: '✖', color: '#DC2626' },
 };
 const ALL_STAGES = [...STAGES, 'hold', 'cancelled'];
+// Label key for each date preset.
+const PRESET_KEY = { all: 'pAll', today: 'pToday', yesterday: 'pYesterday', last7: 'pLast7', thisMonth: 'pThisMonth', lastMonth: 'pLastMonth', custom: 'pCustom' };
 
 const S = {
   title:       { en: '📋 Job Cards', hi: '📋 जॉब कार्ड', hinglish: '📋 Job Cards', gu: '📋 જોબ કાર્ડ', mr: '📋 जॉब कार्ड', mwr: '📋 जॉब कार्ड' },
@@ -56,6 +59,19 @@ const S = {
   willBe:      { en: 'Job number', hi: 'जॉब नंबर', hinglish: 'Job number', gu: 'જોબ નંબર', mr: 'जॉब नंबर', mwr: 'जॉब नंबर' },
   normal:      { en: 'Normal', hi: 'सामान्य', hinglish: 'Normal', gu: 'સામાન્ય', mr: 'सामान्य', mwr: 'सामान्य' },
   urgent:      { en: '⚡ Urgent', hi: '⚡ अर्जेंट', hinglish: '⚡ Urgent', gu: '⚡ અર્જન્ટ', mr: '⚡ तातडीचे', mwr: '⚡ अर्जेंट' },
+  dateBy:      { en: 'Date', hi: 'तारीख', hinglish: 'Date', gu: 'તારીખ', mr: 'तारीख', mwr: 'तारीख' },
+  byCreated:   { en: 'Created on', hi: 'बनाने की तारीख', hinglish: 'Created on', gu: 'બનાવ્યાની તારીખ', mr: 'तयार केल्याची तारीख', mwr: 'बणावण री तारीख' },
+  byDelivery:  { en: 'Delivery date', hi: 'डिलीवरी तारीख', hinglish: 'Delivery date', gu: 'ડિલિવરી તારીખ', mr: 'डिलिव्हरी तारीख', mwr: 'डिलीवरी तारीख' },
+  pAll:        { en: 'All dates', hi: 'सभी तारीखें', hinglish: 'All dates', gu: 'બધી તારીખો', mr: 'सर्व तारखा', mwr: 'सगळी तारीखां' },
+  pToday:      { en: 'Today', hi: 'आज', hinglish: 'Today', gu: 'આજે', mr: 'आज', mwr: 'आज' },
+  pYesterday:  { en: 'Yesterday', hi: 'कल', hinglish: 'Yesterday', gu: 'ગઈકાલે', mr: 'काल', mwr: 'काल' },
+  pLast7:      { en: 'Last 7 days', hi: 'पिछले 7 दिन', hinglish: 'Last 7 days', gu: 'છેલ્લા 7 દિવસ', mr: 'मागील 7 दिवस', mwr: 'पाछला 7 दिन' },
+  pThisMonth:  { en: 'This month', hi: 'इस महीने', hinglish: 'This month', gu: 'આ મહિને', mr: 'हा महिना', mwr: 'इण महीने' },
+  pLastMonth:  { en: 'Last month', hi: 'पिछला महीना', hinglish: 'Last month', gu: 'ગયા મહિને', mr: 'मागील महिना', mwr: 'पाछलो महीनो' },
+  pCustom:     { en: 'Custom…', hi: 'कस्टम…', hinglish: 'Custom…', gu: 'કસ્ટમ…', mr: 'कस्टम…', mwr: 'कस्टम…' },
+  from:        { en: 'From', hi: 'से', hinglish: 'From', gu: 'થી', mr: 'पासून', mwr: 'सूं' },
+  to:          { en: 'To', hi: 'तक', hinglish: 'To', gu: 'સુધી', mr: 'पर्यंत', mwr: 'तांई' },
+  showing:     { en: 'showing', hi: 'दिखा रहे', hinglish: 'showing', gu: 'બતાવી રહ્યા', mr: 'दाखवत आहे', mwr: 'दिखा रया' },
 };
 
 function StageBadge({ stage }) {
@@ -73,6 +89,10 @@ export default function JobCardsPage() {
   const [jobs, setJobs] = useState({});
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
+  // Date filter: which date to look at, a preset, and the custom range.
+  const [dateField, setDateField] = useState('created');
+  const [datePreset, setDatePreset] = useState('all');
+  const [custom, setCustom] = useState({ from: '', to: '' });
   const [showNew, setShowNew] = useState(false);
   const [assignJob, setAssignJob] = useState(null);
 
@@ -87,9 +107,18 @@ export default function JobCardsPage() {
     [jobs]
   );
 
+  const today = isoDay(new Date());
+  const range = datePreset === 'custom' ? custom : presetRange(datePreset, today);
+  // Jobs in the chosen date range. The stage chips count within it, so they
+  // answer "how many of THESE are in production" rather than all-time totals.
+  const dated = useMemo(
+    () => all.filter((j) => inDateRange(j, dateField, range.from, range.to)),
+    [all, dateField, range.from, range.to]
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return all.filter((j) => {
+    return dated.filter((j) => {
       if (stageFilter !== 'all' && j.stage !== stageFilter) return false;
       if (!q) return true;
       return (j.jobNo || '').toLowerCase().includes(q) ||
@@ -97,13 +126,14 @@ export default function JobCardsPage() {
         (j.clientMobile || '').includes(q) ||
         (j.work || '').toLowerCase().includes(q);
     });
-  }, [all, search, stageFilter]);
+  }, [dated, search, stageFilter]);
 
   const counts = useMemo(() => {
     const c = {};
-    all.forEach((j) => { c[j.stage] = (c[j.stage] || 0) + 1; });
+    dated.forEach((j) => { c[j.stage] = (c[j.stage] || 0) + 1; });
     return c;
-  }, [all]);
+  }, [dated]);
+  const dateActive = !!(range.from || range.to);
 
   const move = async (job, to) => {
     if (!to || to === job.stage) return;
@@ -127,15 +157,47 @@ export default function JobCardsPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
-          <div style={{ fontSize: 13, color: 'var(--text2)' }}>{all.length} total</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)' }} data-testid="job-total">
+            {all.length} total{dateActive || stageFilter !== 'all' || search.trim() ? ` · ${t('showing')} ${filtered.length}` : ''}
+          </div>
         </div>
         <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>{t('newJob')}</button>
       </div>
 
       <input className="input mb-4" placeholder={t('search')} value={search} onChange={(e) => setSearch(e.target.value)} />
 
+      {/* Date filter — by the day the job was created, or its delivery date. */}
+      <div className="flex items-center gap-2 mb-4" style={{ flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>📅 {t('dateBy')}</span>
+        <select className="input" data-testid="date-field" style={{ maxWidth: 150 }} value={dateField} onChange={(e) => setDateField(e.target.value)}>
+          <option value="created">{t('byCreated')}</option>
+          <option value="delivery">{t('byDelivery')}</option>
+        </select>
+        <select className="input" data-testid="date-preset" style={{ maxWidth: 150 }} value={datePreset}
+          onChange={(e) => {
+            const v = e.target.value;
+            // Starting a custom range from the preset that was showing saves retyping.
+            if (v === 'custom' && datePreset !== 'custom') setCustom(presetRange(datePreset, today) || { from: '', to: '' });
+            setDatePreset(v);
+          }}>
+          {DATE_PRESETS.map((p) => <option key={p} value={p}>{t(PRESET_KEY[p])}</option>)}
+        </select>
+        {datePreset === 'custom' && (
+          <>
+            <input type="date" className="input" data-testid="date-from" aria-label={t('from')} style={{ maxWidth: 160 }}
+              value={custom.from} max={custom.to || undefined} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
+            <span style={{ color: 'var(--text3)' }}>→</span>
+            <input type="date" className="input" data-testid="date-to" aria-label={t('to')} style={{ maxWidth: 160 }}
+              value={custom.to} min={custom.from || undefined} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+          </>
+        )}
+        {dateActive && (
+          <button className="btn btn-ghost btn-xs" onClick={() => { setDatePreset('all'); setCustom({ from: '', to: '' }); }}>✕</button>
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-        <Chip active={stageFilter === 'all'} onClick={() => setStageFilter('all')} label={`${t('all')} (${all.length})`} />
+        <Chip active={stageFilter === 'all'} onClick={() => setStageFilter('all')} label={`${t('all')} (${dated.length})`} />
         {STAGES.map((s) => (
           <Chip key={s} active={stageFilter === s} onClick={() => setStageFilter(s)}
             label={`${STAGE_META[s].emoji} ${STAGE_META[s].label} (${counts[s] || 0})`} color={STAGE_META[s].color} />
