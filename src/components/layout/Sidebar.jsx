@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
 import { PERM_OF, canViewModule } from '../../config/access';
+import useStageCounts from '../../hooks/useStageCounts';
 
 const SECTION_S = {
   Workspace: { en: 'Workspace', hi: 'वर्कस्पेस', hinglish: 'Workspace', gu: 'વર્કસ્પેસ', mr: 'वर्कस्पेस', mwr: 'वर्कस्पेस' },
@@ -238,6 +239,22 @@ const SECTIONS = [
   },
 ];
 
+// Which job stage each nav row reports, so someone can see that eleven jobs are
+// waiting in Designing without opening the page. 'active' is everything still in
+// progress. A row not listed here carries no number: a badge people cannot act
+// on is noise, and a wrong one is worse than none.
+const STAGE_BADGE = {
+  '/job-cards': 'active',
+  '/designers': 'designer',
+  '/designer': 'designer',
+  '/designers-view': 'designer',
+  '/jobsetter': 'jobsetter',
+  '/production': 'production',
+  '/qc': 'qc',
+  '/dispatch': 'dispatch',
+  '/hold': 'hold',
+};
+
 // Platform super-admins (MeraDhanda staff) operate the PLATFORM, not a CRM — so
 // they get a focused nav (companies console + profile), never the tenant
 // operational sections (Job Cards / Tasks / Designer / HR / …).
@@ -301,6 +318,16 @@ export default function Sidebar({ open, onClose }) {
   };
 
   const onTrial = tenant && tenant.plan === 'trial';
+
+  // Jobs per stage, counted server-side. Zero is not shown: an empty queue
+  // needs no badge, and every row carrying a grey 0 buries the ones that matter.
+  const stageCounts = useStageCounts();
+  const badgeFor = (to) => {
+    const key = STAGE_BADGE[to];
+    if (!key) return 0;
+    const n = key === 'active' ? stageCounts.active : (stageCounts.byStage[key] || 0);
+    return Number(n) || 0;
+  };
 
   // Search matches against the TRANSLATED label (what's actually on screen),
   // so typing in Hindi/Gujarati/etc. finds the same items a user is reading.
@@ -400,8 +427,22 @@ export default function Sidebar({ open, onClose }) {
                   onClick={onClose}
                   data-legacy={item.legacy}
                   className={({ isActive }) => isActive ? 'active' : ''}
+                  style={{ justifyContent: 'space-between' }}
                 >
-                  {t(item.label)}
+                  <span>{t(item.label)}</span>
+                  {badgeFor(item.to) > 0 && (
+                    <span
+                      data-testid={`nav-count-${item.to}`}
+                      title={`${badgeFor(item.to)} job${badgeFor(item.to) === 1 ? '' : 's'}`}
+                      style={{
+                        minWidth: 20, textAlign: 'center', padding: '1px 6px', borderRadius: 10,
+                        fontSize: 11, fontWeight: 700, lineHeight: '16px',
+                        background: 'rgba(255,255,255,.16)', color: '#fff', flexShrink: 0,
+                      }}
+                    >
+                      {badgeFor(item.to) > 99 ? '99+' : badgeFor(item.to)}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </div>

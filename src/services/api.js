@@ -245,6 +245,8 @@ export const ordersApi = {
   nextNumber:  ()           => api.get('/orders/next-number').then(r => r.data),
   searchClients: (q)        => api.get('/orders/clients/search', { params: { q } }).then(r => r.data),
   lookups:     ()           => api.get('/orders/lookups').then(r => r.data),
+  // Jobs per stage, for the sidebar badges — a count, not the jobs.
+  stageCounts: ()           => api.get('/orders/stage-counts').then(r => r.data),
   create:      (body)       => api.post('/orders', body).then(r => r.data),
   transition:  (id, body)   => api.post(`/orders/${id}/transition`, body).then(r => r.data),
   reschedule:  (id, body)   => api.post(`/orders/${id}/reschedule`, body).then(r => r.data),
