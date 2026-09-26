@@ -248,6 +248,9 @@ export const ordersApi = {
   // Jobs per stage, for the sidebar badges — a count, not the jobs.
   stageCounts: ()           => api.get('/orders/stage-counts').then(r => r.data),
   create:      (body)       => api.post('/orders', body).then(r => r.data),
+  // Correct a job card's details. The stage moves via transition(), and the
+  // job number never changes.
+  update:      (id, body)   => api.put(`/orders/${id}`, body).then(r => r.data),
   transition:  (id, body)   => api.post(`/orders/${id}/transition`, body).then(r => r.data),
   reschedule:  (id, body)   => api.post(`/orders/${id}/reschedule`, body).then(r => r.data),
   departments: ()           => api.get('/orders/departments').then(r => r.data),

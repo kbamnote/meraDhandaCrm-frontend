@@ -52,6 +52,9 @@ const S = {
   create:      { en: 'Create job card', hi: 'जॉब कार्ड बनाएं', hinglish: 'Job card banayein', gu: 'જોબ કાર્ડ બનાવો', mr: 'जॉब कार्ड तयार करा', mwr: 'जॉब कार्ड बणावो' },
   cancel:      { en: 'Cancel', hi: 'रद्द करें', hinglish: 'Cancel', gu: 'રદ કરો', mr: 'रद्द करा', mwr: 'रद्द करो' },
   nameReq:     { en: 'Client name is required', hi: 'क्लाइंट का नाम ज़रूरी है', hinglish: 'Client ka naam zaroori hai', gu: 'ક્લાયન્ટનું નામ જરૂરી છે', mr: 'क्लायंटचे नाव आवश्यक', mwr: 'क्लाइंट रो नाम जरूरी है' },
+  edit:        { en: 'Edit', hi: 'बदलें', hinglish: 'Edit', gu: 'સંપાદિત', mr: 'बदला', mwr: 'बदलो' },
+  editJob:     { en: 'Edit job card', hi: 'जॉब कार्ड बदलें', hinglish: 'Job card edit karein', gu: 'જોબ કાર્ડ સંપાદિત કરો', mr: 'जॉब कार्ड बदला', mwr: 'जॉब कार्ड बदलो' },
+  saved:       { en: 'Job card updated', hi: 'जॉब कार्ड अपडेट हुआ', hinglish: 'Job card update ho gaya', gu: 'જોબ કાર્ડ અપડેટ થયું', mr: 'जॉब कार्ड अपडेट झाले', mwr: 'जॉब कार्ड अपडेट हुयो' },
   created:     { en: 'Job card created', hi: 'जॉब कार्ड बन गया', hinglish: 'Job card ban gaya', gu: 'જોબ કાર્ડ બન્યો', mr: 'जॉब कार्ड तयार झाले', mwr: 'जॉब कार्ड बण ग्यो' },
   moved:       { en: 'Stage updated', hi: 'स्टेज अपडेट हुई', hinglish: 'Stage update hui', gu: 'સ્ટેજ અપડેટ થઈ', mr: 'स्टेज अपडेट झाली', mwr: 'स्टेज अपडेट हुई' },
   reasonPrompt:{ en: 'Reason for hold / cancel?', hi: 'होल्ड / कैंसिल का कारण?', hinglish: 'Hold / cancel ka reason?', gu: 'હોલ્ડ / કેન્સલનું કારણ?', mr: 'होल्ड / कॅन्सलचे कारण?', mwr: 'होल्ड / कैंसिल रो कारण?' },
@@ -95,6 +98,8 @@ export default function JobCardsPage() {
   const [custom, setCustom] = useState({ from: '', to: '' });
   const [showNew, setShowNew] = useState(false);
   const [assignJob, setAssignJob] = useState(null);
+  // The job card being corrected — the same form the job was raised with.
+  const [editJob, setEditJob] = useState(null);
 
   useEffect(() => {
     const u = onValue(ref(db, 'mpw/jobs'), (snap) => setJobs(snap.val() || {}));
@@ -227,6 +232,15 @@ export default function JobCardsPage() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {/* Details only — the stage is moved with the dropdown beside it,
+                  which validates the move and tells the next person. A closed
+                  job is not editable, so the button is hidden rather than
+                  offered and then refused. */}
+              {job.stage !== 'delivered' && job.stage !== 'cancelled' && (
+                <button className="btn btn-xs btn-ghost" data-testid="edit-job" onClick={() => setEditJob(job)}>
+                  ✏️ {t('edit')}
+                </button>
+              )}
               {PRE_PRODUCTION.includes(job.stage) && (
                 <button className="btn btn-xs" onClick={() => setAssignJob(job)}
                   style={{ background: 'var(--blue, #C05621)', color: '#fff', border: 'none' }}>🏭 {t('assignProd')}</button>
@@ -244,6 +258,7 @@ export default function JobCardsPage() {
       ))}
 
       {showNew && <NewJobModal onClose={() => setShowNew(false)} t={t} createdBy={profile?.id} />}
+      {editJob && <NewJobModal job={editJob} onClose={() => setEditJob(null)} t={t} createdBy={profile?.id} />}
       {assignJob && (
         <AssignProductionModal jobId={assignJob.id} jobNo={assignJob.jobNo} onClose={() => setAssignJob(null)} />
       )}
@@ -278,18 +293,40 @@ const lbl = { fontSize: 12, color: 'var(--text2)', marginBottom: 3, display: 'bl
 const asArr = (d) => (Array.isArray(d) ? d : d ? Object.values(d) : []);
 const idOf = (x) => x.id || x._id;
 
-function NewJobModal({ onClose, t }) {
+function NewJobModal({ onClose, t, job }) {
+  // `job` = correcting an existing card. Same form, because a second one would
+  // drift from this one field by field.
+  const isEdit = !!job;
   const BLANK = {
     clientName: '', clientMobile: '', clientEmail: '', address: '', gstNo: '', pan: '', creditLimit: '',
     work: '', notes: '', salesPerson: '', deliveryDate: '', priority: 'normal', designNeeded: 'yes',
     eventType: '', billNumber: '',
   };
-  const [form, setForm] = useState(BLANK);
-  const [items, setItems] = useState([]);
-  const [attachments, setAttachments] = useState([]);
+  const [form, setForm] = useState(() => (job ? {
+    ...BLANK,
+    clientName: job.clientName || '', clientMobile: job.clientMobile || '',
+    clientEmail: job.clientEmail || '', address: job.address || '',
+    gstNo: job.gstNo || '', pan: job.pan || '',
+    creditLimit: job.creditLimit != null ? String(job.creditLimit) : '',
+    work: job.work || '', notes: job.notes || '', salesPerson: job.salesPerson || '',
+    deliveryDate: job.deliveryDate || '', priority: job.priority || 'normal',
+    // A job already past the designer must not be flung back into the pool by
+    // an edit, so this is only meaningful while it is still at enquiry.
+    designNeeded: job.designNeeded ? 'yes' : 'no',
+    eventType: job.eventType || '', billNumber: job.billNumber || '',
+    amount: job.amount != null ? String(job.amount) : '',
+    advance: job.advance != null ? String(job.advance) : '',
+    description: job.description || '',
+  } : BLANK));
+  const [items, setItems] = useState(() => (Array.isArray(job && job.items) ? job.items : []));
+  const [attachments, setAttachments] = useState(() => (Array.isArray(job && job.attachments) ? job.attachments : []));
   // Delivery time as 12-hour + AM/PM. Stored as "5:00 PM" to match the format
   // already used by every existing job (170 of 180 carried this shape).
-  const [dh, setDh] = useState(''); const [dm, setDm] = useState(''); const [dap, setDap] = useState('PM');
+  const parsedTime = (() => {
+    const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(String((job && job.deliveryTime) || '').trim());
+    return m ? { h: m[1], m: m[2], ap: m[3].toUpperCase() } : { h: '', m: '', ap: 'PM' };
+  })();
+  const [dh, setDh] = useState(parsedTime.h); const [dm, setDm] = useState(parsedTime.m); const [dap, setDap] = useState(parsedTime.ap);
   const [showGst, setShowGst] = useState(false);
   const [preview, setPreview] = useState('');
   const [busy, setBusy] = useState(false);
@@ -304,7 +341,10 @@ function NewJobModal({ onClose, t }) {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    ordersApi.nextNumber().then((r) => setPreview(r.jobNo)).catch(() => {});
+    // An existing card keeps its number; only a new one previews the next.
+    if (isEdit) { setPreview(job.jobNo || ''); } else {
+      ordersApi.nextNumber().then((r) => setPreview(r.jobNo)).catch(() => {});
+    }
     ordersApi.lookups().then((d) => { setProducts(d.products || []); setSalespeople(d.salespeople || []); }).catch(() => {});
   }, []);
 
@@ -370,15 +410,21 @@ function NewJobModal({ onClose, t }) {
     if (form.clientMobile && !/^\d{10}$/.test(form.clientMobile.trim())) return showToast('Enter a valid 10-digit mobile', 'error');
     setBusy(true);
     try {
-      const job = await ordersApi.create({
+      const payload = {
         ...form,
         designNeeded: form.designNeeded === 'yes',
         creditLimit: form.creditLimit ? Number(form.creditLimit) : null,
         items,
         attachments,
         deliveryTime: (dh !== '' && dm !== '') ? `${dh}:${dm} ${dap}` : null,
-      });
-      showToast(`${t('created')} — ${job.jobNo}`, 'success');
+      };
+      if (isEdit) {
+        const saved = await ordersApi.update(job.id, payload);
+        showToast(`${t('saved')} — ${saved.jobNo || job.jobNo}`, 'success');
+      } else {
+        const made = await ordersApi.create(payload);
+        showToast(`${t('created')} — ${made.jobNo}`, 'success');
+      }
       onClose();
     } catch (err) {
       showToast(err.response?.data?.error || t('failed'), 'error');
@@ -389,7 +435,7 @@ function NewJobModal({ onClose, t }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflow: 'auto' }}>
       <form className="card" onSubmit={submit} style={{ maxWidth: 460, width: '100%', margin: 'auto' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
-          <h3 style={{ margin: 0 }}>📋 {t('newJob')}</h3>
+          <h3 style={{ margin: 0 }}>📋 {isEdit ? t('editJob') : t('newJob')}</h3>
           {preview ? <span className="badge badge-green" style={{ fontFamily: 'monospace' }}>{preview}</span> : null}
         </div>
 
