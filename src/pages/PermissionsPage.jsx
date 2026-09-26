@@ -353,7 +353,18 @@ function RoleRow({ u, canEdit, t, meId, designations = [] }) {
 
   return (
     <tr>
-      <td><b style={{ color: 'var(--text)' }}>{u.name || '—'}</b></td>
+      <td>
+        <b style={{ color: 'var(--text)' }}>{u.name || '—'}</b>
+        {/* An inactive teammate is invisible everywhere else in the system —
+            they drop out of Team Attendance, payroll and every teammate list —
+            so the one screen that can switch it back on has to show it. */}
+        {u.active === false && (
+          <span className="badge badge-red" data-testid="inactive-badge" style={{ marginLeft: 6 }}
+            title="Cannot sign in, and is left out of Team Attendance and other teammate lists">
+            inactive
+          </span>
+        )}
+      </td>
       <td>{u.email || '—'}</td>
       <td><span className={`badge ${badgeClass}`}>{u.role || 'pending'}</span></td>
       <td>{u.customRole || '—'}</td>
