@@ -504,6 +504,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     return { subtotal, taxableValue, taxTotal, cgst, sgst, igst, rates, discount, itemDiscount, billDiscount, itemDiscs, rawTotal, roundOff, total, received, balance };
   }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview, defaults]);
 
+  // What the tax rows are LABELLED with: the rate the lines are actually taxed
+  // at, not whatever the bill-level box happens to say. They disagreed when a
+  // row carried its own rate, so the panel read "CGST @9%" above a 12% figure.
+  const shownRate = totals.rates.length === 1 ? totals.rates[0].rate : (Number(form.gstRate) || 0);
+
   // Look up the customer's advance when one is selected. Not for an edit: the
   // edit endpoint refuses any invoice that already has money against it, so
   // there is nothing an advance could be applied to.
@@ -545,7 +550,13 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
       // report and printed document reads. Only a bill that genuinely mixes
       // rates switches to per-line tax, where gstRate would be a lie.
       const noTaxDoc = isCash || isComposition || form.reverseCharge;
-      const mixed = !noTaxDoc && new Set(billed.map((it) => effectiveRate(it, form.gstRate))).size > 1;
+      // The rate SENT comes from the lines, never straight from the dropdown.
+      // Setting every row to 12% while the bill-level box still reads 18% used
+      // to save 18%: the screen showed one figure and the invoice kept another,
+      // and an edit that changed only the rate appeared to do nothing at all.
+      const lineRates = new Set(billed.map((it) => effectiveRate(it, form.gstRate)));
+      const mixed = !noTaxDoc && lineRates.size > 1;
+      const agreedRate = lineRates.size === 1 ? [...lineRates][0] : (Number(form.gstRate) || 0);
       const body = {
         type,
         // Set only after the user confirms the credit-limit warning below.
@@ -569,7 +580,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         invoiceNumber: form.invoiceNumber !== prefilledNumber ? form.invoiceNumber : undefined,
         paymentTermDays: form.paymentTermDays, dueDate: form.dueDate,
         placeOfSupply: form.placeOfSupply,
-        gstRate: mixed ? undefined : ((isCash || isComposition || form.reverseCharge) ? 0 : Number(form.gstRate) || 0),
+        gstRate: mixed ? undefined : (noTaxDoc ? 0 : agreedRate),
         reverseCharge: !!form.reverseCharge,
         // Bill-level only; each line carries its own below. The server adds the
         // two up into the invoice's total `discount`.
@@ -1052,10 +1063,29 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                 <>
                   <div className="flex items-center justify-between" style={{ padding: '3px 0' }}>
                     <span>GST Rate</span>
-                    <select className="input" style={{ width: 90 }} value={form.gstRate} onChange={(e) => setF('gstRate', e.target.value)}>
+                    <select
+                      className="input"
+                      data-testid="invoice-gst"
+                      style={{ width: 90 }}
+                      value={form.gstRate}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setF('gstRate', next);
+                        // Rows carrying their own rate would silently ignore this
+                        // box, so picking a rate here puts every line back on it.
+                        // Someone who wants a line taxed differently sets that on
+                        // the row afterwards, which is the explicit gesture.
+                        setItems((arr) => arr.map((it) => (it.taxRate === '' ? it : { ...it, taxRate: '' })));
+                      }}
+                    >
                       {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
                     </select>
                   </div>
+                  {items.some((it) => it.taxRate !== '') && (
+                    <div style={{ fontSize: 11, color: 'var(--text3)', paddingBottom: 4 }} data-testid="own-rate-note">
+                      {items.filter((it) => it.taxRate !== '').length} line(s) have their own GST % — change it on the row.
+                    </div>
+                  )}
                   {/* Lines that set their own rate make the single figure below
                       ambiguous, so the taxable value is listed rate by rate —
                       the same split the printed invoice and GSTR-1 show. */}
@@ -1070,11 +1100,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     </div>
                   )}
                   {interStatePreview ? (
-                    <Row label={totals.rates.length > 1 ? 'IGST' : `IGST @${form.gstRate}%`} value={inr(totals.igst)} />
+                    <Row label={totals.rates.length > 1 ? 'IGST' : `IGST @${shownRate}%`} value={inr(totals.igst)} />
                   ) : (
                     <>
-                      <Row label={totals.rates.length > 1 ? 'CGST' : `CGST @${round2(Number(form.gstRate) / 2)}%`} value={inr(totals.cgst)} />
-                      <Row label={totals.rates.length > 1 ? 'SGST' : `SGST @${round2(Number(form.gstRate) / 2)}%`} value={inr(totals.sgst)} />
+                      <Row label={totals.rates.length > 1 ? 'CGST' : `CGST @${round2(shownRate / 2)}%`} value={inr(totals.cgst)} />
+                      <Row label={totals.rates.length > 1 ? 'SGST' : `SGST @${round2(shownRate / 2)}%`} value={inr(totals.sgst)} />
                     </>
                   )}
                 </>
