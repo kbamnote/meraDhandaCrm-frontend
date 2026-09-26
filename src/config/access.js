@@ -35,6 +35,20 @@ export const PERM_OF = {
   '/accounting/profit': 'reports',
   '/accounting/job-profit': 'reports',
   '/accounting/year-end': 'reports',
+  // Everything under Accounting follows the module whose data it shows. These
+  // had no entry, which meant "ungated" — a designer with nothing granted still
+  // got Items, Credit Notes, Debit Notes, Challans, Recurring, Branches and
+  // Search in their sidebar, and no permission could take them away.
+  '/accounting/items': 'products',
+  '/accounting/credit-notes': 'invoices',
+  '/accounting/debit-notes': 'invoices',
+  '/accounting/challans': 'invoices',
+  '/accounting/recurring': 'invoices',
+  '/accounting/branches': 'reports',
+  '/accounting/search': 'reports',
+  // Same hole on the sales side: these three read the enquiry/sample/bulk-order
+  // pipeline, which is what the Leads module covers.
+  '/enquiry': 'leads', '/sample-dm': 'leads', '/bulk-orders': 'leads',
   '/expenses': 'expenses', '/purchase-orders': 'expenses',
   '/products': 'products', '/stock': 'stock', '/vendors': 'vendors',
   '/machines': 'machines', '/machine-history': 'machines',
