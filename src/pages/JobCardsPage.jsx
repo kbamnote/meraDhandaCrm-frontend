@@ -31,6 +31,8 @@ const STAGE_META = {
   cancelled:  { label: 'Cancelled', emoji: '✖', color: '#DC2626' },
 };
 const ALL_STAGES = [...STAGES, 'hold', 'cancelled'];
+// Kept in step with JOB_EDIT_ROLES in the backend's orders route.
+const JOB_EDIT_ROLES = ['owner', 'admin', 'superadmin', 'manager'];
 // Label key for each date preset.
 const PRESET_KEY = { all: 'pAll', today: 'pToday', yesterday: 'pYesterday', last7: 'pLast7', thisMonth: 'pThisMonth', lastMonth: 'pLastMonth', custom: 'pCustom' };
 
@@ -88,6 +90,11 @@ function StageBadge({ stage }) {
 
 export default function JobCardsPage() {
   const { profile } = useAuth();
+  // Same rule the server enforces: changing what a card SAYS after people have
+  // started work is a supervisor's call. A button that is always refused is
+  // worse than no button, so it is hidden for everyone else.
+  const canEdit = JOB_EDIT_ROLES.includes(profile?.role)
+    || JOB_EDIT_ROLES.includes(String(profile?.customRole || '').toLowerCase());
   const t = useT(S);
   const [jobs, setJobs] = useState({});
   const [search, setSearch] = useState('');
@@ -236,7 +243,7 @@ export default function JobCardsPage() {
                   which validates the move and tells the next person. A closed
                   job is not editable, so the button is hidden rather than
                   offered and then refused. */}
-              {job.stage !== 'delivered' && job.stage !== 'cancelled' && (
+              {canEdit && job.stage !== 'delivered' && job.stage !== 'cancelled' && (
                 <button className="btn btn-xs btn-ghost" data-testid="edit-job" onClick={() => setEditJob(job)}>
                   ✏️ {t('edit')}
                 </button>

@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, fireEvent, within } from '@testing-library/react';
-import { renderScreen } from './renderScreen.jsx';
+import { renderScreen, OWNER, STAFF } from './renderScreen.jsx';
 
 const created = [];
 const updated = [];
@@ -47,7 +47,7 @@ const JOB = {
 };
 
 const openEdit = async () => {
-  renderScreen(JobCardsPage);
+  renderScreen(JobCardsPage, { auth: OWNER });
   const btn = await screen.findByTestId('edit-job');
   fireEvent.click(btn);
   return waitFor(() => expect(screen.getByDisplayValue('Sharma Traders')).toBeTruthy());
@@ -100,6 +100,28 @@ describe('the Job Cards page', () => {
     expect(b.clientMobile).toBe('9000000000');
     expect(b.deliveryDate).toBe('2026-10-01');
     expect(b.deliveryTime, 'the 5 PM slot survives a round trip').toBe('5:00 PM');
+  });
+
+  it('only an owner, admin or manager sees the Edit button', async () => {
+    // The server refuses anyone else, so offering the button would only produce
+    // an error. Everything else on the page stays as it was for them.
+    const as = (role, customRole) => ({
+      ...STAFF, profile: { ...STAFF.profile, role, customRole: customRole || null },
+    });
+    for (const role of ['designer', 'jobsetter', 'sales', 'floor_manager', 'staff']) {
+      const { unmount } = renderScreen(JobCardsPage, { auth: as(role) });
+      await waitFor(() => expect(screen.getByText('JOB-26-27-001')).toBeTruthy());
+      expect(screen.queryAllByTestId('edit-job'), `${role} must not be offered it`).toHaveLength(0);
+      unmount();
+    }
+    for (const role of ['owner', 'admin', 'superadmin', 'manager']) {
+      const { unmount } = renderScreen(JobCardsPage, { auth: as(role) });
+      expect(await screen.findByTestId('edit-job'), `${role} should be offered it`).toBeTruthy();
+      unmount();
+    }
+    // A tenant that named its own "Manager" role means the same thing by it.
+    renderScreen(JobCardsPage, { auth: as('staff', 'Manager') });
+    expect(await screen.findByTestId('edit-job')).toBeTruthy();
   });
 
   it('a delivered or cancelled card cannot be edited from here', async () => {
