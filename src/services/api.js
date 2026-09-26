@@ -467,7 +467,11 @@ export const stockApi = {
   // Pass { method: 'fifo'|'fefo' } to value from batch costs instead.
   valuation: (params) => api.get('/stock/valuation', { params }).then(r => r.data),
   // Bulk product/stock import. Pass { rows, dryRun: true } to preview first.
-  bulk:      (body)   => api.post('/stock/bulk', body).then(r => r.data),
+  // A few hundred rows is a lot of writing, and the default 30s timeout
+  // reported an import that was still running as a failure — leaving the user
+  // with no idea how much of it had landed. The server batches the writes now;
+  // this is headroom for a slow connection.
+  bulk:      (body)   => api.post('/stock/bulk', body, { timeout: 180000 }).then(r => r.data),
   // Variants & batches
   items:       (params) => api.get('/stock/items', { params }).then(r => r.data),
   batches:     (params) => api.get('/stock/batches', { params }).then(r => r.data),

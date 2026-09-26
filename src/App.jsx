@@ -54,6 +54,7 @@ import PartiesPage from './pages/accounting/PartiesPage';
 import ReportsPage from './pages/accounting/ReportsPage';
 import GstPage from './pages/accounting/GstPage';
 import PurchasesPage from './pages/accounting/PurchasesPage';
+import AccountingItemsPage from './pages/accounting/ItemsPage';
 import EntriesPage from './pages/accounting/EntriesPage';
 import DayBookPage from './pages/accounting/DayBookPage';
 import ProfitPage from './pages/accounting/ProfitPage';
@@ -124,6 +125,7 @@ const CUSTOM_PAGES = {
   'accounting/reports': ReportsPage,
   'accounting/gst': GstPage,
   'accounting/purchases': PurchasesPage,
+  'accounting/items': AccountingItemsPage,
   'accounting/entries': EntriesPage,
   'accounting/daybook': DayBookPage,
   'accounting/profit': ProfitPage,
