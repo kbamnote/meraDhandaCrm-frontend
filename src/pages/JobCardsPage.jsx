@@ -343,8 +343,14 @@ function NewJobModal({ onClose, t, job }) {
   const [clientQ, setClientQ] = useState('');
   const [clientMatches, setClientMatches] = useState([]);
   const [existingClient, setExistingClient] = useState(null);
-  const [prodSel, setProdSel] = useState(''); const [prodQty, setProdQty] = useState('');
+  const [prodQty, setProdQty] = useState('');
+  // One box that searches AND lists: it used to be a search field beside a
+  // dropdown, so the list only narrowed if you typed BEFORE opening it — and
+  // opening it first showed hundreds of products in DOM order.
   const [prodSearch, setProdSearch] = useState('');
+  const [prodOpen, setProdOpen] = useState(false);
+  const [picked, setPicked] = useState(null);   // the chosen product, if any
+  const [addingProd, setAddingProd] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
@@ -380,11 +386,45 @@ function NewJobModal({ onClose, t, job }) {
     setForm((f) => ({ ...f, clientName: '', clientMobile: '', clientEmail: '', address: '', gstNo: '', pan: '' }));
   };
 
+  // Matches on the typed text; an exact hit is not "no match", so the add-new
+  // row cannot offer to create something that already exists.
+  const prodQ = prodSearch.trim().toLowerCase();
+  const prodMatches = products.filter((p) => !prodQ || String(p.name || p.title || '').toLowerCase().includes(prodQ));
+  const exactProd = products.find((p) => String(p.name || p.title || '').trim().toLowerCase() === prodQ);
+  const canAddProd = prodQ.length >= 2 && !exactProd;
+
+  const choose = (p) => {
+    setPicked(p);
+    setProdSearch(p.name || p.title || '');
+    setProdOpen(false);
+  };
+
+  // A product nobody has entered yet: add it to the list right here, rather
+  // than sending someone to the Items screen (which they may not be allowed to
+  // open) in the middle of writing a job card.
+  const addNewProduct = async () => {
+    const name = prodSearch.trim();
+    if (!name) return;
+    setAddingProd(true);
+    try {
+      const made = await ordersApi.createProduct(name);
+      const p = { id: made.id, name: made.name };
+      setProducts((arr) => (arr.some((x) => String(idOf(x)) === String(made.id)) ? arr : [...arr, p]));
+      choose(p);
+      showToast(made.created ? `${made.name} added to your products` : `${made.name} was already in your products`, 'success');
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Could not add that product', 'error');
+    } finally { setAddingProd(false); }
+  };
+
   const addItem = () => {
-    if (!prodSel) return;
-    const p = products.find((x) => String(idOf(x)) === String(prodSel));
-    setItems((arr) => [...arr, { name: p ? (p.name || p.title) : prodSel, qty: Number(prodQty) || 1, productId: p ? idOf(p) : null }]);
-    setProdSel(''); setProdQty('');
+    // Whatever is typed counts, even without picking from the list — the line
+    // then reads as loose text, exactly as it did before.
+    const name = picked ? (picked.name || picked.title) : prodSearch.trim();
+    if (!name) return;
+    const p = picked;
+    setItems((arr) => [...arr, { name, qty: Number(prodQty) || 1, productId: p ? idOf(p) : null }]);
+    setPicked(null); setProdSearch(''); setProdQty('');
   };
 
   const suggestDate = () => {
@@ -547,17 +587,60 @@ function NewJobModal({ onClose, t, job }) {
           </div>
           <div className="form-group">
             <label style={lbl}>🛍 Products/Items (optional — product list se select karein)</label>
-            <div className="flex gap-2" style={{ marginBottom: 6 }}>
-              <input className="input" placeholder="🔍 Search products..." value={prodSearch} onChange={(e) => setProdSearch(e.target.value)} />
-            </div>
             <div className="flex gap-2">
-              <select className="input" style={{ flex: 1 }} value={prodSel} onChange={(e) => setProdSel(e.target.value)}>
-                <option value="">— Product select karein —</option>
-                {products.filter(p => !prodSearch || (p.name || p.title || '').toLowerCase().includes(prodSearch.toLowerCase())).map((p) => <option key={idOf(p)} value={idOf(p)}>{p.name || p.title}</option>)}
-              </select>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input
+                  className="input"
+                  style={{ width: '100%' }}
+                  data-testid="product-search"
+                  placeholder="🔍 Type to search, or a new product name"
+                  value={prodSearch}
+                  onFocus={() => setProdOpen(true)}
+                  onChange={(e) => { setProdSearch(e.target.value); setPicked(null); setProdOpen(true); }}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setProdOpen(false); }}
+                />
+                {prodOpen && (
+                  <div
+                    className="card"
+                    data-testid="product-list"
+                    style={{ position: 'absolute', zIndex: 6, left: 0, right: 0, top: '100%', marginTop: 2, padding: 0, maxHeight: 220, overflow: 'auto' }}
+                  >
+                    {prodMatches.slice(0, 50).map((p) => (
+                      <div
+                        key={idOf(p)}
+                        data-testid="product-option"
+                        onMouseDown={(e) => { e.preventDefault(); choose(p); }}
+                        style={{ padding: '7px 10px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 13 }}
+                      >
+                        {p.name || p.title}
+                      </div>
+                    ))}
+                    {!prodMatches.length && !canAddProd && (
+                      <div style={{ padding: '8px 10px', fontSize: 12.5, color: 'var(--text3)' }}>No product matches that.</div>
+                    )}
+                    {canAddProd && (
+                      <div
+                        data-testid="product-add-new"
+                        onMouseDown={(e) => { e.preventDefault(); addNewProduct(); }}
+                        style={{ padding: '8px 10px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: 'var(--primary, #2563EB)', background: 'var(--surface2)' }}
+                      >
+                        {addingProd ? 'Adding…' : `+ Add "${prodSearch.trim()}" to your products`}
+                        <span style={{ display: 'block', fontWeight: 400, fontSize: 11, color: 'var(--text3)' }}>
+                          so it is on the list next time
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <input className="input" style={{ width: 70 }} type="number" min="1" placeholder="Qty" value={prodQty} onChange={(e) => setProdQty(e.target.value)} />
               <button type="button" className="btn btn-primary btn-sm" onClick={addItem}>+ Add</button>
             </div>
+            {/* Clicking away closes the list without stealing the click that
+                chose an option (hence onMouseDown above). */}
+            {prodOpen && (
+              <div onClick={() => setProdOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+            )}
             {items.map((it, i) => (
               <div key={i} className="flex items-center justify-between" style={{ fontSize: 13, padding: '4px 0' }}>
                 <span>• {it.name} × {it.qty}</span>

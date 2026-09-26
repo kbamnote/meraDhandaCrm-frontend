@@ -251,6 +251,9 @@ export const ordersApi = {
   // Correct a job card's details. The stage moves via transition(), and the
   // job number never changes.
   update:      (id, body)   => api.put(`/orders/${id}`, body).then(r => r.data),
+  // Add a product from the job-card form. Open to any job-card creator,
+  // like the customer auto-add; matched by name so it never duplicates.
+  createProduct: (name)     => api.post('/orders/products', { name }).then(r => r.data),
   transition:  (id, body)   => api.post(`/orders/${id}/transition`, body).then(r => r.data),
   reschedule:  (id, body)   => api.post(`/orders/${id}/reschedule`, body).then(r => r.data),
   departments: ()           => api.get('/orders/departments').then(r => r.data),
