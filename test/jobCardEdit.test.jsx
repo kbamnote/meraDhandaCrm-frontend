@@ -102,19 +102,19 @@ describe('the Job Cards page', () => {
     expect(b.deliveryTime, 'the 5 PM slot survives a round trip').toBe('5:00 PM');
   });
 
-  it('only an owner, admin or manager sees the Edit button', async () => {
+  it('only a supervisor sees the Edit button', async () => {
     // The server refuses anyone else, so offering the button would only produce
     // an error. Everything else on the page stays as it was for them.
     const as = (role, customRole) => ({
       ...STAFF, profile: { ...STAFF.profile, role, customRole: customRole || null },
     });
-    for (const role of ['designer', 'jobsetter', 'sales', 'floor_manager', 'staff']) {
+    for (const role of ['designer', 'jobsetter', 'sales', 'staff']) {
       const { unmount } = renderScreen(JobCardsPage, { auth: as(role) });
       await waitFor(() => expect(screen.getByText('JOB-26-27-001')).toBeTruthy());
       expect(screen.queryAllByTestId('edit-job'), `${role} must not be offered it`).toHaveLength(0);
       unmount();
     }
-    for (const role of ['owner', 'admin', 'superadmin', 'manager']) {
+    for (const role of ['owner', 'admin', 'superadmin', 'manager', 'floor_manager']) {
       const { unmount } = renderScreen(JobCardsPage, { auth: as(role) });
       expect(await screen.findByTestId('edit-job'), `${role} should be offered it`).toBeTruthy();
       unmount();

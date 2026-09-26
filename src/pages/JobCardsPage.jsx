@@ -32,7 +32,7 @@ const STAGE_META = {
 };
 const ALL_STAGES = [...STAGES, 'hold', 'cancelled'];
 // Kept in step with JOB_EDIT_ROLES in the backend's orders route.
-const JOB_EDIT_ROLES = ['owner', 'admin', 'superadmin', 'manager'];
+const JOB_EDIT_ROLES = ['owner', 'admin', 'superadmin', 'manager', 'floor_manager'];
 // Label key for each date preset.
 const PRESET_KEY = { all: 'pAll', today: 'pToday', yesterday: 'pYesterday', last7: 'pLast7', thisMonth: 'pThisMonth', lastMonth: 'pLastMonth', custom: 'pCustom' };
 
