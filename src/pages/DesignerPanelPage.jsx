@@ -12,6 +12,7 @@ import { ordersApi, uploadApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
+import { designDuration, formatDuration, averageWorkMs } from '../utils/designTime';
 
 const S = {
   title:     { en: '🎨 My Designer Panel', hi: '🎨 मेरा डिज़ाइनर पैनल', hinglish: '🎨 My Designer Panel', gu: '🎨 મારું ડિઝાઇનર પેનલ', mr: '🎨 माझे डिझाइनर पॅनल', mwr: '🎨 म्हारो डिज़ाइनर पैनल' },
@@ -47,6 +48,13 @@ const S = {
   taken:     { en: 'Job already taken', hi: 'जॉब पहले ही ले ली गई', hinglish: 'Job already taken', gu: 'જોબ પહેલેથી લેવાઈ', mr: 'जॉब आधीच घेतले', mwr: 'जॉब पैलाईं ले ली' },
   completeNeedsImage: { en: 'Attach the design image to mark this complete', hi: 'पूरा करने के लिए डिज़ाइन इमेज लगाएं', hinglish: 'Complete karne ke liye design image lagayein', gu: 'પૂર્ણ કરવા ડિઝાઇન ઇમેજ જોડો', mr: 'पूर्ण करण्यासाठी डिझाइन इमेज जोडा', mwr: 'पूरो करण खातर डिज़ाइन इमेज लगावो' },
   chooseImage: { en: 'Choose image…', hi: 'इमेज चुनें…', hinglish: 'Image chunein…', gu: 'ઇમેજ પસંદ કરો…', mr: 'इमेज निवडा…', mwr: 'इमेज चुणो…' },
+  completedTab: { en: 'Completed by me', hi: 'मेरे पूरे किए', hinglish: 'Maine complete kiye', gu: 'મેં પૂર્ણ કર્યા', mr: 'मी पूर्ण केलेले', mwr: 'म्हैं पूरा कर्या' },
+  noneCompleted: { en: 'Nothing finished yet — completed designs show here with the time they took.', hi: 'अभी कुछ पूरा नहीं — पूरे किए डिज़ाइन यहाँ समय के साथ दिखेंगे।', hinglish: 'Abhi kuch complete nahi — complete kiye designs yahan time ke saath dikhenge.', gu: 'હજી કંઈ પૂર્ણ નથી — પૂર્ણ ડિઝાઇન અહીં સમય સાથે દેખાશે.', mr: 'अजून काही पूर्ण नाही — पूर्ण डिझाइन येथे वेळेसह दिसतील.', mwr: 'अजै कीं पूरो कोनी — पूरा कर्या डिज़ाइन अठै टेम साथै दिखैला।' },
+  timeTaken: { en: 'Time taken', hi: 'लगा समय', hinglish: 'Time laga', gu: 'લાગેલો સમય', mr: 'लागलेला वेळ', mwr: 'लाग्यो टेम' },
+  waitedLabel: { en: 'waiting on client', hi: 'क्लाइंट का इंतज़ार', hinglish: 'client ka wait', gu: 'ક્લાયન્ટની રાહ', mr: 'क्लायंटची वाट', mwr: 'क्लाइंट रो इंतजार' },
+  completedOn: { en: 'Completed', hi: 'पूरा हुआ', hinglish: 'Complete hua', gu: 'પૂર્ણ થયું', mr: 'पूर्ण झाले', mwr: 'पूरो हुयो' },
+  avgTime: { en: 'Average', hi: 'औसत', hinglish: 'Average', gu: 'સરેરાશ', mr: 'सरासरी', mwr: 'औसत' },
+  showAll: { en: 'Show all', hi: 'सभी देखें', hinglish: 'Sab dekhein', gu: 'બધા જુઓ', mr: 'सर्व पहा', mwr: 'सगळा देखो' },
   completedOk: { en: 'Design marked complete', hi: 'डिज़ाइन पूरा हुआ', hinglish: 'Design complete ho gaya', gu: 'ડિઝાઇન પૂર્ણ થયું', mr: 'डिझाइन पूर्ण झाले', mwr: 'डिज़ाइन पूरो हुयो' },
   failed:    { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua', gu: 'નિષ્ફળ', mr: 'अयशस्वी', mwr: 'कोनी हुयो' },
 };
@@ -62,6 +70,8 @@ export default function DesignerPanelPage() {
   const [passJob, setPassJob] = useState(null);   // job awaiting a pass reason
   const [passReason, setPassReason] = useState('');
   const [completeJob, setCompleteJob] = useState(null); // job awaiting its design image before it can complete
+  // Long lists are folded: the recent ones are what a designer checks.
+  const [showAllDone, setShowAllDone] = useState(false);
 
   // Self-service designer feed (open pool + my claimed jobs). A dedicated endpoint
   // so a designer does NOT need the broad `jobs` (Job Cards) permission to see
@@ -80,6 +90,14 @@ export default function DesignerPanelPage() {
 
   const available = all.filter((j) => j.stage === 'designer' && !j.designerId && !(j.designerRejectedBy || []).includes(me));
   const mine = all.filter((j) => j.stage === 'designer' && j.designerId === me);
+  // Everything this designer finished: the feed already returns their claimed
+  // jobs at any stage, so a job that has moved on to the job setter, production
+  // or delivery still belongs in their record of work done.
+  const completed = all
+    .filter((j) => j.designerId === me && j.stage !== 'designer' && !!designDuration(j))
+    .map((j) => ({ job: j, d: designDuration(j) }))
+    .sort((a, b) => (b.d.completedAt || 0) - (a.d.completedAt || 0));
+  const avgMs = averageWorkMs(completed.map((x) => x.job));
 
   const run = async (id, fn, okMsg) => {
     setBusyId(id);
@@ -214,6 +232,58 @@ export default function DesignerPanelPage() {
           </div>
         </div>
       ))}
+
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', margin: '20px 0 8px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+          {t('completedTab')} ({completed.length})
+        </div>
+        {avgMs != null && (
+          <div style={{ fontSize: 12, color: 'var(--text2)' }} data-testid="design-average">
+            {t('avgTime')}: <b>{formatDuration(avgMs)}</b>
+          </div>
+        )}
+      </div>
+      {!completed.length && (
+        <div className="card" style={{ textAlign: 'center', padding: 20, color: 'var(--text3)' }}>{t('noneCompleted')}</div>
+      )}
+      {(showAllDone ? completed : completed.slice(0, 10)).map(({ job, d }) => (
+        <div key={job.id} className="card" data-testid="completed-job" style={{ marginBottom: 8, borderLeft: '4px solid var(--green, #16A34A)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{job.jobNo}</span>
+              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{job.work || '—'}</div>
+              {job.clientName && <div style={{ fontSize: 12, color: 'var(--text2)' }}>{job.clientName}</div>}
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              {/* The headline figure is time WORKED — the stretch spent waiting
+                  on the client is shown under it rather than folded in, because
+                  a designer is not answerable for the client's delay. */}
+              <div style={{ fontSize: 12, color: 'var(--text3)' }}>{t('timeTaken')}</div>
+              <div style={{ fontSize: 17, fontWeight: 700 }} data-testid="time-taken">
+                {formatDuration(d.workMs)}
+              </div>
+              {d.pausedMs > 60000 && (
+                <div style={{ fontSize: 11, color: 'var(--amber, #B45309)' }} data-testid="time-waited">
+                  + {formatDuration(d.pausedMs)} {t('waitedLabel')}
+                </div>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
+            <span>✅ {t('completedOn')}: {fmt(d.completedAt)}</span>
+            {job.designerClaimedAt && <span>▶️ {t('received')}: {fmt(job.designerClaimedAt)}</span>}
+            {job.designApprovals > 0 && <span>✉️ {t('approvalsSent')}: {job.designApprovals}×</span>}
+          </div>
+          {job.designImage && (
+            <img src={job.designImage} alt="design" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', marginTop: 8 }} />
+          )}
+        </div>
+      ))}
+      {completed.length > 10 && !showAllDone && (
+        <button className="btn btn-ghost btn-sm" onClick={() => setShowAllDone(true)}>
+          {t('showAll')} ({completed.length})
+        </button>
+      )}
 
       {/* Design Complete without an image yet — forces the upload right here
           instead of just erroring, then advances the job in the same step. */}
