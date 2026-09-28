@@ -53,6 +53,10 @@ const fillLine = (i, name, qty, price, gst) => {
   fireEvent.change(r.price, { target: { value: String(price) } });
   if (gst !== undefined) fireEvent.change(rowN(i).gst, { target: { value: String(gst) } });
 };
+// The bill discount sits either side of the tax, chosen per invoice. The
+// default is 'after' (tax on the full value, discount off the total); these
+// tests say which one they mean rather than relying on it.
+const setMode = (mode) => fireEvent.change(screen.getByTestId('discount-mode'), { target: { value: mode } });
 const setDiscount = (v) => fireEvent.change(
   screen.getByText('Discount').parentElement.querySelector('input'), { target: { value: String(v) } },
 );
@@ -90,6 +94,7 @@ describe('the invoice form', () => {
   it('charges GST on the discounted amount', async () => {
     await openForm();
     fillLine(0, 'Flyers', 1, 10000);
+    setMode('before');
     setDiscount(1000);
     // 18% of 9,000 = 1,620 — not 18% of 10,000 (1,800).
     await waitFor(() => expect(shown('CGST @9%')).toContain('₹810'));
@@ -112,6 +117,7 @@ describe('the invoice form', () => {
     fireEvent.click(screen.getByText('+ Add Item'));
     await waitFor(() => expect(screen.getAllByPlaceholderText('Item').length).toBe(2));
     fillLine(1, 'Design charges', 1, 2000, 18);
+    setMode('before');
     setDiscount(300);
     // 5% of 900 + 18% of 1,800 = 45 + 324 = 369.
     await waitFor(() => expect(shown('Total Amount')).toContain('₹3,069'));
@@ -124,20 +130,73 @@ describe('the invoice form', () => {
     await openForm();
     fireEvent.change(screen.getByPlaceholderText('Or type a new party name'), { target: { value: 'Sharma' } });
     fillLine(0, 'Flyers', 1, 10000);
+    setMode('before');
     setDiscount(1000);
     await waitFor(() => expect(shown('Total Amount')).toContain('₹10,620'));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0].discount).toBe(1000);
+    expect(saved[0].discountMode).toBe('before');
     expect(saved[0].gstRate).toBe(18);
   });
 
   it('a discount bigger than the bill leaves no negative tax or total', async () => {
     await openForm();
     fillLine(0, 'Flyers', 1, 1000);
+    setMode('before');
     setDiscount(5000);
     await waitFor(() => expect(shown('Total Amount')).toContain('₹0'));
     expect(shown('CGST @9%')).toContain('₹0');
+  });
+});
+
+describe('a discount after GST (the default)', () => {
+  it('leaves the tax alone and comes off the total', async () => {
+    await openForm();
+    fillLine(0, 'Flyers', 1, 10000);
+    setDiscount(1000);
+    // Tax is charged on the full 10,000: 900 + 900, and the discount comes off
+    // the 11,800 that follows.
+    await waitFor(() => expect(shown('CGST @9%')).toContain('₹900'));
+    expect(shown('SGST @9%')).toContain('₹900');
+    expect(shown('Total Amount')).toContain('₹10,800');
+    expect(screen.getByTestId('taxable-note').textContent).toContain('comes off the total');
+  });
+
+  it('is what a new invoice starts on', async () => {
+    await openForm();
+    expect(screen.getByTestId('discount-mode').value).toBe('after');
+  });
+
+  it('sends the mode, so the server charges the same tax', async () => {
+    await openForm();
+    fireEvent.change(screen.getByPlaceholderText('Or type a new party name'), { target: { value: 'Sharma' } });
+    fillLine(0, 'Flyers', 1, 10000);
+    setDiscount(1000);
+    await waitFor(() => expect(shown('Total Amount')).toContain('₹10,800'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].discountMode).toBe('after');
+    expect(saved[0].discount).toBe(1000);
+  });
+
+  it('switching to before GST changes the tax in front of you', async () => {
+    await openForm();
+    fillLine(0, 'Flyers', 1, 10000);
+    setDiscount(1000);
+    await waitFor(() => expect(shown('Total Amount')).toContain('₹10,800'));
+    setMode('before');
+    await waitFor(() => expect(shown('Total Amount')).toContain('₹10,620'));
+    expect(shown('CGST @9%')).toContain('₹810');
+  });
+
+  it('a discount bigger than the bill cannot make the total negative', async () => {
+    await openForm();
+    fillLine(0, 'Flyers', 1, 1000);
+    setDiscount(5000);
+    // Tax still charged on 1,000; the discount is capped at the 1,180 payable.
+    await waitFor(() => expect(shown('Total Amount')).toContain('₹0'));
+    expect(shown('CGST @9%')).toContain('₹90');
   });
 });
 

@@ -267,6 +267,13 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     // The bill-level part only. `discount` on a saved invoice is the TOTAL (line
     // discounts included); invoices from before per-line discounts have no
     // billDiscount, and there the two are the same thing.
+    // An invoice saved before the switch existed carries no mode. Its numbers
+    // say which it was: a taxable value below the billed total means the
+    // discount had been taken off before the tax.
+    discountMode: invoice?.discountMode
+      || (invoice && invoice.taxableValue != null
+        && round2(invoice.taxableValue) < round2((invoice.subtotal || 0) - (invoice.itemDiscount || 0))
+        ? 'before' : 'after'),
     discount: invoice?.billDiscount != null ? String(invoice.billDiscount)
       : (invoice?.discount != null ? String(invoice.discount) : '0'),
     // Payment capture belongs to creation only — the edit endpoint refuses any
@@ -462,12 +469,19 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const itemDiscount = round2(itemDiscs.reduce((a, n) => a + n, 0));
     const nets = amounts.map((a, i) => round2(a - itemDiscs[i]));
     const netSubtotal = round2(subtotal - itemDiscount);
-    const billDiscount = round2(Math.min(Math.max(0, Number(form.discount) || 0), netSubtotal));
+    // Where the bill discount sits relative to GST — see the switch beside the
+    // Discount box. 'before' spreads it over the lines, so the tax falls with
+    // it (the relief s.15(3)(a) allows); 'after' taxes the full value and takes
+    // the discount off the total, so the tax does not move. A LINE's own
+    // discount is always before tax: it is the price of that line.
+    const beforeTax = form.discountMode === 'before';
+    const billDiscount = beforeTax
+      ? round2(Math.min(Math.max(0, Number(form.discount) || 0), netSubtotal))
+      : round2(Math.max(0, Number(form.discount) || 0));
     const discount = round2(itemDiscount + billDiscount);
-    // GST is charged on what the customer actually pays, so discounts come off
-    // each line BEFORE its tax — s.15(3)(a) of the CGST Act. The server does
-    // the same sum; this mirrors it so the screen shows what saves.
-    const billShares = allocateDiscount(nets, billDiscount, netSubtotal);
+    const billShares = beforeTax
+      ? allocateDiscount(nets, billDiscount, netSubtotal)
+      : nets.map(() => 0);
     const shares = itemDiscs.map((d, i) => round2(d + billShares[i]));
     let tx = 0;
     // Taxable value per GST rate, so the panel can show the split on a bill
@@ -483,12 +497,16 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const cgst = interStatePreview ? 0 : round2(taxTotal / 2);
     const sgst = interStatePreview ? 0 : round2(taxTotal - round2(taxTotal / 2));
     const igst = interStatePreview ? taxTotal : 0;
-    const taxableValue = round2(Math.max(0, subtotal - discount));
+    const taxableValue = round2(Math.max(0, beforeTax ? subtotal - discount : subtotal - itemDiscount));
     const rates = [...byRate.entries()]
       .filter(([, taxable]) => taxable > 0)
       .map(([r, taxable]) => ({ rate: r, taxable, tax: round2((taxable * r) / 100) }))
       .sort((a, b) => a.rate - b.rate);
-    const rawTotal = round2(Math.max(0, taxableValue + taxTotal));
+    // The after-tax discount cannot exceed what is payable, or the bill shows a
+    // zero total beside a discount bigger than the invoice.
+    const payable = round2(taxableValue + taxTotal);
+    const appliedBill = beforeTax ? billDiscount : round2(Math.min(billDiscount, payable));
+    const rawTotal = round2(Math.max(0, payable - (beforeTax ? 0 : appliedBill)));
     // Mirror the server's rounding so the figure on screen IS the figure that
     // gets saved. The server recomputes authoritatively; this is display only.
     const mode = defaults?.invoiceRounding || 'nearest';
@@ -501,8 +519,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const roundOff = round2(total - rawTotal);
     const received = form.markFullyPaid ? total : round2(Number(form.amountReceived) || 0);
     const balance = round2(Math.max(0, total - Math.min(received, total)));
-    return { subtotal, taxableValue, taxTotal, cgst, sgst, igst, rates, discount, itemDiscount, billDiscount, itemDiscs, rawTotal, roundOff, total, received, balance };
-  }, [items, form.gstRate, form.discount, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview, defaults]);
+    return { subtotal, taxableValue, taxTotal, cgst, sgst, igst, rates, discount: round2(itemDiscount + appliedBill), itemDiscount, billDiscount: appliedBill, itemDiscs, rawTotal, roundOff, total, received, balance };
+  }, [items, form.gstRate, form.discount, form.discountMode, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview, defaults]);
 
   // What the tax rows are LABELLED with: the rate the lines are actually taxed
   // at, not whatever the bill-level box happens to say. They disagreed when a
@@ -585,6 +603,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         // Bill-level only; each line carries its own below. The server adds the
         // two up into the invoice's total `discount`.
         discount: totals.billDiscount,
+        discountMode: form.discountMode,
         markFullyPaid: form.markFullyPaid,
         applyAdvance: useAdvance || undefined,
         amountReceived: form.markFullyPaid ? undefined : Number(form.amountReceived) || 0,
@@ -1114,15 +1133,35 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                   <Row label="Item discounts" value={`− ${inr(totals.itemDiscount)}`} />
                 </div>
               )}
-              <div className="flex items-center justify-between" style={{ padding: '3px 0' }} title="Discount on the whole bill, spread over the items">
+              <div className="flex items-center justify-between" style={{ padding: '3px 0', gap: 6 }}>
                 <span>Discount</span>
-                <input className="input" type="number" style={{ width: 90, textAlign: 'right' }} value={form.discount} onChange={(e) => setF('discount', e.target.value)} />
+                <div className="flex" style={{ gap: 6, alignItems: 'center' }}>
+                  {/* Which side of the tax it falls on. "after GST" leaves the
+                      tax alone and takes the discount off the total; "before
+                      GST" reduces the value the tax is charged on. */}
+                  {!isCash && !isComposition && !form.reverseCharge && (
+                    <select
+                      className="input"
+                      data-testid="discount-mode"
+                      style={{ width: 118, fontSize: 12 }}
+                      value={form.discountMode}
+                      onChange={(e) => setF('discountMode', e.target.value)}
+                      title="after GST: tax is charged on the full amount. before GST: the discount reduces the taxable value."
+                    >
+                      <option value="after">after GST</option>
+                      <option value="before">before GST</option>
+                    </select>
+                  )}
+                  <input className="input" type="number" style={{ width: 90, textAlign: 'right' }} value={form.discount} onChange={(e) => setF('discount', e.target.value)} />
+                </div>
               </div>
               {/* Says which figure the GST above was charged on — without it a
                   discounted bill looks like the tax does not match the rate. */}
               {totals.discount > 0 && (
                 <div style={{ fontSize: 11, color: 'var(--text3)', paddingBottom: 4 }} data-testid="taxable-note">
-                  GST charged on {inr(totals.taxableValue)} (after discount)
+                  {form.discountMode === 'before'
+                    ? `GST charged on ${inr(totals.taxableValue)} (after discount)`
+                    : `GST charged on ${inr(totals.taxableValue)} — the discount comes off the total`}
                 </div>
               )}
               <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />

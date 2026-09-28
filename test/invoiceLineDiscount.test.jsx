@@ -106,6 +106,9 @@ describe('the invoice form', () => {
     await waitFor(() => expect(screen.getAllByPlaceholderText('Item').length).toBe(2));
     fillLine(1, 'Stand', 1, 200);       // 200
     setLineDiscount(0, 200, 'amount');
+    // The BILL discount can sit either side of the tax; a LINE's own discount is
+    // always part of its price. This case is the before-tax one.
+    fireEvent.change(screen.getByTestId('discount-mode'), { target: { value: 'before' } });
     setDiscount(100);                   // bill discount on the remaining 1,000
     // Taxable 900; 18% = 162 → 1,062.
     await waitFor(() => expect(shown('Total Amount')).toContain('₹1,062'));

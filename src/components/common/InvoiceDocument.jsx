@@ -94,6 +94,15 @@ export default function InvoiceDocument({ invoice }) {
     totalTax: round2(a.totalTax + r.totalTax),
   }), { taxable: 0, cgst: 0, sgst: 0, igst: 0, totalTax: 0 });
 
+  // A bill discount prints where it was applied: above the tax rows when it
+  // reduced the taxable value, below them when the tax was charged first.
+  // Invoices issued before the choice existed carry no mode; their numbers say
+  // which it was.
+  const discountBeforeTax = inv.discountMode
+    ? inv.discountMode === 'before'
+    : (inv.taxableValue != null
+      && round2(inv.taxableValue) < round2((Number(inv.subtotal) || 0) - (Number(inv.itemDiscount) || 0)));
+
   const qtyTotal = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
   // Per-product discounts get their own column (only when any line has one),
   // and AMOUNT then shows each line after its discount. The Discount row below
@@ -286,7 +295,7 @@ export default function InvoiceDocument({ invoice }) {
                   </tr>
                 ))}
 
-                {billDiscount > 0 && (
+                {discountBeforeTax && billDiscount > 0 && (
                   <tr>
                     <td colSpan={labelSpan} className="inv-r"><i>Discount</i></td>
                     <td className="inv-r">− {plain(billDiscount)}</td>
@@ -310,6 +319,13 @@ export default function InvoiceDocument({ invoice }) {
                     </tr>
                   </>
                 ))}
+
+                {!discountBeforeTax && billDiscount > 0 && (
+                  <tr>
+                    <td colSpan={labelSpan} className="inv-r"><i>Discount</i></td>
+                    <td className="inv-r">− {plain(billDiscount)}</td>
+                  </tr>
+                )}
 
                 {/* Without this line the invoice doesn't add up: TOTAL is the
                     rounded figure, while the taxable value and tax above sum to
