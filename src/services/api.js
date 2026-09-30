@@ -268,6 +268,11 @@ export const ordersApi = {
   designerWait:     (id, reason) => api.post(`/orders/${id}/designer/wait`, { reason }).then(r => r.data),
   designerDesignImage: (id, url) => api.post(`/orders/${id}/designer/design-image`, { url }).then(r => r.data),
   designerHold:     (id)    => api.post(`/orders/${id}/designer/hold`).then(r => r.data),
+  // Why this designer's pool looks the way it does: on leave, how many jobs
+  // are waiting, and how many are hidden only because they passed them.
+  designerStatus:   ()      => api.get('/orders/designer/status').then(r => r.data),
+  designerPassed:   ()      => api.get('/orders/designer/passed').then(r => r.data),
+  designerUnpass:   (id)    => api.post(`/orders/${id}/designer/unpass`).then(r => r.data),
   designerFeed:     ()      => api.get('/orders/designer/feed').then(r => r.data),
   designerLeave:    (onLeave) => api.post('/orders/designer/leave', { onLeave }).then(r => r.data),
   designerManage:   (uid, b)  => api.post(`/orders/designer/${uid}/manage`, b).then(r => r.data),

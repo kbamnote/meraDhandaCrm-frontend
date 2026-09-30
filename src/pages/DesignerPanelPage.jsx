@@ -44,6 +44,11 @@ const S = {
   urgent:    { en: 'Urgent', hi: 'अर्जेंट', hinglish: 'Urgent', gu: 'તાત્કાલિક', mr: 'तातडीचे', mwr: 'अर्जेंट' },
   delivery:  { en: 'Delivery', hi: 'डिलीवरी', hinglish: 'Delivery', gu: 'ડિલિવરી', mr: 'डिलिव्हरी', mwr: 'डिलीवरी' },
   received:  { en: 'Received', hi: 'प्राप्त', hinglish: 'Received', gu: 'મળ્યું', mr: 'मिळाले', mwr: 'मिल्यो' },
+  passedTitle:{ en: 'Passed by you', hi: 'आपने छोड़े', hinglish: 'Aapne pass kiye', gu: 'તમે પસાર કર્યા', mr: 'तुम्ही सोडलेले', mwr: 'थे छोड्या' },
+  passedNote: { en: 'These are hidden from your list because you passed them.', hi: 'ये आपकी सूची में नहीं दिखते क्योंकि आपने इन्हें छोड़ा था।', hinglish: 'Yeh aapki list mein nahi dikhte kyunki aapne inhe pass kiya tha.', gu: 'તમે પસાર કર્યા હોવાથી આ તમારી યાદીમાં દેખાતા નથી.', mr: 'तुम्ही सोडल्यामुळे हे तुमच्या यादीत दिसत नाहीत.', mwr: 'थे छोड्या हा, इण खातर लिस्ट मै कोनी दिखै।' },
+  lookAgain:  { en: 'Take another look', hi: 'फिर से देखें', hinglish: 'Phir se dekhein', gu: 'ફરી જુઓ', mr: 'पुन्हा पहा', mwr: 'फेर सूं देखो' },
+  backInPool: { en: 'Back in your list', hi: 'आपकी सूची में वापस', hinglish: 'Aapki list mein wapas', gu: 'તમારી યાદીમાં પાછું', mr: 'तुमच्या यादीत परत', mwr: 'थारी लिस्ट मै वापस' },
+  hiddenLeave:{ en: 'job(s) are waiting, hidden while you are on leave', hi: 'जॉब इंतज़ार में हैं, छुट्टी के कारण छिपे हैं', hinglish: 'job wait kar rahe hain, leave ki wajah se chhipe hain', gu: 'જોબ રાહ જુએ છે, રજાને કારણે છુપાયેલા', mr: 'जॉब वाट पाहत आहेत, रजेमुळे लपलेले', mwr: 'जॉब इंतजार मै है, छुट्टी रै कारण छिप्या' },
   onLeaveMsg:{ en: "You're on leave — jobs won't be shown. Turn off to accept work.", hi: 'आप छुट्टी पर हैं — जॉब नहीं दिखेंगे।', hinglish: 'Aap leave par hain — jobs nahi dikhenge.', gu: 'તમે રજા પર છો — જોબ બતાવાશે નહીં.', mr: 'तुम्ही रजेवर आहात — जॉब दिसणार नाहीत.', mwr: 'थे छुट्टी पर हो — जॉब कोनी दिखसी।' },
   taken:     { en: 'Job already taken', hi: 'जॉब पहले ही ले ली गई', hinglish: 'Job already taken', gu: 'જોબ પહેલેથી લેવાઈ', mr: 'जॉब आधीच घेतले', mwr: 'जॉब पैलाईं ले ली' },
   completeNeedsImage: { en: 'Attach the design image to mark this complete', hi: 'पूरा करने के लिए डिज़ाइन इमेज लगाएं', hinglish: 'Complete karne ke liye design image lagayein', gu: 'પૂર્ણ કરવા ડિઝાઇન ઇમેજ જોડો', mr: 'पूर्ण करण्यासाठी डिझाइन इमेज जोडा', mwr: 'पूरो करण खातर डिज़ाइन इमेज लगावो' },
@@ -72,12 +77,25 @@ export default function DesignerPanelPage() {
   const [completeJob, setCompleteJob] = useState(null); // job awaiting its design image before it can complete
   // Long lists are folded: the recent ones are what a designer checks.
   const [showAllDone, setShowAllDone] = useState(false);
+  // Why the pool looks the way it does — asked for separately, because an empty
+  // list has several causes and a designer cannot tell them apart.
+  const [status, setStatus] = useState(null);
+  const [passed, setPassed] = useState([]);
 
   // Self-service designer feed (open pool + my claimed jobs). A dedicated endpoint
   // so a designer does NOT need the broad `jobs` (Job Cards) permission to see
   // their own work. Refreshes live on any job change + on socket reconnect.
   useEffect(() => {
-    const load = () => ordersApi.designerFeed().then((rows) => setAll(Array.isArray(rows) ? rows : [])).catch(() => {});
+    const load = () => {
+      ordersApi.designerFeed().then((rows) => setAll(Array.isArray(rows) ? rows : [])).catch(() => {});
+      ordersApi.designerStatus().then((st) => {
+        setStatus(st);
+        // An admin can put someone on leave; the panel has to follow that
+        // rather than trust the profile it loaded when it first opened.
+        if (st && typeof st.onLeave === 'boolean') setOnLeave(st.onLeave);
+      }).catch(() => {});
+      ordersApi.designerPassed().then((rows) => setPassed(Array.isArray(rows) ? rows : [])).catch(() => {});
+    };
     load();
     const onChange = (msg) => {
       const base = String((msg && msg.path) || '').replace(/^mpw\//, '').split('/')[0];
@@ -220,7 +238,14 @@ export default function DesignerPanelPage() {
         {t('available')} ({onLeave ? 0 : available.length})
       </div>
       {onLeave ? (
-        <div className="card" style={{ textAlign: 'center', padding: 20, color: 'var(--amber)' }}>{t('onLeaveMsg')}</div>
+        <div className="card" data-testid="on-leave-msg" style={{ textAlign: 'center', padding: 20, color: 'var(--amber)' }}>
+          {t('onLeaveMsg')}
+          {status && status.pool > 0 ? (
+            <div style={{ fontSize: 12, marginTop: 6, color: 'var(--text2)' }}>
+              {status.pool} {t('hiddenLeave')}
+            </div>
+          ) : null}
+        </div>
       ) : !available.length ? (
         <div className="card" style={{ textAlign: 'center', padding: 20, color: 'var(--text3)' }}>{t('noneAvail')}</div>
       ) : available.map((job) => (
@@ -232,6 +257,33 @@ export default function DesignerPanelPage() {
           </div>
         </div>
       ))}
+
+      {/* Jobs this designer passed. They are hidden from the pool by design,
+          but hiding them WITHOUT SAYING SO is what makes one designer's screen
+          look broken next to a colleague's. */}
+      {passed.length > 0 && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.05em', margin: '20px 0 4px' }}>
+            {t('passedTitle')} ({passed.length})
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--text3)', marginBottom: 8 }}>{t('passedNote')}</div>
+          {passed.map((job) => (
+            <div key={job.id} className="card" data-testid="passed-job" style={{ marginBottom: 8, borderLeft: '4px solid var(--amber)' }}>
+              <JobLine job={job} />
+              <div className="flex gap-2" style={{ marginTop: 8 }}>
+                <button
+                  className="btn btn-sm"
+                  data-testid="unpass-btn"
+                  disabled={busyId === job.id}
+                  onClick={() => run(job.id, () => ordersApi.designerUnpass(job.id), t('backInPool'))}
+                >
+                  ↩ {t('lookAgain')}
+                </button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', margin: '20px 0 8px' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
