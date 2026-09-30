@@ -507,11 +507,20 @@ export const analyticsApi = {
 };
 
 export const chatApi = {
-  messages:    (convId)   => api.get(`/chat/messages/${convId}`).then(r => r.data),
+  messages:    (convId, params) => api.get(`/chat/messages/${convId}`, { params }).then(r => r.data),
   send:        (body)     => api.post('/chat/messages', body).then(r => r.data),
+  // The list screen's rows: last message + unread count per conversation,
+  // computed server-side so a client never downloads a thread to draw a row.
+  conversations: ()       => api.get('/chat/conversations').then(r => r.data),
+  markRead:    (convId)   => api.post(`/chat/read/${convId}`).then(r => r.data),
+  editMessage: (id, text) => api.patch(`/chat/messages/${id}`, { text }).then(r => r.data),
+  deleteMessage: (id)     => api.delete(`/chat/messages/${id}`).then(r => r.data),
+  react:       (id, emoji) => api.post(`/chat/messages/${id}/react`, { emoji }).then(r => r.data),
+  search:      (q)        => api.get('/chat/search', { params: { q } }).then(r => r.data),
   groups:      ()         => api.get('/chat/groups').then(r => r.data),
   createGroup: (body)     => api.post('/chat/groups', body).then(r => r.data),
   updateGroup: (id, body) => api.patch(`/chat/groups/${id}`, body).then(r => r.data),
+  leaveGroup:  (id)       => api.post(`/chat/groups/${id}/leave`).then(r => r.data),
 };
 
 // ── Module 14 — Super Admin ─────────────────────────────────────────────────
