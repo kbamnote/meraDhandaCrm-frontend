@@ -44,6 +44,13 @@ export default function InvoiceDocument({ invoice }) {
   // be mistakable for a live bill.
   const cancelled = inv.status === 'void' || inv.voided === true;
   const items = Array.isArray(inv.items) ? inv.items : [];
+  // Charges are printed in two places: the ones GST was charged on belong above
+  // the tax rows (they are part of what was taxed), the rest below them. One
+  // list printed in one place would make the bill fail to add up for a reader
+  // checking the tax against the rate.
+  const allCharges = Array.isArray(inv.additionalCharges) ? inv.additionalCharges : [];
+  const taxedCharges = allCharges.filter((ch) => (Number(ch.taxRate) || 0) > 0);
+  const plainCharges = allCharges.filter((ch) => !((Number(ch.taxRate) || 0) > 0));
 
   // What a line is taxed at. An invoice billed at one rate carries it at the
   // top (`gstRate`) and its lines have none; a bill that mixes rates carries
@@ -53,9 +60,14 @@ export default function InvoiceDocument({ invoice }) {
   );
   // True when the lines do not all share one rate — the tax rows can then no
   // longer be labelled with a single percentage.
+  // A charge taxed at a rate of its own counts here too: freight at 5% beside
+  // goods at 18% leaves the tax rows with no single percentage to carry.
   const mixedRates = useMemo(
-    () => new Set(items.filter((it) => (Number(it.amount) || 0) > 0).map(lineRate)).size > 1,
-    [items, inv.gstRate]
+    () => new Set([
+      ...items.filter((it) => (Number(it.amount) || 0) > 0).map(lineRate),
+      ...taxedCharges.map((ch) => Number(ch.taxRate) || 0),
+    ]).size > 1,
+    [items, inv.gstRate, inv.additionalCharges]
   );
 
   // HSN-wise tax summary — derived here rather than stored, so it always agrees
@@ -75,6 +87,17 @@ export default function InvoiceDocument({ invoice }) {
       cur.taxable = round2(cur.taxable + (Number(it.taxable != null ? it.taxable : it.amount) || 0));
       map.set(key, cur);
     });
+    // A charge GST was charged on is part of the taxable value, so it belongs in
+    // this summary too — left out, the table's tax would not add up to the tax
+    // rows above it. It has no HSN of its own, so it groups with the other
+    // unclassified value at its rate.
+    taxedCharges.forEach((ch) => {
+      const rate = Number(ch.taxRate) || 0;
+      const key = `—|${rate}`;
+      const cur = map.get(key) || { hsn: '—', rate, taxable: 0 };
+      cur.taxable = round2(cur.taxable + (Number(ch.amount) || 0));
+      map.set(key, cur);
+    });
     return [...map.values()].map((r) => {
       if (inv.interState) {
         const igst = round2((r.taxable * r.rate) / 100);
@@ -84,7 +107,7 @@ export default function InvoiceDocument({ invoice }) {
       const cgst = round2((r.taxable * half) / 100);
       return { ...r, cgstRate: half, cgst, sgstRate: half, sgst: cgst, totalTax: round2(cgst * 2) };
     });
-  }, [items, inv.gstRate, inv.interState]);
+  }, [items, inv.gstRate, inv.interState, inv.additionalCharges]);
 
   const hsnTotals = hsnRows.reduce((a, r) => ({
     taxable: round2(a.taxable + r.taxable),
@@ -98,10 +121,14 @@ export default function InvoiceDocument({ invoice }) {
   // reduced the taxable value, below them when the tax was charged first.
   // Invoices issued before the choice existed carry no mode; their numbers say
   // which it was.
+  // A taxed charge is inside taxableValue, so it has to come back off before
+  // that comparison means anything.
+  const taxedChargeValue = round2(taxedCharges.reduce((s, ch) => s + (Number(ch.amount) || 0), 0));
   const discountBeforeTax = inv.discountMode
     ? inv.discountMode === 'before'
     : (inv.taxableValue != null
-      && round2(inv.taxableValue) < round2((Number(inv.subtotal) || 0) - (Number(inv.itemDiscount) || 0)));
+      && round2((Number(inv.taxableValue) || 0) - taxedChargeValue)
+        < round2((Number(inv.subtotal) || 0) - (Number(inv.itemDiscount) || 0)));
 
   const qtyTotal = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
   // Per-product discounts get their own column (only when any line has one),
@@ -302,6 +329,18 @@ export default function InvoiceDocument({ invoice }) {
                   </tr>
                 )}
 
+                {/* A charge GST was charged on has to be printed ABOVE the tax
+                    rows: it is part of the value taxed, and a reader checking
+                    the bill must be able to see what the tax was charged on. */}
+                {taxedCharges.map((ch, i) => (
+                  <tr key={`tch${i}`}>
+                    <td colSpan={labelSpan} className="inv-r">
+                      <i>{ch.label || 'Charge'}{mixedRates ? '' : ` (GST @${ch.taxRate}%)`}</i>
+                    </td>
+                    <td className="inv-r">{plain(ch.amount)}</td>
+                  </tr>
+                ))}
+
                 {!isCash && (inv.interState ? (
                   <tr>
                     <td colSpan={labelSpan} className="inv-r"><i>IGST{mixedRates ? '' : `@${inv.gstRate || 0}%`}</i></td>
@@ -327,9 +366,10 @@ export default function InvoiceDocument({ invoice }) {
                   </tr>
                 )}
 
-                {/* Freight, packing and the like — billed after tax, printed
-                    where they were added so the total adds up on inspection. */}
-                {(Array.isArray(inv.additionalCharges) ? inv.additionalCharges : []).map((ch, i) => (
+                {/* Freight, packing and the like that carry no GST — billed
+                    after tax, printed where they were added so the total adds
+                    up on inspection. */}
+                {plainCharges.map((ch, i) => (
                   <tr key={`ch${i}`}>
                     <td colSpan={labelSpan} className="inv-r"><i>{ch.label || 'Charge'}</i></td>
                     <td className="inv-r">{plain(ch.amount)}</td>

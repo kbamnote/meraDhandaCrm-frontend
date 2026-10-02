@@ -103,7 +103,8 @@ describe('extra charges', () => {
     fireEvent.change(screen.getByTestId('charge-amount'), { target: { value: '75' } });
     save();
     await waitFor(() => expect(saved).toHaveLength(1));
-    expect(saved[0].additionalCharges).toEqual([{ label: 'Packing', amount: 75 }]);
+    // taxRate 0 = billed without GST, which is the default for a charge.
+    expect(saved[0].additionalCharges).toEqual([{ label: 'Packing', amount: 75, taxRate: 0 }]);
   });
 
   it('an empty charge row is not sent', async () => {
