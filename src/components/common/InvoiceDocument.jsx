@@ -327,6 +327,15 @@ export default function InvoiceDocument({ invoice }) {
                   </tr>
                 )}
 
+                {/* Freight, packing and the like — billed after tax, printed
+                    where they were added so the total adds up on inspection. */}
+                {(Array.isArray(inv.additionalCharges) ? inv.additionalCharges : []).map((ch, i) => (
+                  <tr key={`ch${i}`}>
+                    <td colSpan={labelSpan} className="inv-r"><i>{ch.label || 'Charge'}</i></td>
+                    <td className="inv-r">{plain(ch.amount)}</td>
+                  </tr>
+                ))}
+
                 {/* Without this line the invoice doesn't add up: TOTAL is the
                     rounded figure, while the taxable value and tax above sum to
                     the exact one. Shown with its sign so the reader can check it. */}

@@ -86,6 +86,11 @@ const DOC_TYPES = [
   { value: 'cash', label: 'Cash / Non-GST Bill' },
 ];
 const GST_RATES = ['0', '5', '12', '18', '28'];
+// Anything outside the usual slabs — 1.5% on job work, 0.25% on rough stones,
+// a state cess. Typed rather than chosen, so an unusual supply is not a reason
+// to leave the bill wrong.
+const CUSTOM_RATE = 'custom';
+const isListedRate = (r) => GST_RATES.includes(String(r));
 
 /**
  * Spread a bill-level discount across the lines in proportion to their value,
@@ -259,17 +264,28 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     eventType: invoice?.eventType || '', salesPerson: invoice?.salesPerson || '',
     deliveryType: invoice?.deliveryType || '', branchId: invoice?.branchId || '',
     // The number is fixed on an edit — a GST document keeps its identity.
-    invoicePrefix: invoice?.invoicePrefix || '', invoiceNumber: '',
+    invoicePrefix: invoice?.invoicePrefix || '',
+    // The number as issued, so the box shows this invoice rather than the next.
+    invoiceNumber: invoice
+      ? String(invoice.invoiceNo || '').slice(String(invoice.invoicePrefix || '').length + 1) || String(invoice.invoiceNo || '')
+      : '',
     paymentTermDays: invoice?.paymentTermDays ?? '', dueDate: invoice?.dueDate || '',
     placeOfSupply: invoice?.placeOfSupply || 'auto',
     reverseCharge: !!invoice?.reverseCharge,
-    gstRate: invoice?.gstRate != null ? String(invoice.gstRate) : '18',
+    // A stored rate outside the slab list opens on "Other…", with the figure in
+    // the box beside it — otherwise the select falls back to its first option
+    // and a 1.5% invoice silently reopens as 0%.
+    gstRate: invoice?.gstRate != null
+      ? (isListedRate(invoice.gstRate) ? String(invoice.gstRate) : CUSTOM_RATE)
+      : '18',
     // The bill-level part only. `discount` on a saved invoice is the TOTAL (line
     // discounts included); invoices from before per-line discounts have no
     // billDiscount, and there the two are the same thing.
     // An invoice saved before the switch existed carries no mode. Its numbers
     // say which it was: a taxable value below the billed total means the
     // discount had been taken off before the tax.
+    // A rate the slab list does not carry is typed into its own box.
+    customRate: invoice && invoice.gstRate != null && !isListedRate(invoice.gstRate) ? String(invoice.gstRate) : '',
     discountMode: invoice?.discountMode
       || (invoice && invoice.taxableValue != null
         && round2(invoice.taxableValue) < round2((invoice.subtotal || 0) - (invoice.itemDiscount || 0))
@@ -306,6 +322,12 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
       : [job ? { ...blankItem(), name: job.work || '' } : blankItem()]
   );
   const [attachments, setAttachments] = useState(invoice?.attachments || []);
+  // Freight, packing, insurance — charged alongside the goods, added after tax.
+  const [charges, setCharges] = useState(
+    Array.isArray(invoice?.additionalCharges)
+      ? invoice.additionalCharges.map((ch) => ({ label: ch.label || '', amount: ch.amount != null ? String(ch.amount) : '' }))
+      : []
+  );
   const [uploading, setUploading] = useState(false);
   const [defaults, setDefaults] = useState(null); // GET /invoice-defaults result
   // Composition dealers cannot collect GST (CGST Act s.10); reverse charge moves
@@ -344,6 +366,14 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   useEffect(() => {
     accountingApi.invoiceDefaults(type).then((d) => {
       setDefaults(d);
+      // An EXISTING invoice keeps its own number — a GST document's identity is
+      // fixed. Pulling the next free number over it showed people a number that
+      // was not theirs and could not be changed, which is what made editing the
+      // number look broken.
+      if (isEdit) {
+        setForm((f) => ({ ...f, terms: f.terms || d.terms }));
+        return;
+      }
       setPrefilledNumber(d.invoiceNumber);
       setForm((f) => ({ ...f, invoicePrefix: d.invoicePrefix, invoiceNumber: d.invoiceNumber, terms: f.terms || d.terms }));
     }).catch(() => {});
@@ -461,6 +491,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
 
   const totals = useMemo(() => {
     const noTax = isCash || isComposition || form.reverseCharge;
+    // The bill's rate: the slab chosen, or the one typed into the custom box.
+    const invoiceRate = form.gstRate === CUSTOM_RATE ? (Number(form.customRate) || 0) : form.gstRate;
     const amounts = items.map((it) => round2((Number(it.qty) || 0) * (Number(it.rate) || 0)));
     const subtotal = round2(amounts.reduce((a, n) => a + n, 0));
     // Each line's own discount first, then the bill discount spread over what
@@ -489,7 +521,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const byRate = new Map();
     items.forEach((it, i) => {
       const taxable = round2(amounts[i] - shares[i]);
-      const r = noTax ? 0 : effectiveRate(it, form.gstRate);
+      const r = noTax ? 0 : effectiveRate(it, invoiceRate);
       tx += (taxable * r) / 100;
       byRate.set(r, round2((byRate.get(r) || 0) + taxable));
     });
@@ -506,7 +538,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     // zero total beside a discount bigger than the invoice.
     const payable = round2(taxableValue + taxTotal);
     const appliedBill = beforeTax ? billDiscount : round2(Math.min(billDiscount, payable));
-    const rawTotal = round2(Math.max(0, payable - (beforeTax ? 0 : appliedBill)));
+    const chargesTotal = round2(charges.reduce((a, ch) => a + (Number(ch.amount) || 0), 0));
+    const rawTotal = round2(Math.max(0, payable - (beforeTax ? 0 : appliedBill) + chargesTotal));
     // Mirror the server's rounding so the figure on screen IS the figure that
     // gets saved. The server recomputes authoritatively; this is display only.
     const mode = defaults?.invoiceRounding || 'nearest';
@@ -519,8 +552,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const roundOff = round2(total - rawTotal);
     const received = form.markFullyPaid ? total : round2(Number(form.amountReceived) || 0);
     const balance = round2(Math.max(0, total - Math.min(received, total)));
-    return { subtotal, taxableValue, taxTotal, cgst, sgst, igst, rates, discount: round2(itemDiscount + appliedBill), itemDiscount, billDiscount: appliedBill, itemDiscs, rawTotal, roundOff, total, received, balance };
-  }, [items, form.gstRate, form.discount, form.discountMode, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview, defaults]);
+    return { subtotal, taxableValue, taxTotal, cgst, sgst, igst, rates, chargesTotal, discount: round2(itemDiscount + appliedBill), itemDiscount, billDiscount: appliedBill, itemDiscs, rawTotal, roundOff, total, received, balance };
+  }, [items, charges, form.gstRate, form.customRate, form.discount, form.discountMode, form.markFullyPaid, form.amountReceived, isCash, isComposition, form.reverseCharge, interStatePreview, defaults]);
 
   // What the tax rows are LABELLED with: the rate the lines are actually taxed
   // at, not whatever the bill-level box happens to say. They disagreed when a
@@ -572,9 +605,10 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
       // Setting every row to 12% while the bill-level box still reads 18% used
       // to save 18%: the screen showed one figure and the invoice kept another,
       // and an edit that changed only the rate appeared to do nothing at all.
-      const lineRates = new Set(billed.map((it) => effectiveRate(it, form.gstRate)));
+      const billRate = form.gstRate === CUSTOM_RATE ? (Number(form.customRate) || 0) : form.gstRate;
+      const lineRates = new Set(billed.map((it) => effectiveRate(it, billRate)));
       const mixed = !noTaxDoc && lineRates.size > 1;
-      const agreedRate = lineRates.size === 1 ? [...lineRates][0] : (Number(form.gstRate) || 0);
+      const agreedRate = lineRates.size === 1 ? [...lineRates][0] : (Number(billRate) || 0);
       const body = {
         type,
         // Set only after the user confirms the credit-limit warning below.
@@ -603,6 +637,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         // Bill-level only; each line carries its own below. The server adds the
         // two up into the invoice's total `discount`.
         discount: totals.billDiscount,
+        additionalCharges: charges
+          .filter((ch) => Number(ch.amount))
+          .map((ch) => ({ label: ch.label.trim() || 'Charge', amount: Number(ch.amount) })),
         discountMode: form.discountMode,
         markFullyPaid: form.markFullyPaid,
         applyAdvance: useAdvance || undefined,
@@ -614,7 +651,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         items: billed.map((it) => ({
           name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate),
           unit: it.unit || null, description: it.description || null,
-          taxRate: effectiveRate(it, form.gstRate), itemId: it.itemId || null,
+          taxRate: effectiveRate(it, billRate), itemId: it.itemId || null,
           ...(Number(it.discountValue) > 0
             ? { discountType: it.discountType === 'amount' ? 'amount' : 'percent', discountValue: Number(it.discountValue) }
             : {}),
@@ -633,6 +670,12 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         + (inv.advanceApplied > 0 ? ` · ${inr(inv.advanceApplied)} advance applied` : ''),
         'success'
       );
+      // The number asked for was already in use, so a free one was issued.
+      // Saying nothing would leave someone looking for an invoice number that
+      // does not exist.
+      if (inv.requestedInvoiceNo && inv.requestedInvoiceNo !== inv.invoiceNo) {
+        showToast(`${inv.requestedInvoiceNo} was already used — issued as ${inv.invoiceNo}`, 'error');
+      }
       onCreated?.(inv);
       onClose();
     } catch (e) {
@@ -1026,9 +1069,22 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
           {/* ── RIGHT COLUMN ── */}
           <div style={{ flex: '1 1 300px', minWidth: 260 }}>
             <div className="flex gap-2">
-              <div className="form-group" style={{ flex: 1 }}><label>Invoice Prefix</label><input className="input" value={form.invoicePrefix} onChange={(e) => setF('invoicePrefix', e.target.value)} /></div>
-              <div className="form-group" style={{ flex: 1 }}><label>Invoice Number</label><input className="input" value={form.invoiceNumber} onChange={(e) => setF('invoiceNumber', e.target.value)} /></div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Invoice Prefix</label>
+                <input className="input" data-testid="invoice-prefix" value={form.invoicePrefix} disabled={isEdit}
+                  onChange={(e) => setF('invoicePrefix', e.target.value)} />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Invoice Number</label>
+                <input className="input" data-testid="invoice-number" value={form.invoiceNumber} disabled={isEdit}
+                  onChange={(e) => setF('invoiceNumber', e.target.value)} />
+              </div>
             </div>
+            {isEdit && (
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: -6, marginBottom: 8 }} data-testid="number-locked">
+                A GST invoice keeps its number for life — cancel this one and raise another to change it.
+              </div>
+            )}
             <div className="form-group">
               <label>Sales Invoice Date</label>
               <input className="input" type="date" value={form.date} onChange={(e) => setF('date', e.target.value)} />
@@ -1098,8 +1154,23 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                       }}
                     >
                       {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+                      <option value={CUSTOM_RATE}>Other…</option>
                     </select>
                   </div>
+                  {form.gstRate === CUSTOM_RATE && (
+                    <div className="flex items-center justify-between" style={{ padding: '3px 0' }}>
+                      <span style={{ fontSize: 12, color: 'var(--text2)' }}>GST % (typed)</span>
+                      <input
+                        className="input input-num"
+                        data-testid="custom-gst"
+                        type="number" step="0.01" min="0" max="100"
+                        style={{ width: 90, textAlign: 'right' }}
+                        value={form.customRate}
+                        onChange={(e) => setF('customRate', e.target.value)}
+                        placeholder="e.g. 1.5"
+                      />
+                    </div>
+                  )}
                   {items.some((it) => it.taxRate !== '') && (
                     <div style={{ fontSize: 11, color: 'var(--text3)', paddingBottom: 4 }} data-testid="own-rate-note">
                       {items.filter((it) => it.taxRate !== '').length} line(s) have their own GST % — change it on the row.
@@ -1164,6 +1235,28 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     : `GST charged on ${inr(totals.taxableValue)} — the discount comes off the total`}
                 </div>
               )}
+              {/* Freight, packing, insurance — added after tax, as billed. */}
+              {charges.map((ch, i) => (
+                <div key={i} className="flex items-center" style={{ gap: 6, padding: '3px 0' }} data-testid="charge-row">
+                  <input
+                    className="input" style={{ flex: 1, fontSize: 12.5 }} placeholder="Freight / packing…"
+                    value={ch.label}
+                    onChange={(e) => setCharges((a) => a.map((c2, idx) => (idx === i ? { ...c2, label: e.target.value } : c2)))}
+                  />
+                  <input
+                    className="input input-num" type="number" style={{ width: 90, textAlign: 'right' }}
+                    data-testid="charge-amount"
+                    value={ch.amount}
+                    onChange={(e) => setCharges((a) => a.map((c2, idx) => (idx === i ? { ...c2, amount: e.target.value } : c2)))}
+                  />
+                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => setCharges((a) => a.filter((_, idx) => idx !== i))}>×</button>
+                </div>
+              ))}
+              <button type="button" className="btn btn-ghost btn-xs" data-testid="add-charge" style={{ marginBottom: 4 }}
+                onClick={() => setCharges((a) => [...a, { label: '', amount: '' }])}>
+                + Add charge (freight, packing…)
+              </button>
+
               <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
               {totals.roundOff !== 0 && (
                 <Row label="Round Off" value={`${totals.roundOff > 0 ? '+' : '−'} ${inr(Math.abs(totals.roundOff))}`} />

@@ -355,6 +355,10 @@ export const accountingApi = {
   // has been received against it — use a credit/debit note then — or if the
   // financial year is closed. The prior version is kept in `revisions`.
   updateInvoice: (id, body) => api.put(`/accounting/invoice/${id}`, body).then(r => r.data),
+  invoicePayments: (id)     => api.get(`/accounting/invoice/${id}/payments`).then(r => r.data),
+  // Undo a receipt recorded by mistake: its ledger entry goes too, and the
+  // invoice's paid amount is recomputed from what is left.
+  undoPayment:    (id)      => api.delete(`/accounting/payment/${id}`).then(r => r.data),
   recordPayment: (id, body) => api.post(`/accounting/invoice/${id}/payment`, body).then(r => r.data),
   voidInvoice:   (id)       => api.post(`/accounting/invoice/${id}/void`).then(r => r.data),
   deleteInvoice: (id)       => api.delete(`/accounting/invoice/${id}`).then(r => r.data),

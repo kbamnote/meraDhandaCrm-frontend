@@ -45,6 +45,26 @@ const S = {
     hi: 'यह इनवॉइस हमेशा के लिए हटाएँ? यह सूची, लेजर और GST रिपोर्ट से हट जाएगा।',
     hinglish: 'Invoice hamesha ke liye delete karein? List, ledger aur GST reports se hat jayega.',
   },
+  payments: { en: 'Payments', hi: 'भुगतान', hinglish: 'Payments', gu: 'ચુકવણી', mr: 'पेमेंट', mwr: 'भुगतान' },
+  undo:     { en: 'Undo', hi: 'वापस लें', hinglish: 'Undo', gu: 'પાછું', mr: 'मागे घ्या', mwr: 'वापस लो' },
+  undoAsk:  {
+    en: 'Undo this receipt? The money comes off this invoice and out of your books.',
+    hi: 'यह रसीद वापस लें? राशि इनवॉइस और बही से हट जाएगी।',
+    hinglish: 'Yeh receipt undo karein? Amount invoice aur books se hat jayega.',
+    gu: 'આ રસીદ પાછી લો? રકમ ઇન્વોઇસ અને ચોપડામાંથી નીકળી જશે.',
+    mr: 'ही पावती मागे घ्यायची? रक्कम इनव्हॉइस व खात्यातून जाईल.',
+    mwr: 'यो रसीद वापस लो? रकम इनवॉइस अर बही सूं हट जासी।',
+  },
+  undone:   { en: 'Receipt undone', hi: 'रसीद वापस ली', hinglish: 'Receipt undo ho gayi', gu: 'રસીદ પાછી લીધી', mr: 'पावती मागे घेतली', mwr: 'रसीद वापस ली' },
+  whyNoDel: {
+    en: 'received — undo the payment to edit, cancel or delete this bill',
+    hi: 'मिले — बिल बदलने/रद्द/हटाने के लिए भुगतान वापस लें',
+    hinglish: 'mile — bill edit/cancel/delete karne ke liye payment undo karein',
+    gu: 'મળ્યા — બિલ બદલવા કે રદ કરવા પેમેન્ટ પાછું લો',
+    mr: 'मिळाले — बिल बदलण्यासाठी पेमेंट मागे घ्या',
+    mwr: 'मिल्या — बिल बदलण खातर भुगतान वापस लो',
+  },
+  noPayments: { en: 'No receipts against this invoice.', hi: 'इस इनवॉइस पर कोई रसीद नहीं।', hinglish: 'Is invoice par koi receipt nahi.', gu: 'આ ઇન્વોઇસ પર કોઈ રસીદ નથી.', mr: 'या इनव्हॉइसवर पावती नाही.', mwr: 'इण इनवॉइस पर कोई रसीद कोनी।' },
   deleted:  { en: 'Invoice deleted', hi: 'इनवॉइस हटाया गया', hinglish: 'Invoice delete ho gaya' },
   cancelled: { en: 'Invoice cancelled', hi: 'इनवॉइस रद्द', hinglish: 'Invoice cancel ho gaya' },
   edit:     { en: 'Edit', hi: 'बदलें', hinglish: 'Edit' },
@@ -213,6 +233,7 @@ export function InvoiceRow({ inv, t }) {
   const [paying, setPaying] = useState(false);
   const [voiding, setVoiding] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showPayments, setShowPayments] = useState(false);
   const [showCrn, setShowCrn] = useState(false);
   const [showDbn, setShowDbn] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -281,6 +302,14 @@ export function InvoiceRow({ inv, t }) {
             {inv.type !== 'proforma' && inv.status !== 'void' && (
               <button className="btn btn-sm btn-ghost" style={{ color: 'var(--amber)' }} onClick={() => setShowDbn(true)}>{t('debitNote')}</button>
             )}
+            {/* A receipt is what blocks editing, cancelling and deleting, so
+                the way to UNDO one has to be reachable from here — otherwise a
+                wrongly-ticked "fully paid" leaves a bill nobody can correct. */}
+            {hasPayment && (
+              <button className="btn btn-sm btn-ghost" data-testid="payments-btn" onClick={() => setShowPayments(true)}>
+                {t('payments')}
+              </button>
+            )}
             {/* Cancel and Delete both unwind the bill, which the server refuses
                 once money has been received against it — hidden, not offered
                 and then rejected. */}
@@ -300,8 +329,74 @@ export function InvoiceRow({ inv, t }) {
           onCreated={() => setEditing(false)}
         />
       )}
+      {hasPayment && (
+        <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'right', marginTop: 4 }} data-testid="why-no-delete">
+          {inr(inv.paidAmount)} {t('whyNoDel')}
+        </div>
+      )}
+      {showPayments && <PaymentsModal invoice={inv} t={t} onClose={() => setShowPayments(false)} />}
       {showCrn && <CreditNoteModal invoice={inv} onClose={() => setShowCrn(false)} />}
       {showDbn && <DebitNoteModal invoice={inv} onClose={() => setShowDbn(false)} />}
+    </div>
+  );
+}
+
+// The receipts against one invoice, with a way to undo one. This is the only
+// route back from a payment recorded by mistake: until it is undone the bill
+// cannot be edited, cancelled or deleted, which is exactly the state a stray
+// "mark fully paid" leaves behind.
+function PaymentsModal({ invoice, t, onClose }) {
+  const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState(null);
+
+  const load = () => accountingApi.invoicePayments(invoice.id)
+    .then((r) => setRows(Array.isArray(r) ? r : []))
+    .catch((e) => { showToast(e.response?.data?.error || t('failed'), 'error'); setRows([]); });
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const undo = async (p) => {
+    if (!window.confirm(t('undoAsk'))) return;
+    setBusy(p.id);
+    try {
+      await accountingApi.undoPayment(p.id);
+      showToast(t('undone'), 'success');
+      load();
+    } catch (e) {
+      showToast(e.response?.data?.error || t('failed'), 'error');
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="card" style={{ width: '100%', maxWidth: 460, padding: 18 }}>
+        <h3 style={{ margin: '0 0 2px', fontSize: 16, fontWeight: 700 }}>{t('payments')}</h3>
+        <div style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 12 }}>
+          {invoice.invoiceNo} · {inr(invoice.paidAmount)} of {inr(invoice.total)}
+        </div>
+
+        {rows === null && <div style={{ color: 'var(--text3)', fontSize: 13 }}>…</div>}
+        {rows && !rows.length && <div style={{ color: 'var(--text3)', fontSize: 13 }}>{t('noPayments')}</div>}
+        {(rows || []).map((p) => (
+          <div key={p.id} data-testid="payment-row" className="flex items-center justify-between"
+            style={{ gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600 }}>{inr(p.amount)}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>{p.date}{p.mode ? ` · ${p.mode}` : ''}</div>
+            </div>
+            <button className="btn btn-sm btn-ghost" data-testid="undo-payment" style={{ color: 'var(--red)' }}
+              disabled={busy === p.id} onClick={() => undo(p)}>
+              {t('undo')}
+            </button>
+          </div>
+        ))}
+
+        <div className="flex" style={{ gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="btn btn-sm btn-ghost" onClick={onClose}>{t('cancel')}</button>
+        </div>
+      </div>
     </div>
   );
 }
