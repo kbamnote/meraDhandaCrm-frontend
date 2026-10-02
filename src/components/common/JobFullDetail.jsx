@@ -4,7 +4,8 @@
  * scrolls naturally) for read-only job views (Completed, Hold, …) selected via
  * config.detail = 'job'.
  *
- * Props: { job (the job object) }.
+ * Props: { job (the job object), userNames? ({ uid: name } — shows who made
+ *   each Timeline step) }.
  * Renders only the sections whose data actually exists on the job — a job
  * that never reached production shows "Not sent to production", a job with no
  * stageHistory hides the Timeline entirely, etc. This component renders just
@@ -82,7 +83,7 @@ function Row({ label, value }) {
 }
 
 // --- component -------------------------------------------------------------
-export default function JobFullDetail({ job: jobProp }) {
+export default function JobFullDetail({ job: jobProp, userNames }) {
   const job = jobProp || {};
 
   const plan = Array.isArray(job.plan) ? job.plan : [];
@@ -273,6 +274,9 @@ export default function JobFullDetail({ job: jobProp }) {
                         {prettyStage(h.stage)}
                       </span>
                       <span style={{ fontSize: 11, color: 'var(--text3)' }}>{fmt(h.at)}</span>
+                      {h.by && userNames && userNames[h.by] ? (
+                        <span style={{ fontSize: 11, color: 'var(--text2)' }} data-testid="timeline-by">by {userNames[h.by]}</span>
+                      ) : null}
                     </div>
                     {has(h.note) && (
                       <div style={{ fontSize: 12, color: 'var(--text2)' }}>{h.note}</div>

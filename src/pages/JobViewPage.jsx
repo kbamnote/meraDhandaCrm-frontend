@@ -9,12 +9,17 @@
  * Same realtime pattern as JobDetailPage: onValue(ref(db, 'mpw/jobs')). The
  * page reads the id from the query string, picks jobs[id] from the LIVE jobs
  * collection, and renders inside normal document flow so it scrolls naturally.
+ *
+ * The stage panel on top shows the current stage and, for a cancelled / held
+ * job, who did it and why. Opened from Job Cards (?manage=1) it also has the
+ * "Move to" control. Teammates' names come from the live users list.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ref, onValue, db } from '../services/realtime';
 import { useT } from '../i18n/LanguageContext';
 import JobFullDetail from '../components/common/JobFullDetail';
+import JobStagePanel from '../components/common/JobStagePanel';
 
 const S = {
   back: { en: '← Back', hi: '← वापस', hinglish: '← Back', gu: '← પાછળ', mr: '← मागे', mwr: '← पाछो' },
@@ -36,14 +41,24 @@ export default function JobViewPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const id = params.get('id');
+  const canMove = params.get('manage') === '1';
 
   const [jobs, setJobs] = useState(null); // null until first snapshot arrives
+  const [users, setUsers] = useState({});
 
   useEffect(() => {
     const r = ref(db, 'mpw/jobs');
     const u = onValue(r, (snap) => setJobs(snap.val() || {}));
     return u;
   }, []);
+
+  // uid → name, for "Cancelled by …" and the Timeline's "by …".
+  useEffect(() => onValue(ref(db, 'mpw/users'), (snap) => setUsers(snap.val() || {})), []);
+  const userNames = useMemo(() => {
+    const out = {};
+    Object.entries(users || {}).forEach(([uid, u]) => { if (u) out[uid] = u.name || u.email || uid; });
+    return out;
+  }, [users]);
 
   const job = jobs && id ? jobs[id] : null;
   const loading = jobs === null;
@@ -68,7 +83,10 @@ export default function JobViewPage() {
           <div style={{ color: 'var(--text2)', fontSize: 14 }}>{t('notFoundHint')}</div>
         </div>
       ) : (
-        <JobFullDetail job={{ ...job, id }} />
+        <>
+          <JobStagePanel job={{ ...job, id }} userNames={userNames} canMove={canMove} />
+          <JobFullDetail job={{ ...job, id }} userNames={userNames} />
+        </>
       )}
     </div>
   );

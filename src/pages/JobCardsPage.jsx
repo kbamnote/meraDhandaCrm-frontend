@@ -7,6 +7,7 @@
  * The job LIST is read live from `mpw/jobs` via the realtime shim.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DATE_PRESETS, presetRange, inDateRange, isoDay } from '../utils/jobDateFilter';
 import { ref, onValue, db } from '../services/realtime';
 import { ordersApi, dbApi, uploadApi } from '../services/api';
@@ -77,6 +78,7 @@ const S = {
   from:        { en: 'From', hi: 'से', hinglish: 'From', gu: 'થી', mr: 'पासून', mwr: 'सूं' },
   to:          { en: 'To', hi: 'तक', hinglish: 'To', gu: 'સુધી', mr: 'पर्यंत', mwr: 'तांई' },
   showing:     { en: 'showing', hi: 'दिखा रहे', hinglish: 'showing', gu: 'બતાવી રહ્યા', mr: 'दाखवत आहे', mwr: 'दिखा रया' },
+  openDetail:  { en: 'Open job details', hi: 'जॉब का विवरण खोलें', hinglish: 'Job details kholein', gu: 'જોબની વિગતો ખોલો', mr: 'जॉबचा तपशील उघडा', mwr: 'जॉब री जाणकारी खोलो' },
 };
 
 function StageBadge({ stage }) {
@@ -147,22 +149,10 @@ export default function JobCardsPage() {
   }, [dated]);
   const dateActive = !!(range.from || range.to);
 
-  const move = async (job, to) => {
-    if (!to || to === job.stage) return;
-    // Hold / cancel require a reason (the backend enforces this).
-    let note = null;
-    if (to === 'hold' || to === 'cancelled') {
-      note = window.prompt(t('reasonPrompt'));
-      if (!note || !note.trim()) return;
-      note = note.trim();
-    }
-    try {
-      // QC → Production means a reject: reset production progress.
-      const resetSteps = job.stage === 'qc' && to === 'production';
-      await ordersApi.transition(job.id, { to, resetSteps, note });
-      showToast(t('moved'), 'success');
-    } catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
-  };
+  // A card opens the job's full detail; the stage is changed there ("Move to"),
+  // with the reason that holding / cancelling needs.
+  const navigate = useNavigate();
+  const openJob = (job) => navigate(`/job-view?id=${encodeURIComponent(job.id)}&manage=1`);
 
   return (
     <div>
@@ -210,7 +200,7 @@ export default function JobCardsPage() {
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
         <Chip active={stageFilter === 'all'} onClick={() => setStageFilter('all')} label={`${t('all')} (${dated.length})`} />
-        {STAGES.map((s) => (
+        {ALL_STAGES.map((s) => (
           <Chip key={s} active={stageFilter === s} onClick={() => setStageFilter(s)}
             label={`${STAGE_META[s].emoji} ${STAGE_META[s].label} (${counts[s] || 0})`} color={STAGE_META[s].color} />
         ))}
@@ -221,7 +211,11 @@ export default function JobCardsPage() {
       )}
 
       {filtered.map((job) => (
-        <div key={job.id} className="card" style={{ marginBottom: 10 }}>
+        <div key={job.id} className="card" data-testid="job-card" role="button" tabIndex={0}
+          title={t('openDetail')}
+          onClick={() => openJob(job)}
+          onKeyDown={(e) => { if (e.key === 'Enter') openJob(job); }}
+          style={{ marginBottom: 10, cursor: 'pointer' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -238,11 +232,11 @@ export default function JobCardsPage() {
                 {job.amount ? <span> · ₹{job.amount}</span> : null}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              {/* Details only — the stage is moved with the dropdown beside it,
-                  which validates the move and tells the next person. A closed
-                  job is not editable, so the button is hidden rather than
-                  offered and then refused. */}
+            {/* Buttons act on their own, without also opening the job. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
+              {/* Details only — the stage is moved from the job's detail page
+                  (click the card). A closed job is not editable, so the button
+                  is hidden rather than offered and then refused. */}
               {canEdit && job.stage !== 'delivered' && job.stage !== 'cancelled' && (
                 <button className="btn btn-xs btn-ghost" data-testid="edit-job" onClick={() => setEditJob(job)}>
                   ✏️ {t('edit')}
@@ -252,13 +246,6 @@ export default function JobCardsPage() {
                 <button className="btn btn-xs" onClick={() => setAssignJob(job)}
                   style={{ background: 'var(--blue, #C05621)', color: '#fff', border: 'none' }}>🏭 {t('assignProd')}</button>
               )}
-              <span style={{ fontSize: 11, color: 'var(--text3)' }}>{t('moveTo')}</span>
-              <select className="input" style={{ width: 'auto', padding: '4px 8px' }} value="" onChange={(e) => move(job, e.target.value)}>
-                <option value="">—</option>
-                {ALL_STAGES.filter((s) => s !== job.stage).map((s) => (
-                  <option key={s} value={s}>{STAGE_META[s].emoji} {STAGE_META[s].label}</option>
-                ))}
-              </select>
             </div>
           </div>
         </div>
