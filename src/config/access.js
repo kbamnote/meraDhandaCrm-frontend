@@ -39,7 +39,12 @@ export const PERM_OF = {
   // had no entry, which meant "ungated" — a designer with nothing granted still
   // got Items, Credit Notes, Debit Notes, Challans, Recurring, Branches and
   // Search in their sidebar, and no permission could take them away.
-  '/accounting/items': 'products',
+  // The item master is the Products catalog AND the collection the Inventory
+  // module is built on (backend SECTION_COLLECTIONS.inventory covers
+  // `products`), so either grant opens it. Gated on `products` alone, an
+  // accountant granted Inventory had the server serving the data while the nav
+  // and the route guard hid the page.
+  '/accounting/items': ['products', 'inventory'],
   '/accounting/credit-notes': 'invoices',
   '/accounting/debit-notes': 'invoices',
   '/accounting/challans': 'invoices',
@@ -127,10 +132,17 @@ export const PERMISSION_CATALOG = [
 // Can this role see this gated module? Explicit grant/revoke wins, else role default.
 export function canViewModule(role, module, permissions) {
   if (ADMIN_ROLES.includes(role)) return true;
-  const g = permissions ? permissions[`${module}.read`] : undefined;
-  if (g === true) return true;
-  if (g === false) return false;
-  return (ROLE_READ_DEFAULTS[role] || []).includes(module);
+  // A route may name MORE THAN ONE module when its data belongs to several —
+  // the item master is both the Products catalog and what the Inventory module
+  // is built on. Any one of them unlocks it, the same way the server treats a
+  // collection as readable when any covering section grants it
+  // (canReadCollection in backend routes/db.js). With one module the behaviour
+  // is unchanged.
+  const mods = Array.isArray(module) ? module : [module];
+  const flag = (m) => (permissions ? permissions[`${m}.read`] : undefined);
+  if (mods.some((m) => flag(m) === true)) return true;
+  if (mods.some((m) => (ROLE_READ_DEFAULTS[role] || []).includes(m) && flag(m) !== false)) return true;
+  return false;
 }
 
 // True if this route should be hidden/blocked for the given profile (allow-list).

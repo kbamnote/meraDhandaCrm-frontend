@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, fireEvent, within } from '@testing-library/react';
-import { renderScreen, OWNER } from './renderScreen.jsx';
+import { renderScreen, OWNER, STAFF } from './renderScreen.jsx';
 
 const saved = [];
 const updated = [];
@@ -167,11 +167,34 @@ describe('the invoice number', () => {
     expect(screen.getByTestId('invoice-prefix').value).toBe('MW-26-27');
   });
 
-  it('is locked on an edit, and says why', async () => {
+  it('can be corrected by an owner, with a warning', async () => {
     await openEdit();
+    await waitFor(() => expect(screen.getByTestId('number-editable')).toBeTruthy());
+    expect(screen.getByTestId('invoice-number').disabled).toBe(false);
+    expect(screen.queryByTestId('number-locked')).toBeNull();
+  });
+
+  it('is locked for a role that may not renumber, and says why', async () => {
+    renderScreen(CreateInvoiceFlow, { auth: STAFF, props: { invoice: INVOICE, onClose: () => {}, onCreated: () => {} } });
     await waitFor(() => expect(screen.getByTestId('number-locked')).toBeTruthy());
     expect(screen.getByTestId('invoice-number').disabled).toBe(true);
     expect(screen.getByTestId('invoice-prefix').disabled).toBe(true);
+    expect(screen.queryByTestId('number-editable')).toBeNull();
+  });
+
+  it('sends the corrected number on an edit', async () => {
+    await openEdit();
+    fireEvent.change(screen.getByTestId('invoice-number'), { target: { value: '004' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Save changes$/i }));
+    await waitFor(() => expect(updated).toHaveLength(1));
+    expect(updated[0].body.invoiceNumber).toBe('004');
+    expect(updated[0].body.invoicePrefix).toBe('MW-26-27');
+  });
+
+  it('splits a number saved without a stored prefix without eating a character', async () => {
+    await openEdit({ ...INVOICE, invoicePrefix: undefined, invoiceNo: 'INV-2627-0007' });
+    await waitFor(() => expect(screen.getByTestId('invoice-number').value).toBe('0007'));
+    expect(screen.getByTestId('invoice-prefix').value).toBe('INV-2627');
   });
 
   it('is still editable when raising a new invoice', async () => {

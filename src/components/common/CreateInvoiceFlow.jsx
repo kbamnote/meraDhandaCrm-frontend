@@ -154,6 +154,22 @@ export function chargeRate(charge, invoiceRate) {
   return Number(r) || 0;                 // a slab, or CUSTOM_RATE until typed
 }
 export const chargeRateSelect = (r) => (r === BILL_RATE ? BILL_RATE : lineRateSelect(r));
+
+// Split a stored invoice number into the two boxes on the form. They must
+// recompose to EXACTLY what is stored, because an edit now sends them back and a
+// mismatch would silently renumber the bill. Slicing by the prefix's length ate
+// the first character of every invoice saved without a stored `invoicePrefix`,
+// which is most older ones — "INV-2627-0001" showed as "NV-2627-0001".
+export function splitInvoiceNo(invoice) {
+  const no = String((invoice && invoice.invoiceNo) || '');
+  const prefix = String((invoice && invoice.invoicePrefix) || '');
+  if (prefix && no.startsWith(`${prefix}-`)) return { prefix, number: no.slice(prefix.length + 1) };
+  // No stored prefix: these numbers are built as <prefix>-<seq>, so the part
+  // after the LAST dash is the number and everything before it is the prefix.
+  const cut = no.lastIndexOf('-');
+  if (cut > 0) return { prefix: no.slice(0, cut), number: no.slice(cut + 1) };
+  return { prefix: '', number: no };
+}
 const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer'];
 
 // Save HSN codes typed on the bill onto the catalog items that lack them.
@@ -240,7 +256,12 @@ function Row({ label, value, bold, color }) {
 
 function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, party: forParty, invoice }) {
   const isEdit = !!invoice;
-  const { tenant } = useAuth();
+  const { tenant, profile } = useAuth();
+  // Correcting the number of a bill that already exists is for the people who
+  // answer for the books — the same list the server enforces (canRenumber in
+  // routes/accounting.js). Everyone else sees it as issued.
+  const canRenumber = ['owner', 'admin', 'superadmin', 'accountant'].includes(profile?.role);
+  const numberLocked = isEdit && !canRenumber;
   // Snapshot the branding logo onto the invoice so a reprint keeps the mark the
   // document was issued under, even if branding changes later.
   const tenantLogo = tenant?.settings?.branding?.logo || '';
@@ -286,12 +307,10 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     poNumber: invoice?.poNumber || '', approvedBy: invoice?.approvedBy || '',
     eventType: invoice?.eventType || '', salesPerson: invoice?.salesPerson || '',
     deliveryType: invoice?.deliveryType || '', branchId: invoice?.branchId || '',
-    // The number is fixed on an edit — a GST document keeps its identity.
-    invoicePrefix: invoice?.invoicePrefix || '',
-    // The number as issued, so the box shows this invoice rather than the next.
-    invoiceNumber: invoice
-      ? String(invoice.invoiceNo || '').slice(String(invoice.invoicePrefix || '').length + 1) || String(invoice.invoiceNo || '')
-      : '',
+    // The number as issued, so the boxes show THIS invoice rather than the next
+    // one. They have to recompose to exactly what is stored — see splitInvoiceNo.
+    invoicePrefix: invoice ? splitInvoiceNo(invoice).prefix : '',
+    invoiceNumber: invoice ? splitInvoiceNo(invoice).number : '',
     paymentTermDays: invoice?.paymentTermDays ?? '', dueDate: invoice?.dueDate || '',
     placeOfSupply: invoice?.placeOfSupply || 'auto',
     reverseCharge: !!invoice?.reverseCharge,
@@ -677,9 +696,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         eventType: form.eventType, salesPerson: form.salesPerson, deliveryType: form.deliveryType,
         branchId: form.branchId || undefined,
         invoicePrefix: form.invoicePrefix,
-        // Only send it when the user actually changed it; otherwise let the
-        // server allocate the next number.
-        invoiceNumber: form.invoiceNumber !== prefilledNumber ? form.invoiceNumber : undefined,
+        // On a NEW invoice, only send it when the user actually changed it;
+        // otherwise let the server allocate the next number. On an EDIT it is
+        // always sent — the server compares it with the number on file and
+        // renumbers only if it differs (and only for a role allowed to).
+        invoiceNumber: isEdit || form.invoiceNumber !== prefilledNumber ? form.invoiceNumber : undefined,
         paymentTermDays: form.paymentTermDays, dueDate: form.dueDate,
         placeOfSupply: form.placeOfSupply,
         gstRate: mixed ? undefined : (noTaxDoc ? 0 : agreedRate),
@@ -1146,18 +1167,27 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
             <div className="flex gap-2">
               <div className="form-group" style={{ flex: 1 }}>
                 <label>Invoice Prefix</label>
-                <input className="input" data-testid="invoice-prefix" value={form.invoicePrefix} disabled={isEdit}
+                <input className="input" data-testid="invoice-prefix" value={form.invoicePrefix} disabled={numberLocked}
                   onChange={(e) => setF('invoicePrefix', e.target.value)} />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
                 <label>Invoice Number</label>
-                <input className="input" data-testid="invoice-number" value={form.invoiceNumber} disabled={isEdit}
+                <input className="input" data-testid="invoice-number" value={form.invoiceNumber} disabled={numberLocked}
                   onChange={(e) => setF('invoiceNumber', e.target.value)} />
               </div>
             </div>
-            {isEdit && (
+            {numberLocked && (
               <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: -6, marginBottom: 8 }} data-testid="number-locked">
                 A GST invoice keeps its number for life — cancel this one and raise another to change it.
+              </div>
+            )}
+            {/* Editable, but not casually: the number is the document's identity
+                in the GST series, and anything already issued to the customer
+                quotes the old one. */}
+            {isEdit && canRenumber && (
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: -6, marginBottom: 8 }} data-testid="number-editable">
+                Changing this renumbers the bill. Only do it for a number typed wrong — a bill the customer already
+                has should be cancelled and raised again.
               </div>
             )}
             <div className="form-group">
