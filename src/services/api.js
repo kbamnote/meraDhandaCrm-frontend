@@ -563,6 +563,30 @@ export const domainApi = {
   remove: ()        => api.delete('/domain').then(r => r.data),
 };
 
+// Field tracking — where the sales team is, and where they have been.
+// `fix` is what a phone posts; the rest is what a manager reads.
+export const trackingApi = {
+  me:      ()                 => api.get('/tracking/me').then(r => r.data),
+  live:    ()                 => api.get('/tracking/live').then(r => r.data),
+  history: (userId, params)   => api.get(`/tracking/history/${userId}`, { params }).then(r => r.data),
+  summary: (params)           => api.get('/tracking/summary', { params }).then(r => r.data),
+  fix:     (body)             => api.post('/tracking/fix', body).then(r => r.data),
+  stop:    (reason)           => api.post('/tracking/stop', { reason }).then(r => r.data),
+  setTracked: (userId, enabled) => api.post(`/tracking/user/${userId}/track`, { enabled }).then(r => r.data),
+};
+
+// Shop visits — a rep checks in at a shop with a photo, then files feedback on
+// the way out. `list` returns the caller's own unless they may watch the team.
+export const visitsApi = {
+  list:     (params)      => api.get('/visits', { params }).then(r => r.data),
+  open:     ()            => api.get('/visits/open').then(r => r.data),
+  outcomes: ()            => api.get('/visits/outcomes').then(r => r.data),
+  summary:  (params)      => api.get('/visits/summary', { params }).then(r => r.data),
+  checkIn:  (body)        => api.post('/visits/checkin', body).then(r => r.data),
+  feedback: (id, body)    => api.post(`/visits/${id}/feedback`, body).then(r => r.data),
+  remove:   (id)          => api.delete(`/visits/${id}`).then(r => r.data),
+};
+
 // Referrals — your share code + the businesses you referred.
 export const referralsApi = {
   code: () => api.get('/referrals/code').then(r => r.data),

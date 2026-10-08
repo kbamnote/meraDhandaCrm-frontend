@@ -58,6 +58,15 @@ export const PERM_OF = {
   '/products': 'products', '/stock': 'stock', '/vendors': 'vendors',
   '/machines': 'machines', '/machine-history': 'machines',
   '/cust-dashboard': 'clients', '/customer-outbox': 'clients', '/review': 'review',
+  // Where the field team is. No role carries this by default — see
+  // ROLE_READ_DEFAULTS — so it is granted per person in Permissions. A rep
+  // reaching their OWN route is allowed by the server regardless; this only
+  // governs the sidebar link and the route guard.
+  '/tracking': 'tracking', '/tracking/route': 'tracking',
+  // Filed by the field team from the phone; read here. Sales reps have it by
+  // role default, so a rep sees their own visits without being granted
+  // anything — the server shows them only theirs.
+  '/visits': 'visits',
   '/attendance': 'attendance', '/hr-attendance': 'attendance',
   '/hr-leaves': 'leaves', '/hr-payroll': 'payroll', '/productivity': 'productivity',
 };
@@ -71,7 +80,7 @@ export const CORE_MODULES = [
   'invoices', 'expenses', 'stock', 'products', 'vendors', 'machines', 'tasks', 'attendance',
 ];
 const ACCOUNTING_MODULES = ['parties', 'purchases', 'inventory', 'cashbank', 'gst', 'reports', 'entries', 'tds'];
-export const GATED_MODULES = [...CORE_MODULES, 'leaves', 'payroll', 'productivity', 'review', ...ACCOUNTING_MODULES];
+export const GATED_MODULES = [...CORE_MODULES, 'leaves', 'payroll', 'productivity', 'review', 'tracking', 'fieldTrack', 'visits', ...ACCOUNTING_MODULES];
 
 // What each built-in job role can see out of the box. Plain staff/pending start
 // with only the basics (non-gated routes); admins bypass entirely.
@@ -80,7 +89,7 @@ export const ROLE_READ_DEFAULTS = {
   floor_manager: ['jobs', 'production', 'qc', 'dispatch', 'designers', 'machines', 'stock', 'tasks', 'completed', 'hold', 'jobsetter'],
   designer: ['designers', 'jobs', 'tasks', 'completed', 'hold', 'jobsetter'],
   jobsetter: ['jobs', 'production', 'tasks', 'completed', 'hold', 'jobsetter'],
-  sales: ['leads', 'clients', 'invoices', 'tasks', 'review', 'parties', 'reports'],
+  sales: ['leads', 'clients', 'invoices', 'tasks', 'review', 'parties', 'reports', 'fieldTrack', 'visits'],
   hr: ['attendance', 'tasks', 'leaves', 'payroll', 'productivity'],
   accountant: [...CORE_MODULES, ...ACCOUNTING_MODULES, 'leaves', 'payroll', 'productivity'],
   cashier: ['clients', 'invoices', 'payments', 'parties', 'cashbank'], // no reports/gst — payments + cash only
@@ -126,6 +135,15 @@ export const PERMISSION_CATALOG = [
   ] },
   { group: 'workspace', features: [
     { key: 'tasks', manage: true }, { key: 'analytics', manage: false },
+  ] },
+  // Field tracking. Two separate things, deliberately: WATCHING the team
+  // (`tracking`) and a person's own phone SHARING its position (`fieldTrack`).
+  // Nobody watches by default; sales reps share by role default, and this is
+  // where you excuse one of them without changing their role.
+  { group: 'tracking', features: [
+    { key: 'tracking', manage: false },
+    { key: 'fieldTrack', manage: false },
+    { key: 'visits', manage: false },
   ] },
 ];
 

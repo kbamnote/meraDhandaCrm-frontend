@@ -94,6 +94,7 @@ const GROUP_LABELS = {
   accounting: { en: 'Accounting', hi: 'अकाउंटिंग', hinglish: 'Accounting' },
   hr: { en: 'HR', hi: 'एचआर', hinglish: 'HR' },
   workspace: { en: 'Workspace', hi: 'वर्कस्पेस', hinglish: 'Workspace' },
+  tracking: { en: 'Field Tracking', hi: 'फील्ड ट्रैकिंग', hinglish: 'Field Tracking' },
 };
 const MODULE_LABELS = {
   jobs: { en: 'Job Cards', hi: 'जॉब कार्ड', hinglish: 'Job Cards' },
@@ -127,6 +128,11 @@ const MODULE_LABELS = {
   payroll: { en: 'Payroll & Salary', hi: 'पेरोल', hinglish: 'Payroll' },
   productivity: { en: 'Productivity', hi: 'प्रोडक्टिविटी', hinglish: 'Productivity' },
   tasks: { en: 'Tasks', hi: 'टास्क', hinglish: 'Tasks' },
+  // "View" on these two reads differently from the rest, so the labels say what
+  // they do: one is watching the team, the other is this person being tracked.
+  tracking: { en: 'See team map & routes', hi: 'टीम मैप और रूट देखें', hinglish: 'Team map aur routes dekhein' },
+  fieldTrack: { en: 'Share own location (field staff)', hi: 'अपनी लोकेशन शेयर करें (फील्ड स्टाफ)', hinglish: 'Apni location share karein (field staff)' },
+  visits: { en: 'Shop visits', hi: 'शॉप विज़िट', hinglish: 'Shop visits' },
 };
 // Flat list of every feature in the catalog (used to build/save the perms object).
 const CATALOG_FEATURES = PERMISSION_CATALOG.flatMap((g) => g.features);

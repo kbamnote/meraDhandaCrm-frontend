@@ -55,6 +55,9 @@ import ReportsPage from './pages/accounting/ReportsPage';
 import GstPage from './pages/accounting/GstPage';
 import PurchasesPage from './pages/accounting/PurchasesPage';
 import AccountingItemsPage from './pages/accounting/ItemsPage';
+import TeamMapPage from './pages/TeamMapPage';
+import ShopVisitsPage from './pages/ShopVisitsPage';
+import RouteHistoryPage from './pages/RouteHistoryPage';
 import EntriesPage from './pages/accounting/EntriesPage';
 import DayBookPage from './pages/accounting/DayBookPage';
 import ProfitPage from './pages/accounting/ProfitPage';
@@ -126,6 +129,9 @@ const CUSTOM_PAGES = {
   'accounting/gst': GstPage,
   'accounting/purchases': PurchasesPage,
   'accounting/items': AccountingItemsPage,
+  'tracking': TeamMapPage,
+  'visits': ShopVisitsPage,
+  'tracking/route': RouteHistoryPage,
   'accounting/entries': EntriesPage,
   'accounting/daybook': DayBookPage,
   'accounting/profit': ProfitPage,
@@ -190,6 +196,13 @@ const STUB_ROUTES = [
   ['dispatch',        '🚚 Dispatch',          'page-dispatch',        'mpw/dispatch'],
   ['machines',        '⚙️  Machines',          'page-machines',        'mpw/machines'],
   ['machine-history', '🕐 Machine History',   'page-machine-history', 'mpw/machineHistory'],
+
+  // Field tracking. Both are real pages (CUSTOM_PAGES above); they are listed
+  // here so SectionGuard gates them by the 'tracking' module like every other
+  // route, rather than being reachable by typing the URL.
+  ['tracking',        '📍 Team Map',          'page-tracking',        null],
+  ['visits',          '🏪 Shop Visits',       'page-visits',          null],
+  ['tracking/route',  '🛣 Route History',     'page-tracking-route',  null],
 
   ['leads-crm',       '📞 Leads CRM',         'page-leads-crm',       'mpw/leads'],
   ['sales-panel',     '💼 Sales Panel',       'page-sales-panel',     'mpw/sales'],
