@@ -89,7 +89,15 @@ export const ROLE_READ_DEFAULTS = {
   floor_manager: ['jobs', 'production', 'qc', 'dispatch', 'designers', 'machines', 'stock', 'tasks', 'completed', 'hold', 'jobsetter'],
   designer: ['designers', 'jobs', 'tasks', 'completed', 'hold', 'jobsetter'],
   jobsetter: ['jobs', 'production', 'tasks', 'completed', 'hold', 'jobsetter'],
-  sales: ['leads', 'clients', 'invoices', 'tasks', 'review', 'parties', 'reports', 'fieldTrack', 'visits'],
+  // A field rep: their customers, their tasks, their shop visits — and their
+  // own location shared while punched in. Deliberately NOT `invoices`,
+  // `parties` or `reports`: those unlocked the whole Accounting menu (the
+  // dashboard, credit/debit notes, Profitability, Job Profit, Year-End Close,
+  // Branches), which is company financials nobody granted them. An owner who
+  // wants a rep to see invoices can tick it in Permissions — that is what the
+  // allow-list is for. Leads and the Sales Panel are out too: the rep's work
+  // now starts from a shop visit.
+  sales: ['clients', 'tasks', 'review', 'fieldTrack', 'visits'],
   hr: ['attendance', 'tasks', 'leaves', 'payroll', 'productivity'],
   accountant: [...CORE_MODULES, ...ACCOUNTING_MODULES, 'leaves', 'payroll', 'productivity'],
   cashier: ['clients', 'invoices', 'payments', 'parties', 'cashbank'], // no reports/gst — payments + cash only

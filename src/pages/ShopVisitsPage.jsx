@@ -10,9 +10,10 @@
  * hidden — "still at the shop" and "never filed the feedback" look the same on
  * paper, and the person reading this is the one who can tell the difference.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { visitsApi, ordersApi } from '../services/api';
+import { visitsApi } from '../services/api';
+import NewJobModal from '../components/common/NewJobModal';
 import { useAuth } from '../context/AuthContext';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
@@ -34,14 +35,9 @@ const S = {
   deleted:  { en: 'Visit deleted', hi: 'विज़िट हटा दी', hinglish: 'Visit delete ho gayi', gu: 'વિઝિટ કાઢી', mr: 'व्हिजिट हटवली', mwr: 'विज़िट हट गई' },
   followUp: { en: 'Follow up', hi: 'फॉलो अप', hinglish: 'Follow up', gu: 'ફોલો અપ', mr: 'फॉलो अप', mwr: 'फॉलो अप' },
   makeJob:  { en: '+ Job card', hi: '+ जॉब कार्ड', hinglish: '+ Job card', gu: '+ જોબ કાર્ડ', mr: '+ जॉब कार्ड', mwr: '+ जॉब कार्ड' },
-  jobFor:   { en: 'Job card for', hi: 'जॉब कार्ड —', hinglish: 'Job card for', gu: 'જોબ કાર્ડ —', mr: 'जॉब कार्ड —', mwr: 'जॉब कार्ड —' },
-  work:     { en: 'What was ordered', hi: 'क्या ऑर्डर हुआ', hinglish: 'Kya order hua', gu: 'શું ઓર્ડર થયું', mr: 'काय ऑर्डर झाले', mwr: 'कांई ऑर्डर हुयो' },
-  amount:   { en: 'Order amount (₹)', hi: 'ऑर्डर राशि (₹)', hinglish: 'Order amount (₹)', gu: 'ઓર્ડર રકમ (₹)', mr: 'ऑर्डर रक्कम (₹)', mwr: 'ऑर्डर रकम (₹)' },
-  delivery: { en: 'Delivery date', hi: 'डिलीवरी तारीख', hinglish: 'Delivery date', gu: 'ડિલિવરી તારીખ', mr: 'डिलिव्हरी तारीख', mwr: 'डिलीवरी तारीख' },
-  designNeeded: { en: 'Design needed', hi: 'डिज़ाइन चाहिए', hinglish: 'Design needed', gu: 'ડિઝાઇન જોઈએ', mr: 'डिझाइन हवे', mwr: 'डिज़ाइन चाइजै' },
-  create:   { en: 'Create job card', hi: 'जॉब कार्ड बनाएं', hinglish: 'Job card banayein', gu: 'જોબ કાર્ડ બનાવો', mr: 'जॉब कार्ड तयार करा', mwr: 'जॉब कार्ड बणाओ' },
-  created:  { en: 'Job card created', hi: 'जॉब कार्ड बन गया', hinglish: 'Job card ban gaya', gu: 'જોબ કાર્ડ બન્યું', mr: 'जॉब कार्ड तयार झाले', mwr: 'जॉब कार्ड बण ग्यो' },
-  needWork: { en: 'Say what was ordered', hi: 'क्या ऑर्डर हुआ लिखें', hinglish: 'Kya order hua likhein', gu: 'શું ઓર્ડર થયું લખો', mr: 'काय ऑर्डर झाले लिहा', mwr: 'कांई ऑर्डर हुयो लिखो' },
+  person:   { en: 'Salesperson', hi: 'सेल्सपर्सन', hinglish: 'Salesperson', gu: 'સેલ્સપર્સન', mr: 'सेल्सपर्सन', mwr: 'सेल्सपर्सन' },
+  everyone: { en: 'Everyone', hi: 'सभी', hinglish: 'Everyone', gu: 'બધા', mr: 'सर्व', mwr: 'सगळा' },
+  openOrig: { en: 'Open original ↗', hi: 'ओरिजिनल खोलें ↗', hinglish: 'Original kholein ↗', gu: 'ઓરિજિનલ ખોલો ↗', mr: 'मूळ उघडा ↗', mwr: 'ओरिजिनल खोलो ↗' },
   cancel:   { en: 'Cancel', hi: 'रद्द', hinglish: 'Cancel', gu: 'રદ', mr: 'रद्द', mwr: 'रद्द' },
 };
 
@@ -69,10 +65,17 @@ export default function ShopVisitsPage() {
   const [canWatch, setCanWatch] = useState(false);
   const [loading, setLoading] = useState(true);
   const isAdmin = ['owner', 'admin', 'superadmin'].includes(profile?.role);
-  // The visit a job card is being raised from, plus that form's fields.
+  // The visit a job card is being raised from. The card itself is the real
+  // job-card form — the same one the Job Cards page opens, with every field
+  // on it. A rep who has just won an order should not be filing a cut-down
+  // card that leaves the floor chasing details, and a second smaller form
+  // would have drifted from the real one the first time a field was added.
   const [jobFor, setJobFor] = useState(null);
-  const [job, setJob] = useState({ work: '', amount: '', deliveryDate: '', designNeeded: false });
-  const [saving, setSaving] = useState(false);
+  // Which rep's visits to show, for someone who can see more than one.
+  const [who, setWho] = useState('all');
+  // The photo being looked at. A 92px thumbnail proves nothing — the point
+  // of the photo is that somebody can actually look at it.
+  const [photo, setPhoto] = useState(null);
 
   const load = useCallback(async (day) => {
     setLoading(true);
@@ -96,6 +99,19 @@ export default function ShopVisitsPage() {
 
   useEffect(() => { load(date); }, [date, load]);
 
+  // The people who filed a visit on this day. Built from the rows so the
+  // filter can never offer a name with nothing behind it.
+  const people = useMemo(() => {
+    const by = new Map();
+    for (const v of rows) if (!by.has(String(v.userId))) by.set(String(v.userId), v.userName || '—');
+    return [...by.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [rows]);
+
+  const shown = useMemo(
+    () => (who === 'all' ? rows : rows.filter((v) => String(v.userId) === who)),
+    [rows, who]
+  );
+
   const remove = async (v) => {
     if (!window.confirm(t('delAsk'))) return;
     try {
@@ -107,36 +123,6 @@ export default function ShopVisitsPage() {
     }
   };
 
-  // Raising the card from here keeps the order tied to the visit it came
-  // out of: the job is credited to the rep who made the visit, and the
-  // visit shows what came of it instead of ending at "order placed".
-  const createJob = async () => {
-    if (!job.work.trim()) return showToast(t('needWork'), 'error');
-    setSaving(true);
-    try {
-      const created = await ordersApi.create({
-        clientName: jobFor.clientName,
-        clientMobile: jobFor.clientPhone || '',
-        clientId: jobFor.clientId || undefined,
-        work: job.work.trim(),
-        amount: Number(job.amount) || 0,
-        deliveryDate: job.deliveryDate || null,
-        designNeeded: job.designNeeded,
-        visitId: jobFor.id,
-        // Credit goes to whoever MADE the visit, not whoever is typing —
-        // an admin raising it on a rep's behalf must not take the order.
-        salesPersonId: jobFor.userId,
-        salesPerson: jobFor.userName,
-      });
-      showToast(`${t('created')} · ${created.jobNo}`, 'success');
-      setJobFor(null);
-      setJob({ work: '', amount: '', deliveryDate: '', designNeeded: false });
-      load(date);
-    } catch (e) {
-      showToast(e?.response?.data?.error || t('failed'), 'error');
-    } finally { setSaving(false); }
-  };
-
   return (
     <div>
       <div className="flex items-center justify-between" style={{ marginBottom: 10, gap: 10, flexWrap: 'wrap' }}>
@@ -145,6 +131,18 @@ export default function ShopVisitsPage() {
           <label style={{ fontSize: 12.5, color: 'var(--text3)' }}>{t('date')}</label>
           <input className="input" type="date" value={date} max={today()} data-testid="visit-date"
             onChange={(e) => setDate(e.target.value)} style={{ width: 160 }} />
+          {/* Only for someone who can see more than one person's visits; a rep
+              looking at their own day has nothing to choose between. */}
+          {canWatch && people.length > 1 && (
+            <>
+              <label style={{ fontSize: 12.5, color: 'var(--text3)' }}>{t('person')}</label>
+              <select className="input" value={who} data-testid="visit-person"
+                onChange={(e) => setWho(e.target.value)} style={{ width: 190 }}>
+                <option value="all">{t('everyone')} ({rows.length})</option>
+                {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </>
+          )}
         </div>
       </div>
 
@@ -165,16 +163,21 @@ export default function ShopVisitsPage() {
 
       {loading ? (
         <p style={{ color: 'var(--text3)' }}>{t('loading')}</p>
-      ) : !rows.length ? (
+      ) : !shown.length ? (
         <p style={{ color: 'var(--text3)' }} data-testid="visits-empty">{t('none')}</p>
-      ) : rows.map((v) => {
+      ) : shown.map((v) => {
         const oc = OUTCOME[v.outcome];
         return (
           <div className="card" key={v.id} data-testid="visit-row" style={{ display: 'flex', gap: 12, marginBottom: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {v.photo && (
-              <a href={v.photo} target="_blank" rel="noreferrer" style={{ flexShrink: 0 }}>
+              // Opens in a viewer rather than a new tab: a Cloudinary URL in a
+              // fresh tab loses which visit it belonged to, and a popup
+              // blocker can swallow it entirely.
+              <button type="button" onClick={() => setPhoto(v)} data-testid="visit-photo"
+                title={t('openOrig')}
+                style={{ flexShrink: 0, padding: 0, border: 'none', background: 'none', cursor: 'zoom-in' }}>
                 <img src={v.photo} alt="" style={{ width: 92, height: 92, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
-              </a>
+              </button>
             )}
             <div style={{ flex: '1 1 260px', minWidth: 0 }}>
               <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
@@ -249,42 +252,45 @@ export default function ShopVisitsPage() {
         );
       })}
 
-      {jobFor && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setJobFor(null); }}>
-          <div className="card" style={{ width: '100%', maxWidth: 440, padding: 18 }}>
-            <h3 style={{ margin: '0 0 2px', fontSize: 16 }}>{t('jobFor')} {jobFor.clientName}</h3>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>{jobFor.clientPhone || ''}</div>
-            <div className="form-group">
-              <label>{t('work')}</label>
-              <input className="input" data-testid="job-work" value={job.work}
-                onChange={(e) => setJob((j) => ({ ...j, work: e.target.value }))} />
+      {photo && (
+        <div data-testid="photo-viewer"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.88)', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setPhoto(null)}>
+          <img src={photo.photo} alt=""
+            style={{ maxWidth: '94vw', maxHeight: '78vh', objectFit: 'contain', borderRadius: 6 }}
+            onClick={(e) => e.stopPropagation()} />
+          <div style={{ color: '#fff', marginTop: 10, textAlign: 'center', fontSize: 13 }}>
+            <div style={{ fontWeight: 700 }}>
+              {photo.clientName}{photo.userName ? ` · ${photo.userName}` : ''}
             </div>
-            <div className="flex gap-2">
-              <div className="form-group" style={{ flex: 1 }}>
-                <label>{t('amount')}</label>
-                <input className="input" type="number" min="0" data-testid="job-amount" value={job.amount}
-                  onChange={(e) => setJob((j) => ({ ...j, amount: e.target.value }))} />
-              </div>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label>{t('delivery')}</label>
-                <input className="input" type="date" value={job.deliveryDate}
-                  onChange={(e) => setJob((j) => ({ ...j, deliveryDate: e.target.value }))} />
-              </div>
+            <div style={{ color: '#CBD5E1', fontSize: 12 }}>
+              {photo.area || ''}{photo.checkInAt ? ` · ${clock(photo.checkInAt)}` : ''}
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}>
-              <input type="checkbox" checked={job.designNeeded}
-                onChange={(e) => setJob((j) => ({ ...j, designNeeded: e.target.checked }))} />
-              {t('designNeeded')}
-            </label>
-            <div className="flex" style={{ gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-sm btn-ghost" onClick={() => setJobFor(null)} disabled={saving}>{t('cancel')}</button>
-              <button className="btn btn-sm btn-primary" onClick={createJob} disabled={saving} data-testid="job-save">
-                {t('create')}
-              </button>
-            </div>
+            <a href={photo.photo} target="_blank" rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{ color: '#93C5FD', fontSize: 12.5, display: 'inline-block', marginTop: 6 }}>
+              {t('openOrig')}
+            </a>
           </div>
         </div>
+      )}
+
+      {/* The full job-card form, prefilled with the shop this order came from.
+          `visitId` ties the card back to the visit it came out of, and
+          `salesPersonId` credits the rep who MADE the visit — not whoever is
+          at the keyboard, which may be an admin filing on their behalf.
+
+          The client goes in by name and number rather than id: the form lets
+          whoever is filling it search and pick a different client, and the
+          server matches an existing one by phone anyway, so carrying an id the
+          form cannot update would be a way to file against the wrong party. */}
+      {jobFor && (
+        <NewJobModal
+          prefill={{ clientName: jobFor.clientName || '', clientMobile: jobFor.clientPhone || '' }}
+          extra={{ visitId: jobFor.id, salesPersonId: jobFor.userId }}
+          onCreated={() => load(date)}
+          onClose={() => setJobFor(null)}
+        />
       )}
     </div>
   );

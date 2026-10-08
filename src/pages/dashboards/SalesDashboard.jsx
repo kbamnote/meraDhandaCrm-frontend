@@ -1,8 +1,12 @@
 /**
- * Sales role dashboard — a salesperson's own view of their pipeline.
- * Pulls salesApi.report() for tenant-wide deal outcomes, salesApi.leaderboard()
- * to isolate MY row (by profile.id / name), and salesApi.targets(month) for my
- * monthly target. Charts are the shared dependency-free primitives.
+ * Sales role dashboard — a rep'''s own month.
+ *
+ * Orders they actually won (salesApi.myPerformance: job cards credited to them,
+ * with what was billed and collected against each) and their monthly target.
+ *
+ * The lead KPIs that used to sit at the top are gone: a rep'''s work now starts
+ * from a shop visit, and the Leads CRM is not part of their nav any more, so
+ * figures they could not click through to were just noise.
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -13,7 +17,6 @@ import {
 } from '../../components/common/DashboardCharts';
 
 const GREEN = 'var(--green)';
-const RED = 'var(--red)';
 const AMBER = 'var(--amber)';
 
 function currentMonth() {
@@ -22,31 +25,14 @@ function currentMonth() {
 
 export default function SalesDashboard() {
   const { profile } = useAuth();
-  const [report, setReport] = useState(null);     // tenant-wide outcome totals
-  const [mine, setMine] = useState(null);          // my leaderboard row
   const [target, setTarget] = useState(null);      // my monthly target number
-  // Orders I actually won — job cards credited to me, and what has been
-  // billed and collected against them. Separate from the lead pipeline
-  // above: a lead is a conversation, an order is work in the building.
+  // Orders I actually won — job cards credited to me, and what has been billed
+  // and collected against them.
   const [perf, setPerf] = useState(null);
 
   useEffect(() => {
-    salesApi.report().then(setReport).catch(() => {});
     salesApi.myPerformance().then(setPerf).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    salesApi.leaderboard().then((rows) => {
-      const list = Array.isArray(rows) ? rows : [];
-      const myId = profile?.id;
-      const myName = profile?.name;
-      const found = list.find((r) =>
-        (myId && (r.userId === myId)) ||
-        (myName && r.name && r.name.toLowerCase() === String(myName).toLowerCase())
-      );
-      setMine(found || null);
-    }).catch(() => {});
-  }, [profile?.id, profile?.name]);
 
   useEffect(() => {
     salesApi.targets(currentMonth()).then((rows) => {
@@ -57,37 +43,15 @@ export default function SalesDashboard() {
     }).catch(() => {});
   }, [profile?.id]);
 
-  // Prefer my personal numbers (leaderboard); fall back to tenant report so the
-  // page is still useful before a leaderboard row exists for me.
-  const leads = (mine?.leads ?? report?.leads ?? report?.total ?? 0) || 0;
-  const won = (mine?.won ?? report?.won ?? 0) || 0;
-  const lost = (mine?.lost ?? report?.lost ?? 0) || 0;
-  // Backend leaderboard has no "pending"; derive it, fall back to report.
-  const pending = mine
-    ? Math.max(0, leads - won - lost)
-    : ((report?.pending ?? 0) || 0);
-  const revenue = (mine?.revenue ?? report?.revenue ?? 0) || 0;
-  const conversion = (mine?.conversion ?? report?.conversion ?? 0) || 0;
-
-  // Measured against orders won when there are any — a target is about
-  // money brought in, and an order in the building is a firmer claim on
-  // that than a lead marked won. Falls back to the lead figure otherwise.
-  const achieved = perf && perf.orderValue ? perf.orderValue : revenue;
+  // A target is about money brought in, so it is measured against the orders
+  // actually won.
+  const achieved = (perf && perf.orderValue) || 0;
   const hasTarget = target != null && target > 0;
   const targetPct = hasTarget ? Math.round((achieved / target) * 100) : 0;
 
   return (
     <div data-legacy-id="page-dashboard">
-      <DashHeader title="My Sales" subtitle="Your leads, deals and monthly target" />
-
-      <KpiGrid>
-        <Kpi label="My leads" value={leads} icon="📋" />
-        <Kpi label="Won" value={won} color={GREEN} icon="🏆" />
-        <Kpi label="Lost" value={lost} color={RED} icon="❌" />
-        <Kpi label="Pending" value={pending} color={AMBER} icon="⏳" />
-        <Kpi label="Revenue" value={inr(revenue)} color={GREEN} icon="💰" />
-        <Kpi label="Conversion" value={`${conversion}%`} icon="📈" />
-      </KpiGrid>
+      <DashHeader title="My Sales" subtitle="Your shop visits, orders and monthly target" />
 
       {perf && (
         <Section title="My orders this month">
@@ -121,14 +85,6 @@ export default function SalesDashboard() {
         </Section>
       )}
 
-      <Section title="Lead outcomes">
-        <BarList items={[
-          { label: 'Won', value: won, color: GREEN },
-          { label: 'Lost', value: lost, color: RED },
-          { label: 'Pending', value: pending, color: AMBER },
-        ]} />
-      </Section>
-
       <Section title="My target">
         {hasTarget ? (
           <>
@@ -142,14 +98,13 @@ export default function SalesDashboard() {
           </>
         ) : (
           <div style={{ color: 'var(--text3)', fontSize: 13 }}>
-            No target set for this month yet. Ask your manager to set one in the Sales Panel.
+            No target set for this month yet. Ask your manager to set one.
           </div>
         )}
       </Section>
 
       <QuickLinks links={[
-        { to: '/leads-crm', label: 'Leads' },
-        { to: '/sales-panel', label: 'Sales Panel' },
+        { to: '/my-attendance', label: 'My Attendance' },
         { to: '/visits', label: 'Shop Visits' },
       ]} />
     </div>
