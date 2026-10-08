@@ -11,7 +11,8 @@
  * paper, and the person reading this is the one who can tell the difference.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { visitsApi } from '../services/api';
+import { Link } from 'react-router-dom';
+import { visitsApi, ordersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
@@ -32,6 +33,16 @@ const S = {
   delAsk:   { en: 'Delete this visit? The photo and feedback go with it.', hi: 'यह विज़िट हटाएं? फोटो और फीडबैक भी हट जाएंगे।', hinglish: 'Yeh visit delete karein? Photo aur feedback bhi hat jayenge.', gu: 'આ વિઝિટ કાઢો? ફોટો અને ફીડબેક પણ જશે.', mr: 'ही व्हिजिट हटवायची? फोटो व फीडबॅकही जाईल.', mwr: 'यो विज़िट हटाओ? फोटो अर फीडबैक ही जासी।' },
   deleted:  { en: 'Visit deleted', hi: 'विज़िट हटा दी', hinglish: 'Visit delete ho gayi', gu: 'વિઝિટ કાઢી', mr: 'व्हिजिट हटवली', mwr: 'विज़िट हट गई' },
   followUp: { en: 'Follow up', hi: 'फॉलो अप', hinglish: 'Follow up', gu: 'ફોલો અપ', mr: 'फॉलो अप', mwr: 'फॉलो अप' },
+  makeJob:  { en: '+ Job card', hi: '+ जॉब कार्ड', hinglish: '+ Job card', gu: '+ જોબ કાર્ડ', mr: '+ जॉब कार्ड', mwr: '+ जॉब कार्ड' },
+  jobFor:   { en: 'Job card for', hi: 'जॉब कार्ड —', hinglish: 'Job card for', gu: 'જોબ કાર્ડ —', mr: 'जॉब कार्ड —', mwr: 'जॉब कार्ड —' },
+  work:     { en: 'What was ordered', hi: 'क्या ऑर्डर हुआ', hinglish: 'Kya order hua', gu: 'શું ઓર્ડર થયું', mr: 'काय ऑर्डर झाले', mwr: 'कांई ऑर्डर हुयो' },
+  amount:   { en: 'Order amount (₹)', hi: 'ऑर्डर राशि (₹)', hinglish: 'Order amount (₹)', gu: 'ઓર્ડર રકમ (₹)', mr: 'ऑर्डर रक्कम (₹)', mwr: 'ऑर्डर रकम (₹)' },
+  delivery: { en: 'Delivery date', hi: 'डिलीवरी तारीख', hinglish: 'Delivery date', gu: 'ડિલિવરી તારીખ', mr: 'डिलिव्हरी तारीख', mwr: 'डिलीवरी तारीख' },
+  designNeeded: { en: 'Design needed', hi: 'डिज़ाइन चाहिए', hinglish: 'Design needed', gu: 'ડિઝાઇન જોઈએ', mr: 'डिझाइन हवे', mwr: 'डिज़ाइन चाइजै' },
+  create:   { en: 'Create job card', hi: 'जॉब कार्ड बनाएं', hinglish: 'Job card banayein', gu: 'જોબ કાર્ડ બનાવો', mr: 'जॉब कार्ड तयार करा', mwr: 'जॉब कार्ड बणाओ' },
+  created:  { en: 'Job card created', hi: 'जॉब कार्ड बन गया', hinglish: 'Job card ban gaya', gu: 'જોબ કાર્ડ બન્યું', mr: 'जॉब कार्ड तयार झाले', mwr: 'जॉब कार्ड बण ग्यो' },
+  needWork: { en: 'Say what was ordered', hi: 'क्या ऑर्डर हुआ लिखें', hinglish: 'Kya order hua likhein', gu: 'શું ઓર્ડર થયું લખો', mr: 'काय ऑर्डर झाले लिहा', mwr: 'कांई ऑर्डर हुयो लिखो' },
+  cancel:   { en: 'Cancel', hi: 'रद्द', hinglish: 'Cancel', gu: 'રદ', mr: 'रद्द', mwr: 'रद्द' },
 };
 
 // Labels and colours for what came of a visit. The server owns the list; this
@@ -58,6 +69,10 @@ export default function ShopVisitsPage() {
   const [canWatch, setCanWatch] = useState(false);
   const [loading, setLoading] = useState(true);
   const isAdmin = ['owner', 'admin', 'superadmin'].includes(profile?.role);
+  // The visit a job card is being raised from, plus that form's fields.
+  const [jobFor, setJobFor] = useState(null);
+  const [job, setJob] = useState({ work: '', amount: '', deliveryDate: '', designNeeded: false });
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (day) => {
     setLoading(true);
@@ -90,6 +105,36 @@ export default function ShopVisitsPage() {
     } catch (e) {
       showToast(e?.response?.data?.error || t('failed'), 'error');
     }
+  };
+
+  // Raising the card from here keeps the order tied to the visit it came
+  // out of: the job is credited to the rep who made the visit, and the
+  // visit shows what came of it instead of ending at "order placed".
+  const createJob = async () => {
+    if (!job.work.trim()) return showToast(t('needWork'), 'error');
+    setSaving(true);
+    try {
+      const created = await ordersApi.create({
+        clientName: jobFor.clientName,
+        clientMobile: jobFor.clientPhone || '',
+        clientId: jobFor.clientId || undefined,
+        work: job.work.trim(),
+        amount: Number(job.amount) || 0,
+        deliveryDate: job.deliveryDate || null,
+        designNeeded: job.designNeeded,
+        visitId: jobFor.id,
+        // Credit goes to whoever MADE the visit, not whoever is typing —
+        // an admin raising it on a rep's behalf must not take the order.
+        salesPersonId: jobFor.userId,
+        salesPerson: jobFor.userName,
+      });
+      showToast(`${t('created')} · ${created.jobNo}`, 'success');
+      setJobFor(null);
+      setJob({ work: '', amount: '', deliveryDate: '', designNeeded: false });
+      load(date);
+    } catch (e) {
+      showToast(e?.response?.data?.error || t('failed'), 'error');
+    } finally { setSaving(false); }
   };
 
   return (
@@ -177,6 +222,22 @@ export default function ShopVisitsPage() {
               {v.followUpDate && (
                 <div style={{ fontSize: 12, marginTop: 4, color: '#D97706' }}>{t('followUp')}: {v.followUpDate}</div>
               )}
+
+              {/* An order that came out of this visit, or the offer to raise
+                  one. Only for a visit that actually ended in an order — the
+                  button on every row would invite job cards for shops that
+                  said no. */}
+              {v.jobId ? (
+                <div style={{ fontSize: 12.5, marginTop: 6 }} data-testid="visit-job">
+                  📦 <Link to={`/job-detail?id=${v.jobId}`}>{v.jobNo}</Link>
+                  {v.orderAmount ? ` · ₹${Number(v.orderAmount).toLocaleString('en-IN')}` : ''}
+                </div>
+              ) : v.outcome === 'order_placed' ? (
+                <button className="btn btn-sm btn-primary" style={{ marginTop: 6 }}
+                  data-testid="visit-make-job" onClick={() => setJobFor(v)}>
+                  {t('makeJob')}
+                </button>
+              ) : null}
             </div>
 
             {isAdmin && (
@@ -187,6 +248,44 @@ export default function ShopVisitsPage() {
           </div>
         );
       })}
+
+      {jobFor && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setJobFor(null); }}>
+          <div className="card" style={{ width: '100%', maxWidth: 440, padding: 18 }}>
+            <h3 style={{ margin: '0 0 2px', fontSize: 16 }}>{t('jobFor')} {jobFor.clientName}</h3>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>{jobFor.clientPhone || ''}</div>
+            <div className="form-group">
+              <label>{t('work')}</label>
+              <input className="input" data-testid="job-work" value={job.work}
+                onChange={(e) => setJob((j) => ({ ...j, work: e.target.value }))} />
+            </div>
+            <div className="flex gap-2">
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>{t('amount')}</label>
+                <input className="input" type="number" min="0" data-testid="job-amount" value={job.amount}
+                  onChange={(e) => setJob((j) => ({ ...j, amount: e.target.value }))} />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>{t('delivery')}</label>
+                <input className="input" type="date" value={job.deliveryDate}
+                  onChange={(e) => setJob((j) => ({ ...j, deliveryDate: e.target.value }))} />
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12 }}>
+              <input type="checkbox" checked={job.designNeeded}
+                onChange={(e) => setJob((j) => ({ ...j, designNeeded: e.target.checked }))} />
+              {t('designNeeded')}
+            </label>
+            <div className="flex" style={{ gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-sm btn-ghost" onClick={() => setJobFor(null)} disabled={saving}>{t('cancel')}</button>
+              <button className="btn btn-sm btn-primary" onClick={createJob} disabled={saving} data-testid="job-save">
+                {t('create')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

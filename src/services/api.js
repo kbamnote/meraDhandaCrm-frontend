@@ -474,6 +474,9 @@ export const salesApi = {
   targets:     (month)    => api.get('/sales/targets', { params: { month } }).then(r => r.data),
   leaderboard: (params)   => api.get('/sales/leaderboard', { params }).then(r => r.data),
   report:      (params)   => api.get('/sales/report', { params }).then(r => r.data),
+  // One rep's own orders, billing and collection. Defaults to the caller and
+  // this month; `userId` needs the Tracking grant, like the team map.
+  myPerformance: (params) => api.get('/sales/my-performance', { params }).then(r => r.data),
 };
 
 // Stock — material in/out movements that adjust an item's running quantity.
