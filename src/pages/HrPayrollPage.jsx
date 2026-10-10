@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { hrApi } from '../services/api';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
+import SalaryAdmin from '../components/common/SalaryAdmin';
 
 const inr = (n) => '₹' + (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-IN');
 
@@ -51,6 +52,11 @@ export default function HrPayrollPage() {
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 14 }}>{t('title')}</h2>
+      {/* Pay and advances sit above the month's run: you set what people earn
+          and settle their requests BEFORE generating the payslips that carry
+          both. */}
+      <SalaryAdmin />
+
       <div className="flex gap-2 mb-4" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div className="form-group" style={{ margin: 0 }}><label>{t('month')}</label><input className="input" type="month" value={month} onChange={(e) => setMonth(e.target.value)} /></div>
         <button className="btn btn-primary btn-sm" onClick={compute} disabled={busy}>{t('compute')}</button>

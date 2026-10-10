@@ -206,6 +206,14 @@ export const meApi = {
   readNotification:     (id)   => api.post(`/me/notifications/${id}/read`).then(r => r.data),
   readAllNotifications: ()     => api.post('/me/notifications/read-all').then(r => r.data),
   registerPush:         (token) => api.post('/me/push-token', { token, platform: 'android' }).then(r => r.data),
+  // Salary advances — the cap is the server's answer, never a local sum.
+  advanceLimit:  ()      => api.get('/me/advance-limit').then(r => r.data),
+  advances:      ()      => api.get('/me/advances').then(r => r.data),
+  applyAdvance:  (body)  => api.post('/me/advances', body).then(r => r.data),
+  cancelAdvance: (id)    => api.post(`/me/advances/${id}/cancel`).then(r => r.data),
+  // Name, phone and photo — the few things a person may change about
+  // themselves. Salary and role are deliberately not among them.
+  updateProfile: (body)  => api.patch('/me/profile', body).then(r => r.data),
 };
 
 // HR admin — leave decisions, payroll compute/generate, productivity, team attendance (admin/hr).
@@ -220,6 +228,12 @@ export const hrApi = {
   attendanceSummary: (from, to) => api.get('/hr/attendance/summary', { params: { from, to } }).then(r => r.data),
   // …and one teammate's records within it.
   userAttendanceRange: (uid, from, to) => api.get(`/hr/attendance/${uid}`, { params: { from, to } }).then(r => r.data),
+  // Pay, and the advances drawn against it.
+  salaries:        ()            => api.get('/hr/salaries').then(r => r.data),
+  setSalary:       (uid, salary) => api.post(`/hr/salaries/${uid}`, { salary }).then(r => r.data),
+  advances:        (params)      => api.get('/hr/advances', { params }).then(r => r.data),
+  decideAdvance:   (id, body)    => api.post(`/hr/advances/${id}/decide`, body).then(r => r.data),
+  repayAdvance:    (id, body)    => api.post(`/hr/advances/${id}/repay`, body).then(r => r.data),
 };
 
 export const paymentApi = {
