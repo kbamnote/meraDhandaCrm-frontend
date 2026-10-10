@@ -219,7 +219,8 @@ export const meApi = {
 // HR admin — leave decisions, payroll compute/generate, productivity, team attendance (admin/hr).
 export const hrApi = {
   leaveDecision:   (id, body) => api.post(`/hr/leaves/${id}/decision`, body).then(r => r.data),
-  payrollCompute:  (month)    => api.get('/hr/payroll/compute', { params: { month } }).then(r => r.data),
+  // Either a month ('2026-09') or a custom range ({ from, to, workingDays? }).
+  payrollCompute:  (p)        => api.get('/hr/payroll/compute', { params: typeof p === 'string' ? { month: p } : p }).then(r => r.data),
   payrollGenerate: (month)    => api.post('/hr/payroll/generate', { month }).then(r => r.data),
   productivity:    (params)   => api.get('/hr/productivity', { params }).then(r => r.data),
   attendance:      (date)     => api.get('/hr/attendance', { params: date ? { date } : {} }).then(r => r.data),
@@ -231,6 +232,9 @@ export const hrApi = {
   // Pay, and the advances drawn against it.
   salaries:        ()            => api.get('/hr/salaries').then(r => r.data),
   setSalary:       (uid, salary) => api.post(`/hr/salaries/${uid}`, { salary }).then(r => r.data),
+  // A hike is given as EITHER an amount or a percent; the server derives the other.
+  hikeSalary:      (uid, body)   => api.post(`/hr/salaries/${uid}/hike`, body).then(r => r.data),
+  salaryRevisions: (uid)         => api.get(`/hr/salaries/${uid}/revisions`).then(r => r.data),
   advances:        (params)      => api.get('/hr/advances', { params }).then(r => r.data),
   decideAdvance:   (id, body)    => api.post(`/hr/advances/${id}/decide`, body).then(r => r.data),
   repayAdvance:    (id, body)    => api.post(`/hr/advances/${id}/repay`, body).then(r => r.data),
@@ -259,6 +263,8 @@ export const ordersApi = {
   nextNumber:  ()           => api.get('/orders/next-number').then(r => r.data),
   searchClients: (q)        => api.get('/orders/clients/search', { params: { q } }).then(r => r.data),
   lookups:     ()           => api.get('/orders/lookups').then(r => r.data),
+  // Jobs past their promised delivery time, for the on-screen alert.
+  overdue:     ()           => api.get('/orders/overdue').then(r => r.data),
   // Jobs per stage, for the sidebar badges — a count, not the jobs.
   stageCounts: ()           => api.get('/orders/stage-counts').then(r => r.data),
   create:      (body)       => api.post('/orders', body).then(r => r.data),

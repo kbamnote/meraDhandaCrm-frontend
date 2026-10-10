@@ -58,8 +58,8 @@ const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0;
 
 let _rid = 0;
 const newId = () => `r${++_rid}`;
-const emptyMaterial = () => ({ rid: newId(), stockId: '', item: '', qtyUsed: '', unit: '', length: '', width: '', sizeUnit: 'ft', sheets: '' });
-const emptyAssembly = () => ({ rid: newId(), stockId: '', item: '', qty: '' });
+const emptyMaterial = () => ({ rid: newId(), stockId: '', source: '', item: '', qtyUsed: '', unit: '', length: '', width: '', sizeUnit: 'ft', sheets: '' });
+const emptyAssembly = () => ({ rid: newId(), stockId: '', source: '', item: '', qty: '' });
 
 export default function CompleteAndSendModal({ job, currentDept, onClose, onDone }) {
   const t = useT(S);
@@ -75,7 +75,10 @@ export default function CompleteAndSendModal({ job, currentDept, onClose, onDone
 
   const materialOpts = useMemo(() => stock.filter(isMaterial), [stock]);
   const assemblyOpts = useMemo(() => stock.filter(isAssembly), [stock]);
-  const byId = useMemo(() => Object.fromEntries(stock.map((s) => [String(s.id), s])), [stock]);
+  // Keyed by source AND id: stock lives in two collections (raw materials
+  // and stock-tracked products) and an id alone could match either.
+  const keyOf = (source, id) => `${source || 'stock'}|${id}`;
+  const byKey = useMemo(() => Object.fromEntries(stock.map((s) => [keyOf(s.source, s.id), s])), [stock]);
 
   const idx = job.currentDeptIndex || 0;
   const plan = Array.isArray(job.plan) ? job.plan : [];
@@ -83,16 +86,16 @@ export default function CompleteAndSendModal({ job, currentDept, onClose, onDone
 
   // --- material rows
   const setMat = (rid, patch) => setMaterials((rows) => rows.map((r) => (r.rid === rid ? { ...r, ...patch } : r)));
-  const pickMat = (rid, stockId) => {
-    const s = byId[String(stockId)];
-    setMat(rid, { stockId, item: s?.item || '', unit: s?.unit || '' });
+  const pickMat = (rid, key) => {
+    const s = byKey[key];
+    setMat(rid, { stockId: s?.id || '', source: s?.source || '', item: s?.item || '', unit: s?.unit || '' });
   };
   const addMat = () => setMaterials((rows) => [...rows, emptyMaterial()]);
   const removeMat = (rid) => setMaterials((rows) => rows.filter((r) => r.rid !== rid));
 
   // --- assembly rows
   const setAsm = (rid, patch) => setAssembly((rows) => rows.map((r) => (r.rid === rid ? { ...r, ...patch } : r)));
-  const pickAsm = (rid, stockId) => { const s = byId[String(stockId)]; setAsm(rid, { stockId, item: s?.item || '' }); };
+  const pickAsm = (rid, key) => { const s = byKey[key]; setAsm(rid, { stockId: s?.id || '', source: s?.source || '', item: s?.item || '' }); };
   const addAsm = () => setAssembly((rows) => [...rows, emptyAssembly()]);
   const removeAsm = (rid) => setAssembly((rows) => rows.filter((r) => r.rid !== rid));
 
@@ -107,7 +110,7 @@ export default function CompleteAndSendModal({ job, currentDept, onClose, onDone
       materials: materials
         .filter((r) => r.stockId && num(r.qtyUsed) > 0)
         .map((r) => {
-          const out = { stockId: r.stockId, item: r.item, qtyUsed: num(r.qtyUsed), unit: r.unit };
+          const out = { stockId: r.stockId, source: r.source || 'stock', item: r.item, qtyUsed: num(r.qtyUsed), unit: r.unit };
           if (num(r.length) > 0 || num(r.width) > 0 || num(r.sheets) > 0) {
             out.length = num(r.length);
             out.width = num(r.width);
@@ -119,7 +122,7 @@ export default function CompleteAndSendModal({ job, currentDept, onClose, onDone
         }),
       assembly: assembly
         .filter((r) => r.stockId && num(r.qty) > 0)
-        .map((r) => ({ stockId: r.stockId, item: r.item, qty: num(r.qty) })),
+        .map((r) => ({ stockId: r.stockId, source: r.source || 'stock', item: r.item, qty: num(r.qty) })),
       wastageInfo: hasWastage
         ? { hasWastage: true, qty: num(wQty), note: wNote || '' }
         : { hasWastage: false },
@@ -156,10 +159,10 @@ export default function CompleteAndSendModal({ job, currentDept, onClose, onDone
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
               <div style={{ flex: 2 }}>
                 <label style={lbl}>{t('materials')}</label>
-                <select className="input" value={r.stockId} onChange={(e) => pickMat(r.rid, e.target.value)}>
+                <select className="input" value={r.stockId ? keyOf(r.source, r.stockId) : ''} onChange={(e) => pickMat(r.rid, e.target.value)}>
                   <option value="">{t('selectStock')}</option>
                   {materialOpts.map((s) => (
-                    <option key={s.id} value={s.id}>{s.item} ({s.quantity} {t('available')})</option>
+                    <option key={keyOf(s.source, s.id)} value={keyOf(s.source, s.id)}>{s.item} ({s.quantity} {t('available')})</option>
                   ))}
                 </select>
               </div>
@@ -235,10 +238,10 @@ export default function CompleteAndSendModal({ job, currentDept, onClose, onDone
           <div key={r.rid} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 8 }}>
             <div style={{ flex: 2 }}>
               <label style={lbl}>{t('materials')}</label>
-              <select className="input" value={r.stockId} onChange={(e) => pickAsm(r.rid, e.target.value)}>
+              <select className="input" value={r.stockId ? keyOf(r.source, r.stockId) : ''} onChange={(e) => pickAsm(r.rid, e.target.value)}>
                 <option value="">{t('selectStock')}</option>
                 {assemblyOpts.map((s) => (
-                  <option key={s.id} value={s.id}>{s.item} ({s.quantity} {t('available')})</option>
+                  <option key={keyOf(s.source, s.id)} value={keyOf(s.source, s.id)}>{s.item} ({s.quantity} {t('available')})</option>
                 ))}
               </select>
             </div>

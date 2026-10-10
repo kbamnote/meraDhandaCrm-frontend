@@ -15,6 +15,7 @@ import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useT, useLang } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
+import SalaryHikeModal from '../components/common/SalaryHikeModal';
 import { canViewModule, PERMISSION_CATALOG } from '../config/access';
 
 const S = {
@@ -58,6 +59,8 @@ const S = {
   tempPassword: { en: 'Temporary password * (min 6 chars)', hi: 'अस्थायी पासवर्ड * (कम से कम 6 अक्षर)', hinglish: 'Temporary password * (min 6 chars)', gu: 'કામચલાઉ પાસવર્ડ * (ઓછામાં ઓછા 6 અક્ષર)', mr: 'तात्पुरता पासवर्ड * (किमान 6 अक्षरे)', mwr: 'अस्थायी पासवर्ड * (कम सूं कम 6 अक्षर)' },
   passwordPlaceholder: { en: 'they can change it later', hi: 'वे बाद में बदल सकते हैं', hinglish: 'wo baad mein change kar sakte hain', gu: 'તેઓ પછી બદલી શકે છે', mr: 'ते नंतर बदलू शकतात', mwr: 'वे पछै बदल सको है' },
   role: { en: 'Role', hi: 'रोल', hinglish: 'Role', gu: 'રોલ', mr: 'भूमिका', mwr: 'रोल' },
+  employeeId: { en: 'Employee ID', hi: 'कर्मचारी ID', hinglish: 'Employee ID', gu: 'કર્મચારી ID', mr: 'कर्मचारी ID', mwr: 'कर्मचारी ID' },
+  employeeIdHint: { en: 'Your own staff number — EMP-014, 2219, anything. Leave blank if you don\'t use one.', hi: 'आपका अपना स्टाफ नंबर — खाली छोड़ सकते हैं।', hinglish: 'Aapka apna staff number — khaali chhod sakte hain.', gu: 'તમારો સ્ટાફ નંબર — ખાલી રાખી શકો.', mr: 'तुमचा स्टाफ नंबर — रिकामा ठेवू शकता.', mwr: 'थांरो स्टाफ नंबर — खाली छोड़ सको।' },
   department: { en: 'Department', hi: 'विभाग', hinglish: 'Department', gu: 'વિભાગ', mr: 'विभाग', mwr: 'विभाग' },
   creating: { en: 'Creating…', hi: 'बन रहा है…', hinglish: 'Create ho raha hai…', gu: 'બની રહ્યું છે…', mr: 'तयार होत आहे…', mwr: 'बण रियो है…' },
   createTeammate: { en: 'Create teammate', hi: 'टीममेट बनाएं', hinglish: 'Teammate banayein', gu: 'ટીમમેટ બનાવો', mr: 'टीममेट तयार करा', mwr: 'टीममेट बणावो' },
@@ -65,6 +68,8 @@ const S = {
   shareHint: { en: 'Share the email + password with them. They sign in at the login page.', hi: 'उन्हें ईमेल + पासवर्ड दें। वे लॉगिन पेज पर साइन इन करेंगे।', hinglish: 'Unhe email + password dein. Wo login page par sign in karenge.', gu: 'તેમને ઈમેલ + પાસવર્ડ આપો. તેઓ લોગિન પેજ પર સાઇન ઇન કરશે.', mr: 'त्यांना ईमेल + पासवर्ड द्या. ते लॉगिन पेजवर साइन इन करतील.', mwr: 'उणने ईमेल + पासवर्ड दो। वे लॉगिन पेज पर साइन इन करसी।' },
 
   thAccess: { en: 'Access', hi: 'एक्सेस', hinglish: 'Access', gu: 'એક્સેસ', mr: 'अॅक्सेस', mwr: 'एक्सेस' },
+  hike: { en: '📈 Hike', hi: '📈 बढ़ोतरी', hinglish: '📈 Hike', gu: '📈 વધારો', mr: '📈 वाढ', mwr: '📈 बढ़ोतरी' },
+  thHike: { en: 'Salary', hi: 'सैलरी', hinglish: 'Salary', gu: 'પગાર', mr: 'पगार', mwr: 'सैलरी' },
   manageAccess: { en: '🔧 Access', hi: '🔧 एक्सेस', hinglish: '🔧 Access', gu: '🔧 એક્સેસ', mr: '🔧 अॅक्सेस', mwr: '🔧 एक्सेस' },
   edit: { en: 'Edit', hi: 'एडिट', hinglish: 'Edit', gu: 'એડિટ', mr: 'एडिट', mwr: 'एडिट' },
   editUser: { en: 'Edit user', hi: 'यूज़र एडिट करें', hinglish: 'User edit karein', gu: 'યૂઝર એડિટ કરો', mr: 'युझर एडिट करा', mwr: 'यूज़र एडिट करो' },
@@ -231,6 +236,7 @@ export default function PermissionsPage() {
                 {canEdit && <th style={{ minWidth: 320 }}>{t('thChangeRole')}</th>}
                 {canEdit && <th>{t('edit')}</th>}
                 {canEdit && <th>{t('thAccess')}</th>}
+                {canEdit && <th>{t('thHike')}</th>}
                 {canEdit && <th>{t('remove')}</th>}
               </tr>
             </thead>
@@ -342,6 +348,7 @@ function RoleRow({ u, canEdit, t, meId, designations = [] }) {
   const [busy, setBusy] = useState(false);
   const [showAccess, setShowAccess] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [showHike, setShowHike] = useState(false);
 
   const badgeClass = ROLE_BADGE[u.role] || 'badge-blue';
 
@@ -369,6 +376,12 @@ function RoleRow({ u, canEdit, t, meId, designations = [] }) {
             title="Cannot sign in, and is left out of Team Attendance and other teammate lists">
             inactive
           </span>
+        )}
+        {/* The staff number belongs next to the name: it is how this person is
+            referred to on a register or a slip, and an ID nobody can see is an
+            ID nobody will use. */}
+        {u.employeeId && (
+          <div style={{ fontSize: 11, color: 'var(--text3)' }}>{u.employeeId}</div>
         )}
       </td>
       <td>{u.email || '—'}</td>
@@ -401,6 +414,17 @@ function RoleRow({ u, canEdit, t, meId, designations = [] }) {
             {t('manageAccess')}
           </button>
           {showAccess && <PermissionsModal u={u} t={t} onClose={() => setShowAccess(false)} />}
+        </td>
+      )}
+      {canEdit && (
+        <td>
+          {/* Pay sits with the person, not only on the payroll screen: this
+              is where you already are when you decide somebody has earned a
+              raise. The figure itself still lands in HR → Payroll. */}
+          <button className="btn btn-ghost btn-xs" onClick={() => setShowHike(true)}>
+            {t('hike')}
+          </button>
+          {showHike && <SalaryHikeModal user={u} onClose={() => setShowHike(false)} />}
         </td>
       )}
       {canEdit && (
@@ -549,6 +573,7 @@ function EditUserModal({ u, t, onClose, meId }) {
   const [form, setForm] = useState({
     name: u.name || '',
     email: u.email || '',
+    employeeId: u.employeeId || '',
     department: u.department || '',
     active: u.active !== false,
     password: '',
@@ -564,6 +589,8 @@ function EditUserModal({ u, t, onClose, meId }) {
       const body = {
         name: form.name.trim(),
         email: form.email.trim(),
+        // Always sent, so clearing the box clears the number.
+        employeeId: form.employeeId.trim(),
         department: form.department.trim() || null,
         active: form.active,
       };
@@ -589,9 +616,15 @@ function EditUserModal({ u, t, onClose, meId }) {
           <label>{t('emailStar')}</label>
           <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required />
         </div>
-        <div className="form-group">
-          <label>{t('department')}</label>
-          <input className="input" value={form.department} onChange={(e) => set('department', e.target.value)} />
+        <div className="flex gap-2">
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>{t('employeeId')}</label>
+            <input className="input" value={form.employeeId} onChange={(e) => set('employeeId', e.target.value)} placeholder="EMP-014" />
+          </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>{t('department')}</label>
+            <input className="input" value={form.department} onChange={(e) => set('department', e.target.value)} />
+          </div>
         </div>
         <div className="form-group">
           <label>{t('newPassword')}</label>
@@ -616,7 +649,7 @@ function EditUserModal({ u, t, onClose, meId }) {
 }
 
 function AddTeammateModal({ onClose, t, designations = [] }) {
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff', department: '', customRole: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff', employeeId: '', department: '', customRole: '' });
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -631,6 +664,7 @@ function AddTeammateModal({ onClose, t, designations = [] }) {
         password: form.password,
         name: form.name.trim(),
         role: form.role,
+        employeeId: form.employeeId.trim(),
         department: form.department.trim() || null,
         customRole: form.customRole || null,
       });
@@ -673,6 +707,11 @@ function AddTeammateModal({ onClose, t, designations = [] }) {
         <div className="form-group">
           <label>{t('thCustomRole')}</label>
           <DesignationSelect value={form.customRole} designations={designations} onChange={(v) => set('customRole', v)} t={t} />
+        </div>
+        <div className="form-group">
+          <label>{t('employeeId')}</label>
+          <input className="input" value={form.employeeId} onChange={(e) => set('employeeId', e.target.value)} placeholder="EMP-014" />
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{t('employeeIdHint')}</div>
         </div>
 
         <div className="flex gap-2 mt-2">

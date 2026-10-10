@@ -9,6 +9,7 @@ import { showToast } from '../components/common/toast';
 import { useT } from '../i18n/LanguageContext';
 
 const S = {
+  employeeId: { en: 'Employee ID', hi: 'कर्मचारी ID', hinglish: 'Employee ID', gu: 'કર્મચારી ID', mr: 'कर्मचारी ID', mwr: 'कर्मचारी ID' },
   changePhoto: { en: 'Change photo', hi: 'फोटो बदलें', hinglish: 'Photo badlein', gu: 'ફોટો બદલો', mr: 'फोटो बदला', mwr: 'फोटो बदलो' },
   removePhoto: { en: 'Remove', hi: 'हटाएं', hinglish: 'Remove', gu: 'કાઢો', mr: 'काढा', mwr: 'हटाओ' },
   uploading: { en: 'Uploading…', hi: 'अपलोड हो रहा है…', hinglish: 'Uploading…', gu: 'અપલોડ થઈ રહ્યું છે…', mr: 'अपलोड होत आहे…', mwr: 'अपलोड हो रयो है…' },
@@ -120,6 +121,7 @@ export default function ProfilePage() {
             {t('details')}
           </div>
           <Row label={t('name')} value={p.name || '—'} />
+          <Row label={t('employeeId')} value={p.employeeId || '—'} />
           <Row label={t('email')} value={p.email || '—'} />
           <Row
             label={t('role')}

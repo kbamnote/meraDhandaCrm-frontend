@@ -21,6 +21,7 @@ const S = {
   perDay:    { en: 'per day', hi: 'प्रति दिन', hinglish: 'per day', gu: 'પ્રતિ દિવસ', mr: 'प्रतिदिन', mwr: 'हर दिन' },
   save:      { en: 'Save', hi: 'सेव', hinglish: 'Save', gu: 'સેવ', mr: 'सेव्ह', mwr: 'सेव' },
   saved:     { en: 'Salary updated', hi: 'सैलरी अपडेट हुई', hinglish: 'Salary update ho gayi', gu: 'પગાર અપડેટ થયો', mr: 'पगार अपडेट झाला', mwr: 'सैलरी अपडेट हुई' },
+  lastHike:  { en: 'last hike', hi: 'पिछली बढ़ोतरी', hinglish: 'last hike', gu: 'છેલ્લો વધારો', mr: 'मागील वाढ', mwr: 'पैली बढ़ोतरी' },
   owes:      { en: 'advance owing', hi: 'एडवांस बाकी', hinglish: 'advance baki', gu: 'એડવાન્સ બાકી', mr: 'अ‍ॅडव्हान्स बाकी', mwr: 'एडवांस बाकी' },
   requests:  { en: 'Advance requests', hi: 'एडवांस अनुरोध', hinglish: 'Advance requests', gu: 'એડવાન્સ વિનંતીઓ', mr: 'अ‍ॅडव्हान्स विनंत्या', mwr: 'एडवांस अरजियां' },
   noReq:     { en: 'No advance requests.', hi: 'कोई एडवांस अनुरोध नहीं।', hinglish: 'Koi advance request nahi.', gu: 'કોઈ એડવાન્સ વિનંતી નથી.', mr: 'अ‍ॅडव्हान्स विनंती नाही.', mwr: 'कोई एडवांस अरजी कोनी।' },
@@ -114,6 +115,15 @@ export default function SalaryAdmin() {
                   {r.role || ''}
                   {r.salary ? ` · ${inr(r.perDay)} ${t('perDay')}` : ''}
                   {r.outstandingAdvance ? ` · ${inr(r.outstandingAdvance)} ${t('owes')}` : ''}
+                  {/* What the last raise was worth, so "how much was he
+                      hiked" is answered without opening anything. */}
+                  {r.lastHike ? (
+                    <span style={{ color: r.lastHike.hike >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                      {` · ${t('lastHike')} ${r.lastHike.hike >= 0 ? '+' : '−'}${inr(Math.abs(r.lastHike.hike))}`}
+                      {r.lastHike.percent != null ? ` (${r.lastHike.percent}%)` : ''}
+                      {` · ${r.lastHike.effectiveMonth}`}
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <input className="input" type="number" min="0" style={{ width: 130 }}
