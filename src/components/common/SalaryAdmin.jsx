@@ -23,6 +23,22 @@ const S = {
   saved:     { en: 'Salary updated', hi: 'सैलरी अपडेट हुई', hinglish: 'Salary update ho gayi', gu: 'પગાર અપડેટ થયો', mr: 'पगार अपडेट झाला', mwr: 'सैलरी अपडेट हुई' },
   lastHike:  { en: 'last hike', hi: 'पिछली बढ़ोतरी', hinglish: 'last hike', gu: 'છેલ્લો વધારો', mr: 'मागील वाढ', mwr: 'पैली बढ़ोतरी' },
   owes:      { en: 'advance owing', hi: 'एडवांस बाकी', hinglish: 'advance baki', gu: 'એડવાન્સ બાકી', mr: 'अ‍ॅडव्हान्स बाकी', mwr: 'एडवांस बाकी' },
+  record:    { en: 'Record an advance already given', hi: 'पहले दिया गया एडवांस दर्ज करें', hinglish: 'Pehle diya gaya advance record karein', gu: 'અગાઉ આપેલ એડવાન્સ નોંધો', mr: 'आधी दिलेला अ‍ॅडव्हान्स नोंदवा', mwr: 'पैली दियो एडवांस दरज करो' },
+  recordHint:{ en: 'For cash handed over outside the app. It is recorded as already approved and comes out of their pay.', hi: 'ऐप के बाहर दिए गए कैश के लिए। यह सीधे मंज़ूर दर्ज होगा और सैलरी से कटेगा।', hinglish: 'App ke bahar diye gaye cash ke liye. Seedha approved record hoga aur salary se katega.', gu: 'એપ બહાર આપેલ રોકડ માટે. સીધું મંજૂર નોંધાશે અને પગારમાંથી કપાશે.', mr: 'अ‍ॅपबाहेर दिलेल्या रोखीसाठी. थेट मंजूर नोंदवले जाईल आणि पगारातून कापले जाईल.', mwr: 'ऐप रै बारै दियै कैश खातर। सीधो मंजूर दरज हुसी अर सैलरी सूं कटसी।' },
+  staff:     { en: 'Staff member', hi: 'स्टाफ', hinglish: 'Staff member', gu: 'સ્ટાફ', mr: 'कर्मचारी', mwr: 'स्टाफ' },
+  amount:    { en: 'Amount given', hi: 'दी गई राशि', hinglish: 'Amount given', gu: 'આપેલ રકમ', mr: 'दिलेली रक्कम', mwr: 'दी गी रकम' },
+  repayHow:  { en: 'How will it be repaid?', hi: 'वापसी कैसे होगी?', hinglish: 'Wapsi kaise hogi?', gu: 'પરત કેવી રીતે?', mr: 'परतफेड कशी?', mwr: 'वापसी किया होसी?' },
+  nextSal:   { en: 'Next salary', hi: 'अगली सैलरी', hinglish: 'Next salary', gu: 'આગલો પગાર', mr: 'पुढचा पगार', mwr: 'अगली सैलरी' },
+  emi:       { en: 'Instalments', hi: 'किस्तों में', hinglish: 'Instalments', gu: 'હપ્તા', mr: 'हप्ते', mwr: 'किस्तां' },
+  other:     { en: 'Other arrangement', hi: 'अन्य व्यवस्था', hinglish: 'Other arrangement', gu: 'અન્ય વ્યવસ્થા', mr: 'इतर व्यवस्था', mwr: 'दूजी व्यवस्था' },
+  months:    { en: 'Instalments', hi: 'कितनी किस्तें', hinglish: 'Kitni instalments', gu: 'કેટલા હપ્તા', mr: 'किती हप्ते', mwr: 'कितनी किस्तां' },
+  terms:     { en: 'Describe the arrangement', hi: 'व्यवस्था लिखें', hinglish: 'Arrangement likhein', gu: 'વ્યવસ્થા લખો', mr: 'व्यवस्था लिहा', mwr: 'व्यवस्था लिखो' },
+  why:       { en: 'Reason (optional)', hi: 'कारण (वैकल्पिक)', hinglish: 'Reason (optional)', gu: 'કારણ (વૈકલ્પિક)', mr: 'कारण (ऐच्छिक)', mwr: 'कारण (मरजी सूं)' },
+  saveRec:   { en: 'Record advance', hi: 'एडवांस दर्ज करें', hinglish: 'Advance record karein', gu: 'એડવાન્સ નોંધો', mr: 'अ‍ॅडव्हान्स नोंदवा', mwr: 'एडवांस दरज करो' },
+  recorded:  { en: 'Advance recorded', hi: 'एडवांस दर्ज हो गया', hinglish: 'Advance record ho gaya', gu: 'એડવાન્સ નોંધાયો', mr: 'अ‍ॅडव्हान्स नोंदवला', mwr: 'एडवांस दरज हो ग्यो' },
+  eachInst:  { en: 'each', hi: 'प्रति किस्त', hinglish: 'each', gu: 'દરેક', mr: 'प्रत्येकी', mwr: 'हर एक' },
+  byAdmin:   { en: 'recorded by admin', hi: 'एडमिन ने दर्ज किया', hinglish: 'admin ne record kiya', gu: 'એડમિને નોંધ્યું', mr: 'अ‍ॅडमिनने नोंदवले', mwr: 'एडमिन दरज कियो' },
+  cancel:    { en: 'Cancel', hi: 'रद्द', hinglish: 'Cancel', gu: 'રદ', mr: 'रद्द', mwr: 'रद्द' },
   requests:  { en: 'Advance requests', hi: 'एडवांस अनुरोध', hinglish: 'Advance requests', gu: 'એડવાન્સ વિનંતીઓ', mr: 'अ‍ॅडव्हान्स विनंत्या', mwr: 'एडवांस अरजियां' },
   noReq:     { en: 'No advance requests.', hi: 'कोई एडवांस अनुरोध नहीं।', hinglish: 'Koi advance request nahi.', gu: 'કોઈ એડવાન્સ વિનંતી નથી.', mr: 'अ‍ॅडव्हान्स विनंती नाही.', mwr: 'कोई एडवांस अरजी कोनी।' },
   approve:   { en: 'Approve', hi: 'मंज़ूर', hinglish: 'Approve', gu: 'મંજૂર', mr: 'मंजूर', mwr: 'मंजूर' },
@@ -52,6 +68,40 @@ export default function SalaryAdmin() {
   const [filter, setFilter] = useState('pending');
   const [draft, setDraft] = useState({});       // userId -> typed salary
   const [busy, setBusy] = useState(null);
+  // Folded away: most days nobody is recording a cash advance, and an open
+  // form on a screen about everyone's pay is an invitation to mistype.
+  const [recOpen, setRecOpen] = useState(false);
+  const BLANK_REC = { userId: '', amount: '', repayMode: 'next_salary', emiMonths: '3', otherTerms: '', reason: '' };
+  const [rec, setRec] = useState(BLANK_REC);
+  const setRecField = (k, v) => setRec((f) => ({ ...f, [k]: v }));
+
+  const recordAdvance = async (e) => {
+    e.preventDefault();
+    setBusy('record');
+    try {
+      const body = {
+        userId: rec.userId,
+        amount: Number(rec.amount),
+        repayMode: rec.repayMode,
+        reason: rec.reason.trim() || undefined,
+      };
+      if (rec.repayMode === 'emi') body.emiMonths = Number(rec.emiMonths);
+      if (rec.repayMode === 'other') body.otherTerms = rec.otherTerms.trim();
+      await hrApi.recordAdvance(body);
+      showToast(t('recorded'), 'success');
+      setRec(BLANK_REC);
+      setRecOpen(false);
+      await load(filter);
+    } catch (err) {
+      showToast(err.response?.data?.error || t('failed'), 'error');
+    } finally { setBusy(null); }
+  };
+
+  const recAmount = Number(rec.amount) || 0;
+  const recMonths = Math.max(2, Math.round(Number(rec.emiMonths) || 0));
+  const recValid = rec.userId && recAmount > 0
+    && (rec.repayMode !== 'emi' || (recMonths >= 2 && recMonths <= 12))
+    && (rec.repayMode !== 'other' || rec.otherTerms.trim().length > 0);
 
   const load = useCallback(async (status) => {
     try {
@@ -140,6 +190,83 @@ export default function SalaryAdmin() {
         </div>
       </div>
 
+      <div className="card" style={{ marginBottom: 14 }} data-testid="advance-record">
+        <div className="flex items-center justify-between" style={{ gap: 10, flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>📥 {t('record')}</h3>
+          <button type="button" className="btn btn-sm btn-ghost" data-testid="advance-record-toggle"
+            onClick={() => setRecOpen((v) => !v)}>{recOpen ? t('cancel') : '+'}</button>
+        </div>
+        {recOpen ? (
+          <form onSubmit={recordAdvance} style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--text3)', marginBottom: 8 }}>{t('recordHint')}</div>
+            <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+              <div className="form-group" style={{ flex: 2, minWidth: 180, margin: 0 }}>
+                <label>{t('staff')}</label>
+                <select className="input" value={rec.userId} data-testid="advance-record-user"
+                  onChange={(e) => setRecField('userId', e.target.value)}>
+                  <option value="">—</option>
+                  {staff.map((r) => (
+                    <option key={r.userId} value={r.userId}>
+                      {r.name}{r.outstandingAdvance ? ` (${inr(r.outstandingAdvance)} ${t('owes')})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group" style={{ flex: 1, minWidth: 110, margin: 0 }}>
+                <label>{t('amount')}</label>
+                <input className="input" type="number" min="1" step="0.01" value={rec.amount}
+                  data-testid="advance-record-amount"
+                  onChange={(e) => setRecField('amount', e.target.value)} />
+              </div>
+            </div>
+
+            <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}>
+              <label>{t('repayHow')}</label>
+              <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+                {[['next_salary', t('nextSal')], ['emi', t('emi')], ['other', t('other')]].map(([k, label]) => (
+                  <button key={k} type="button" data-testid={`advance-record-mode-${k}`}
+                    className={'btn btn-sm ' + (rec.repayMode === k ? 'btn-primary' : 'btn-ghost')}
+                    onClick={() => setRecField('repayMode', k)}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            {rec.repayMode === 'emi' ? (
+              <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}>
+                <label>{t('months')}</label>
+                <input className="input" type="number" min="2" max="12" style={{ width: 110 }}
+                  value={rec.emiMonths} data-testid="advance-record-months"
+                  onChange={(e) => setRecField('emiMonths', e.target.value)} />
+                {recAmount > 0 && recMonths >= 2 ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--text2)', marginTop: 4 }}>
+                    {recMonths} × {inr(Math.round((recAmount / recMonths) * 100) / 100)} {t('eachInst')}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {rec.repayMode === 'other' ? (
+              <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}>
+                <label>{t('terms')}</label>
+                <input className="input" value={rec.otherTerms} data-testid="advance-record-terms"
+                  onChange={(e) => setRecField('otherTerms', e.target.value)} />
+              </div>
+            ) : null}
+
+            <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}>
+              <label>{t('why')}</label>
+              <input className="input" value={rec.reason} maxLength={500}
+                onChange={(e) => setRecField('reason', e.target.value)} />
+            </div>
+
+            <button type="submit" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}
+              data-testid="advance-record-save" disabled={busy === 'record' || !recValid}>
+              {t('saveRec')}
+            </button>
+          </form>
+        ) : null}
+      </div>
+
       <div className="card" style={{ marginBottom: 14 }} data-testid="advance-admin">
         <div className="flex items-center justify-between" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
           <h3 style={{ margin: 0, fontSize: 15 }}>💰 {t('requests')}</h3>
@@ -161,6 +288,9 @@ export default function SalaryAdmin() {
               <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
                 <b style={{ fontSize: 13 }}>{a.userName}</b>
                 <b style={{ fontSize: 13 }}>{inr(a.amount)}</b>
+                {a.recordedByAdmin ? (
+                  <span className="badge badge-amber" style={{ fontSize: 10 }}>{t('byAdmin')}</span>
+                ) : null}
                 <span style={{ fontSize: 11.5, color: 'var(--text3)' }}>
                   {MODE[a.repayMode] || a.repayMode}
                   {a.emiMonths ? ` · ${a.emiMonths} × ${inr(a.emiAmount)}` : ''}

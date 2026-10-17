@@ -221,6 +221,8 @@ export const hrApi = {
   leaveDecision:   (id, body) => api.post(`/hr/leaves/${id}/decision`, body).then(r => r.data),
   // Either a month ('2026-09') or a custom range ({ from, to, workingDays? }).
   payrollCompute:  (p)        => api.get('/hr/payroll/compute', { params: typeof p === 'string' ? { month: p } : p }).then(r => r.data),
+  // Which day of the month the pay cycle opens on (1 = calendar month).
+  setPayrollCycle: (startDay)   => api.post('/hr/payroll/cycle', { startDay }).then(r => r.data),
   payrollGenerate: (month)    => api.post('/hr/payroll/generate', { month }).then(r => r.data),
   productivity:    (params)   => api.get('/hr/productivity', { params }).then(r => r.data),
   attendance:      (date)     => api.get('/hr/attendance', { params: date ? { date } : {} }).then(r => r.data),
@@ -236,6 +238,8 @@ export const hrApi = {
   hikeSalary:      (uid, body)   => api.post(`/hr/salaries/${uid}/hike`, body).then(r => r.data),
   salaryRevisions: (uid)         => api.get(`/hr/salaries/${uid}/revisions`).then(r => r.data),
   advances:        (params)      => api.get('/hr/advances', { params }).then(r => r.data),
+  // Money already handed over, written down after the fact. Lands approved.
+  recordAdvance:   (body)        => api.post('/hr/advances', body).then(r => r.data),
   decideAdvance:   (id, body)    => api.post(`/hr/advances/${id}/decide`, body).then(r => r.data),
   repayAdvance:    (id, body)    => api.post(`/hr/advances/${id}/repay`, body).then(r => r.data),
 };

@@ -25,6 +25,12 @@ const S = {
   month:    { en: 'Month', hi: 'महीना', hinglish: 'Month', gu: 'મહિનો', mr: 'महिना', mwr: 'महीनो' },
   compute:  { en: 'Compute', hi: 'गणना करें', hinglish: 'Compute', gu: 'ગણતરી', mr: 'गणना', mwr: 'गणना' },
   generate: { en: 'Generate slips', hi: 'स्लिप जनरेट करें', hinglish: 'Slips generate karein', gu: 'સ્લિપ જનરેટ કરો', mr: 'स्लिप तयार करा', mwr: 'स्लिप जनरेट करो' },
+  saveCycle: { en: 'Save', hi: 'सेव', hinglish: 'Save', gu: 'સેવ', mr: 'सेव्ह', mwr: 'सेव' },
+  cycle:     { en: 'Pay cycle', hi: 'सैलरी साइकिल', hinglish: 'Pay cycle', gu: 'પગાર ચક્ર', mr: 'पगार चक्र', mwr: 'सैलरी साइकिल' },
+  covers:    { en: 'covers', hi: 'अवधि', hinglish: 'covers', gu: 'સમયગાળો', mr: 'कालावधी', mwr: 'अवधि' },
+  startsOn:  { en: 'Starts on day', hi: 'शुरू दिन', hinglish: 'Starts on day', gu: 'શરૂ દિવસ', mr: 'सुरू दिवस', mwr: 'सरू दिन' },
+  cycleHint: { en: '1 = calendar month. 16 means the 16th of one month to the 15th of the next.', hi: '1 = पूरा महीना। 16 का मतलब 16 तारीख से अगली 15 तारीख तक।', hinglish: '1 = poora mahina. 16 matlab 16 se agli 15 tak.', gu: '1 = આખો મહિનો. 16 એટલે 16થી આગલી 15 સુધી.', mr: '1 = पूर्ण महिना. 16 म्हणजे 16 ते पुढील 15.', mwr: '1 = पूरो महीनो। 16 रो मतलब 16 सूं अगली 15 ताईं।' },
+  cycleSaved:{ en: 'Pay cycle updated', hi: 'सैलरी साइकिल अपडेट हुई', hinglish: 'Pay cycle update ho gayi', gu: 'પગાર ચક્ર અપડેટ', mr: 'पगार चक्र अपडेट', mwr: 'सैलरी साइकिल अपडेट हुई' },
   byMonth:  { en: 'Month', hi: 'महीने से', hinglish: 'Month', gu: 'મહિનો', mr: 'महिना', mwr: 'महीनो' },
   byRange:  { en: 'Custom dates', hi: 'कस्टम तारीख', hinglish: 'Custom dates', gu: 'કસ્ટમ તારીખ', mr: 'कस्टम तारीख', mwr: 'कस्टम तारीख' },
   from:     { en: 'From', hi: 'से', hinglish: 'From', gu: 'થી', mr: 'पासून', mwr: 'सूं' },
@@ -54,6 +60,19 @@ export default function HrPayrollPage() {
   const [workDays, setWorkDays] = useState('');
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Blank until a compute comes back and tells us the shop's own cycle.
+  const [cycleDay, setCycleDay] = useState('');
+
+  const saveCycle = async () => {
+    setBusy(true);
+    try {
+      await hrApi.setPayrollCycle(Number(cycleDay));
+      showToast(t('cycleSaved'), 'success');
+      await compute();
+    } catch (e) {
+      showToast(e.response?.data?.error || t('failed'), 'error');
+    } finally { setBusy(false); }
+  };
   const custom = mode === 'range';
 
   const compute = async () => {
@@ -64,6 +83,7 @@ export default function HrPayrollPage() {
         : await hrApi.payrollCompute(month);
       setData(res);
       if (custom) setWorkDays(String(res.workingDays));
+      if (!custom && res.cycleStartDay) setCycleDay(String(res.cycleStartDay));
     }
     catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
     finally { setBusy(false); }
@@ -124,6 +144,25 @@ export default function HrPayrollPage() {
       {custom && (
         <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
           {t('auto')}<br />{t('rangeNote')}
+        </div>
+      )}
+
+      {/* A run labelled 'October' may not be the month of October. Say which
+          dates it actually covers, next to the control that decides. */}
+      {!custom && data && !data.custom && (
+        <div className="flex items-center" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 14, fontSize: 12 }}>
+          <span style={{ color: 'var(--text2)' }}>
+            <b>{t('cycle')}</b> — {t('covers')} <b data-testid="cycle-range">{data.from} → {data.to}</b>
+          </span>
+          <span style={{ color: 'var(--text3)' }}>|</span>
+          <label style={{ color: 'var(--text2)' }}>{t('startsOn')}</label>
+          <input className="input" type="number" min="1" max="28" style={{ width: 70 }}
+            data-testid="cycle-start-day" value={cycleDay}
+            onChange={(e) => setCycleDay(e.target.value)} />
+          <button className="btn btn-ghost btn-xs" data-testid="cycle-save"
+            disabled={busy || !cycleDay || Number(cycleDay) === (data.cycleStartDay || 1)}
+            onClick={saveCycle}>{t('saveCycle')}</button>
+          <span style={{ color: 'var(--text3)' }}>{t('cycleHint')}</span>
         </div>
       )}
 
