@@ -7,7 +7,7 @@
  * 400 "Not enough stock: …" if any item is short, logs to productionLog, and
  * advances the job to the next department (or QC if this was the last).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ordersApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
@@ -38,6 +38,8 @@ const S = {
   wQty:      { en: 'Wastage qty', hi: 'बर्बादी मात्रा', hinglish: 'Wastage qty', gu: 'બગાડ જથ્થો', mr: 'वाया संख्या', mwr: 'बरबादी मात्रा' },
   wNote:     { en: 'Note (optional)', hi: 'नोट (वैकल्पिक)', hinglish: 'Note (optional)', gu: 'નોંધ (વૈકલ્પિક)', mr: 'टीप (ऐच्छिक)', mwr: 'नोट (मरजी रो)' },
 
+  ordered: { en: 'Ordered', hi: 'ऑर्डर', hinglish: 'Ordered', gu: 'ઓર્ડર', mr: 'ऑर्डर', mwr: 'ऑर्डर' },
+  notStocked: { en: 'pick the stock item used, or remove this row', hi: 'इस्तेमाल किया स्टॉक चुनें, या हटाएं', hinglish: 'Istemal kiya stock chunein, ya hataayein', gu: 'વપરાયેલ સ્ટોક પસંદ કરો, અથવા દૂર કરો', mr: 'वापरलेला स्टॉक निवडा, किंवा काढा', mwr: 'काम आयो स्टॉक चुनो, या हटाओ' },
   materials: { en: 'Materials', hi: 'मटेरियल', hinglish: 'Materials', gu: 'મટિરિયલ', mr: 'मटेरियल', mwr: 'मटेरियल' },
   assembly:  { en: 'Assembly', hi: 'असेंबली', hinglish: 'Assembly', gu: 'એસેમ્બલી', mr: 'असेंब्ली', mwr: 'असेंबली' },
   wastage:   { en: 'Wastage', hi: 'बर्बादी', hinglish: 'Wastage', gu: 'બગાડ', mr: 'वाया', mwr: 'बरबादी' },
@@ -56,6 +58,25 @@ const isMaterial  = (s) => { const t = s.type || 'both'; return t === 'raw' || t
 const isAssembly  = (s) => { const t = s.type || 'both'; return t === 'consumable' || t === 'both'; };
 const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 
+/**
+ * Find the stock row that an item from the job card refers to.
+ *
+ * By product id first — that is the link the job card actually stored. By
+ * name second, because a line typed by hand ("Flex Roll 10ft") names the
+ * same thing without carrying its id, and the operator should not have to
+ * hunt for it in a dropdown they can already see the answer to.
+ */
+function matchStock(item, stock) {
+  if (!item) return null;
+  if (item.productId) {
+    const byId = stock.find((s) => s.source === 'product' && String(s.id) === String(item.productId));
+    if (byId) return byId;
+  }
+  const name = String(item.name || item.title || '').trim().toLowerCase();
+  if (!name) return null;
+  return stock.find((s) => String(s.item || '').trim().toLowerCase() === name) || null;
+}
+
 let _rid = 0;
 const newId = () => `r${++_rid}`;
 const emptyMaterial = () => ({ rid: newId(), stockId: '', source: '', item: '', qtyUsed: '', unit: '', length: '', width: '', sizeUnit: 'ft', sheets: '' });
@@ -71,7 +92,50 @@ export default function CompleteAndSendModal({ job, currentDept, onClose, onDone
   const [wNote, setWNote] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { ordersApi.stockItems().then((d) => setStock(Array.isArray(d) ? d : [])).catch(() => setStock([])); }, []);
+  // Seeded once, and only while the form is still untouched: re-seeding after
+  // somebody has started typing would throw their work away.
+  const seeded = useRef(false);
+
+  // Loaded-and-empty is not the same as not-loaded-yet, and the rows must
+  // not be seeded against a list that has not arrived.
+  const [stockLoaded, setStockLoaded] = useState(false);
+  useEffect(() => {
+    ordersApi.stockItems()
+      .then((d) => setStock(Array.isArray(d) ? d : []))
+      .catch(() => setStock([]))
+      .finally(() => setStockLoaded(true));
+  }, []);
+
+  /**
+   * What the customer ordered, pre-filled as the materials rows.
+   *
+   * The job card already says what this job is made of, so asking the floor
+   * to pick it again from a long dropdown is asking them to re-enter known
+   * data — which is how the wrong item gets logged. Each line comes in with
+   * its quantity; anything that is not a tracked stock item still appears,
+   * named, so the operator can map it or remove it rather than wonder where
+   * it went.
+   */
+  useEffect(() => {
+    if (seeded.current || !stockLoaded) return;
+    const items = Array.isArray(job.items) ? job.items.filter((i) => i && (i.name || i.title)) : [];
+    if (!items.length) return;
+    seeded.current = true;
+    setMaterials(items.map((it) => {
+      const s = matchStock(it, stock);
+      return {
+        ...emptyMaterial(),
+        stockId: s ? s.id : '',
+        source: s ? s.source : '',
+        // The name is kept either way, so an unmatched line still says what
+        // it was rather than showing an empty dropdown and nothing else.
+        item: s ? s.item : String(it.name || it.title || ''),
+        qtyUsed: String(num(it.qty) || 1),
+        unit: (s && s.unit) || '',
+        fromJob: true,
+      };
+    }));
+  }, [stock, stockLoaded, job.items]);
 
   const materialOpts = useMemo(() => stock.filter(isMaterial), [stock]);
   const assemblyOpts = useMemo(() => stock.filter(isAssembly), [stock]);
@@ -165,6 +229,13 @@ export default function CompleteAndSendModal({ job, currentDept, onClose, onDone
                     <option key={keyOf(s.source, s.id)} value={keyOf(s.source, s.id)}>{s.item} ({s.quantity} {t('available')})</option>
                   ))}
                 </select>
+                {/* Ordered, but not something stock is kept for: say so, rather
+                    than leave a blank dropdown the operator has to explain. */}
+                {r.fromJob && !r.stockId && r.item ? (
+                  <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 3 }}>
+                    {t('ordered')}: <b>{r.item}</b> — {t('notStocked')}
+                  </div>
+                ) : null}
               </div>
               <button className="btn btn-ghost btn-xs" onClick={() => removeMat(r.rid)} style={{ marginBottom: 2 }}>×</button>
             </div>
