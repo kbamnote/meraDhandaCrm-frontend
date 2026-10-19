@@ -362,6 +362,9 @@ export default function HrAttendancePage() {
     } catch (err) {
       showToast(err.response?.data?.error || t('failed'), 'error');
       setRows([]);
+    } finally {
+      setLoading(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
