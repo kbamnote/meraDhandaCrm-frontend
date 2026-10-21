@@ -8,6 +8,7 @@ import { ref, onValue, db } from '../services/realtime';
 import { salesApi } from '../services/api';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
+import CallingReport from '../components/common/CallingReport';
 
 const inr = (n) => '₹' + (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-IN');
 
@@ -29,6 +30,7 @@ const S = {
   importHint:{ en: 'Use the sample format. The Assigned To column (name or email) wins over the picker above.', hi: 'सैंपल फॉर्मेट इस्तेमाल करें। शीट का Assigned To कॉलम ऊपर की पसंद से ऊपर रहेगा।', hinglish: 'Sample format use karein. Sheet ka Assigned To column upar ki choice se upar rahega.', gu: 'સેમ્પલ ફોર્મેટ વાપરો. શીટનું Assigned To કૉલમ ઉપરની પસંદગી પર ભારે.', mr: 'सॅम्पल फॉरमॅट वापरा. शीटचा Assigned To कॉलम वरच्या निवडीपेक्षा वरचढ.', mwr: 'सैंपल फॉर्मेट काम में लो। शीट रो Assigned To कॉलम ऊपर री पसंद सूं ऊपर रैसी।' },
   notFound: { en: 'Not matched to anyone', hi: 'किसी से मैच नहीं हुआ', hinglish: 'Kisi se match nahi hua', gu: 'કોઈ સાથે મેળ નહીં', mr: 'कोणाशीही जुळले नाही', mwr: 'कोई सूं मैच कोनी हुयो' },
   assignedN:{ en: 'assigned', hi: 'असाइन हुए', hinglish: 'assigned', gu: 'સોંપાયા', mr: 'दिले', mwr: 'असाइन हुया' },
+  calling:  { en: '📞 Calling', hi: '📞 कॉलिंग', hinglish: '📞 Calling', gu: '📞 કૉલિંગ', mr: '📞 कॉलिंग', mwr: '📞 कॉलिंग' },
   imported: { en: 'Imported', hi: 'इम्पोर्ट हो गया', hinglish: 'Import ho gaya', gu: 'ઇમ્પોર્ટ થયું', mr: 'इम्पोर्ट झाले', mwr: 'इम्पोर्ट हो ग्यो' },
   setTarget:{ en: 'Set target', hi: 'टारगेट सेट करें', hinglish: 'Target set karein', gu: 'ટાર્ગેટ સેટ કરો', mr: 'टार्गेट सेट करा', mwr: 'टारगेट सेट करो' },
   targetQ:  { en: 'Monthly target (₹)?', hi: 'मासिक टारगेट (₹)?', hinglish: 'Monthly target (₹)?', gu: 'માસિક ટાર્ગેટ (₹)?', mr: 'मासिक टार्गेट (₹)?', mwr: 'मासिक टारगेट (₹)?' },
@@ -119,11 +121,14 @@ export default function SalesPage() {
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-        {['leads', 'board', 'report'].map((k) => (
+        {['leads', 'calling', 'board', 'report'].map((k) => (
           <button key={k} className="btn btn-xs" onClick={() => setTab(k)}
             style={{ background: tab === k ? 'var(--blue, #C05621)' : 'var(--surface2)', color: tab === k ? '#fff' : 'var(--text2)', border: 'none', borderRadius: 14 }}>{t(k)}</button>
         ))}
       </div>
+
+      {/* The day's calling, for whoever is meant to be watching it. */}
+      {tab === 'calling' && <CallingReport />}
 
       {tab === 'leads' && lastImport && (
         <div className="card" style={{ marginBottom: 10, fontSize: 12.5 }} data-testid="lead-import-result">

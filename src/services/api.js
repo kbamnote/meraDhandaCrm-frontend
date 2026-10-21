@@ -503,6 +503,13 @@ export const salesApi = {
   },
   // The ready-made .xlsx to fill in. Returned as a blob so it can be saved.
   leadTemplate: () => api.get('/sales/leads/import-template', { responseType: 'blob' }).then(r => r.data),
+  // Calling: the outcomes, logging one, a lead's history, and the day's report.
+  // The caller's OWN calling figures, for their dashboard.
+  myCalling:   (params)   => api.get('/sales/my-calling', { params }).then(r => r.data),
+  callStatuses: ()        => api.get('/sales/call-statuses').then(r => r.data),
+  logCall:     (id, body) => api.post(`/sales/leads/${id}/call`, body).then(r => r.data),
+  leadCalls:   (id)       => api.get(`/sales/leads/${id}/calls`).then(r => r.data),
+  calls:       (params)   => api.get('/sales/calls', { params }).then(r => r.data),
   setTarget:   (body)     => api.post('/sales/targets', body).then(r => r.data),
   targets:     (month)    => api.get('/sales/targets', { params: { month } }).then(r => r.data),
   leaderboard: (params)   => api.get('/sales/leaderboard', { params }).then(r => r.data),

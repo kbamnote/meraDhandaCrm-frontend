@@ -29,9 +29,12 @@ export default function SalesDashboard() {
   // Orders I actually won — job cards credited to me, and what has been billed
   // and collected against them.
   const [perf, setPerf] = useState(null);
+  // Today's calling, and the follow-ups this rep promised.
+  const [calling, setCalling] = useState(null);
 
   useEffect(() => {
     salesApi.myPerformance().then(setPerf).catch(() => {});
+    salesApi.myCalling().then(setCalling).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -49,9 +52,55 @@ export default function SalesDashboard() {
   const hasTarget = target != null && target > 0;
   const targetPct = hasTarget ? Math.round((achieved / target) * 100) : 0;
 
+  // Dialled is how many times they pressed call; reached is how many of
+  // those actually connected. The gap between them is the day's real story.
+  const st = (calling && calling.statuses) || {};
+  const lab = (calling && calling.labels) || {};
+  const bars = Object.keys(lab)
+    .map((k) => ({ label: lab[k], value: st[k] || 0 }))
+    .filter((b) => b.value > 0)
+    .sort((a, b) => b.value - a.value);
+
   return (
     <div data-legacy-id="page-dashboard">
-      <DashHeader title="My Sales" subtitle="Your shop visits, orders and monthly target" />
+      <DashHeader title="My Sales" subtitle="Your calls, shop visits, orders and monthly target" />
+
+      {calling && (
+        <Section title="My calling today">
+          <KpiGrid>
+            <Kpi label="Dialled" value={calling.dialled} icon="☎️" />
+            {/* Not the same as dialled: a number that never answered is not
+                somebody you spoke to. */}
+            <Kpi label="Connected" value={calling.reached} color={GREEN} icon="✅" />
+            <Kpi label="People contacted" value={calling.leads} icon="👥" />
+            <Kpi label="Interested" value={st.interested || 0} color={GREEN} icon="👍" />
+            <Kpi label="Not interested" value={st.not_interested || 0} icon="👎" />
+            <Kpi label="Follow-ups due" value={calling.followUpsDue} color={AMBER} icon="↻" />
+          </KpiGrid>
+
+          {!!bars.length && <BarList items={bars} />}
+
+          {/* The ones they promised to ring back. Overdue first, because
+              that is the promise already broken. */}
+          {!!(calling.followUps || []).length && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 4 }}>
+                Call back
+              </div>
+              {calling.followUps.slice(0, 8).map((f) => (
+                <div key={f.id} className="flex items-center justify-between"
+                  style={{ fontSize: 12.5, padding: '3px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span>{f.name || '—'} <span style={{ color: 'var(--text3)' }}>{f.phone}</span></span>
+                  <span style={{ color: f.overdue ? 'var(--red)' : 'var(--text2)', fontWeight: f.overdue ? 700 : 400 }}>
+                    {f.nextCallBack}
+                  </span>
+                </div>
+              ))}
+              <div style={{ marginTop: 6 }}><Link to="/leads-crm">Open Leads CRM</Link></div>
+            </div>
+          )}
+        </Section>
+      )}
 
       {perf && (
         <Section title="My orders this month">

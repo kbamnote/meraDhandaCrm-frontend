@@ -19,7 +19,11 @@ export const PERM_OF = {
   '/production': 'production', '/assign-prod': 'production', '/prod-steps': 'production',
   '/qc': 'qc', '/dispatch': 'dispatch',
   '/designers': 'designers', '/designer': 'designers', '/designers-view': 'designers',
-  '/leads-crm': 'leads', '/sales-panel': 'leads', '/sales-admin': 'leads',
+  '/leads-crm': 'leads', '/sales-panel': 'leads',
+  // The company's own sales figures — every colleague's revenue, the totals,
+  // and the box that sets anybody's target. A different question from "let
+  // this rep work the lead list", so a different grant.
+  '/sales-admin': 'salesAdmin',
   '/accounting': 'invoices', '/invoice-view': 'invoices', '/client-ledger': 'invoices',
   '/accounting/sales': 'invoices', '/accounting/purchases': 'purchases',
   '/purchase-view': 'purchases',
@@ -76,7 +80,7 @@ const ADMIN_ROLES = ['admin', 'superadmin', 'owner'];
 // Gated modules (allow-list) — must stay in sync with the backend
 // (src/config/visibility.js) and the app (src/config/nav.js).
 export const CORE_MODULES = [
-  'jobs', 'production', 'qc', 'dispatch', 'designers', 'clients', 'leads',
+  'jobs', 'production', 'qc', 'dispatch', 'designers', 'clients', 'leads', 'salesAdmin',
   'invoices', 'expenses', 'stock', 'products', 'vendors', 'machines', 'tasks', 'attendance',
 ];
 const ACCOUNTING_MODULES = ['parties', 'purchases', 'inventory', 'cashbank', 'gst', 'reports', 'entries', 'tds'];
@@ -85,7 +89,7 @@ export const GATED_MODULES = [...CORE_MODULES, 'leaves', 'payroll', 'productivit
 // What each built-in job role can see out of the box. Plain staff/pending start
 // with only the basics (non-gated routes); admins bypass entirely.
 export const ROLE_READ_DEFAULTS = {
-  manager: [...CORE_MODULES, 'productivity', 'review', 'completed', 'hold', 'jobsetter', 'analytics', 'parties', 'gst', 'reports'],
+  manager: [...CORE_MODULES, 'productivity', 'review', 'completed', 'hold', 'jobsetter', 'analytics', 'parties', 'gst', 'reports', 'salesAdmin'],
   floor_manager: ['jobs', 'production', 'qc', 'dispatch', 'designers', 'machines', 'stock', 'tasks', 'completed', 'hold', 'jobsetter'],
   designer: ['designers', 'jobs', 'tasks', 'completed', 'hold', 'jobsetter'],
   jobsetter: ['jobs', 'production', 'tasks', 'completed', 'hold', 'jobsetter'],
@@ -123,6 +127,7 @@ export const PERMISSION_CATALOG = [
   ] },
   { group: 'salesCust', features: [
     { key: 'leads', manage: true }, { key: 'clients', manage: true },
+    { key: 'salesAdmin', manage: false },
     { key: 'products', manage: true }, { key: 'stock', manage: true },
     { key: 'vendors', manage: true }, { key: 'review', manage: false },
   ] },

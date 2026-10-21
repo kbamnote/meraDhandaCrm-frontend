@@ -113,6 +113,7 @@ const MODULE_LABELS = {
   designers: { en: 'Designer Panel', hi: 'डिज़ाइनर', hinglish: 'Designer Panel' },
   machines: { en: 'Machines', hi: 'मशीनें', hinglish: 'Machines' },
   leads: { en: 'Leads / Sales', hi: 'लीड्स / सेल्स', hinglish: 'Leads / Sales' },
+  salesAdmin: { en: 'Sales Admin (whole team)', hi: 'सेल्स एडमिन (पूरी टीम)', hinglish: 'Sales Admin (poori team)', gu: 'સેલ્સ એડમિન (આખી ટીમ)', mr: 'सेल्स अ‍ॅडमिन (संपूर्ण टीम)', mwr: 'सेल्स एडमिन (पूरी टीम)' },
   clients: { en: 'Customers', hi: 'ग्राहक', hinglish: 'Customers' },
   products: { en: 'Products', hi: 'प्रोडक्ट्स', hinglish: 'Products' },
   stock: { en: 'Stock', hi: 'स्टॉक', hinglish: 'Stock' },

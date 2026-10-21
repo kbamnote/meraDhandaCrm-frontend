@@ -112,6 +112,9 @@ export const RESOURCES = {
 
   'leads-crm': {
     collection: 'leads', title: '📞 Leads CRM', plural: 'Leads', singular: 'Lead',
+    // Dial from the row, then log what happened. App only — a laptop has
+    // no dialer, so the web list leaves calling to the phone.
+    call: true,
     legacyId: 'page-leads-crm', writeRoles: ADMIN_SALES,
     fields: [
       { key: 'name', label: 'Name', type: 'text', required: true, table: true },
