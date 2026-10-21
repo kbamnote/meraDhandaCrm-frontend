@@ -23,6 +23,12 @@ const S = {
   lost:     { en: 'Lost', hi: 'हारा', hinglish: 'Lost', gu: 'હાર્યું', mr: 'हरले', mwr: 'हार्यो' },
   pending:  { en: 'Pending', hi: 'पेंडिंग', hinglish: 'Pending', gu: 'પેન્ડિંગ', mr: 'प्रलंबित', mwr: 'पेंडिंग' },
   dealValue:{ en: 'Deal value (₹)?', hi: 'डील वैल्यू (₹)?', hinglish: 'Deal value (₹)?', gu: 'ડીલ વેલ્યુ (₹)?', mr: 'डील व्हॅल्यू (₹)?', mwr: 'डील वैल्यू (₹)?' },
+  sample:   { en: '⬇ Sample format', hi: '⬇ सैंपल फॉर्मेट', hinglish: '⬇ Sample format', gu: '⬇ સેમ્પલ ફોર્મેટ', mr: '⬇ सॅम्पल फॉरमॅट', mwr: '⬇ सैंपल फॉर्मेट' },
+  assignAll:{ en: 'Assign all to', hi: 'सभी को दें', hinglish: 'Assign all to', gu: 'બધા સોંપો', mr: 'सर्व द्या', mwr: 'सगळा न दो' },
+  unassigned:{ en: 'Leave unassigned', hi: 'बिना असाइन', hinglish: 'Leave unassigned', gu: 'સોંપ્યા વગર', mr: 'न देता', mwr: 'बिना असाइन' },
+  importHint:{ en: 'Use the sample format. The Assigned To column (name or email) wins over the picker above.', hi: 'सैंपल फॉर्मेट इस्तेमाल करें। शीट का Assigned To कॉलम ऊपर की पसंद से ऊपर रहेगा।', hinglish: 'Sample format use karein. Sheet ka Assigned To column upar ki choice se upar rahega.', gu: 'સેમ્પલ ફોર્મેટ વાપરો. શીટનું Assigned To કૉલમ ઉપરની પસંદગી પર ભારે.', mr: 'सॅम्पल फॉरमॅट वापरा. शीटचा Assigned To कॉलम वरच्या निवडीपेक्षा वरचढ.', mwr: 'सैंपल फॉर्मेट काम में लो। शीट रो Assigned To कॉलम ऊपर री पसंद सूं ऊपर रैसी।' },
+  notFound: { en: 'Not matched to anyone', hi: 'किसी से मैच नहीं हुआ', hinglish: 'Kisi se match nahi hua', gu: 'કોઈ સાથે મેળ નહીં', mr: 'कोणाशीही जुळले नाही', mwr: 'कोई सूं मैच कोनी हुयो' },
+  assignedN:{ en: 'assigned', hi: 'असाइन हुए', hinglish: 'assigned', gu: 'સોંપાયા', mr: 'दिले', mwr: 'असाइन हुया' },
   imported: { en: 'Imported', hi: 'इम्पोर्ट हो गया', hinglish: 'Import ho gaya', gu: 'ઇમ્પોર્ટ થયું', mr: 'इम्पोर्ट झाले', mwr: 'इम्पोर्ट हो ग्यो' },
   setTarget:{ en: 'Set target', hi: 'टारगेट सेट करें', hinglish: 'Target set karein', gu: 'ટાર્ગેટ સેટ કરો', mr: 'टार्गेट सेट करा', mwr: 'टारगेट सेट करो' },
   targetQ:  { en: 'Monthly target (₹)?', hi: 'मासिक टारगेट (₹)?', hinglish: 'Monthly target (₹)?', gu: 'માસિક ટાર્ગેટ (₹)?', mr: 'मासिक टार्गेट (₹)?', mwr: 'मासिक टारगेट (₹)?' },
@@ -61,11 +67,33 @@ export default function SalesPage() {
     try { await salesApi.setOutcome(lead.id, { outcome: o, value }); showToast(t('done'), 'success'); }
     catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
   };
+  // One owner for the whole upload. Blank leaves the sheet to decide.
+  const [importTo, setImportTo] = useState('');
+  const [lastImport, setLastImport] = useState(null);
+
+  const downloadSample = async () => {
+    try {
+      const blob = await salesApi.leadTemplate();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'leads-import-sample.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoked on the next tick: Safari needs the object to outlive the click.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) { showToast(err.response?.data?.error || t('failed'), 'error'); }
+  };
+
   const onFile = async (e) => {
     const file = e.target.files?.[0]; e.target.value = '';
     if (!file) return;
-    try { const r = await salesApi.importLeads(file); showToast(`${t('imported')}: ${r.created}/${r.totalRows}`, 'success'); }
-    catch (err) { showToast(err.response?.data?.error || t('failed'), 'error'); }
+    try {
+      const r = await salesApi.importLeads(file, importTo || undefined);
+      setLastImport(r);
+      showToast(`${t('imported')}: ${r.created}/${r.totalRows} · ${r.assigned || 0} ${t('assignedN')}`, 'success');
+    } catch (err) { showToast(err.response?.data?.error || t('failed'), 'error'); }
   };
 
   return (
@@ -73,10 +101,20 @@ export default function SalesPage() {
       <div className="flex items-center justify-between mb-4">
         <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
         {tab === 'leads' && (
-          <>
+          <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
+            {/* The sample sits NEXT to the upload button, because the moment
+                somebody wants to import is the moment they need the format. */}
+            <button className="btn btn-ghost btn-sm" data-testid="lead-sample" onClick={downloadSample}>
+              {t('sample')}
+            </button>
+            <select className="input" style={{ width: 190 }} value={importTo} data-testid="lead-import-assign"
+              onChange={(e) => setImportTo(e.target.value)}>
+              <option value="">{t('unassigned')}</option>
+              {salespeople.map((u) => <option key={u.id} value={u.id}>{t('assignAll')}: {u.name || u.email}</option>)}
+            </select>
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{ display: 'none' }} />
             <button className="btn btn-primary btn-sm" onClick={() => fileRef.current?.click()}>{t('import')}</button>
-          </>
+          </div>
         )}
       </div>
 
@@ -86,6 +124,21 @@ export default function SalesPage() {
             style={{ background: tab === k ? 'var(--blue, #C05621)' : 'var(--surface2)', color: tab === k ? '#fff' : 'var(--text2)', border: 'none', borderRadius: 14 }}>{t(k)}</button>
         ))}
       </div>
+
+      {tab === 'leads' && lastImport && (
+        <div className="card" style={{ marginBottom: 10, fontSize: 12.5 }} data-testid="lead-import-result">
+          <b>{t('imported')}: {lastImport.created}/{lastImport.totalRows}</b>
+          {' · '}{lastImport.assigned || 0} {t('assignedN')}
+          {/* A name nobody matched is a typo worth fixing, not a silent
+              unassigned lead. */}
+          {lastImport.unknownOwners?.length ? (
+            <div style={{ color: 'var(--amber)', marginTop: 4 }}>
+              {t('notFound')}: {lastImport.unknownOwners.join(', ')}
+            </div>
+          ) : null}
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{t('importHint')}</div>
+        </div>
+      )}
 
       {tab === 'leads' && (
         <>

@@ -493,7 +493,16 @@ export const ledgerApi = {
 export const salesApi = {
   assignLead:  (id, body) => api.post(`/sales/leads/${id}/assign`, body).then(r => r.data),
   setOutcome:  (id, body) => api.post(`/sales/leads/${id}/outcome`, body).then(r => r.data),
-  importLeads: (file)     => { const fd = new FormData(); fd.append('file', file); return api.post('/sales/leads/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data); },
+  // `assignedTo` (optional) gives every imported row the same owner; an
+  // 'Assigned To' column in the sheet overrides it per row.
+  importLeads: (file, assignedTo) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (assignedTo) fd.append('assignedTo', assignedTo);
+    return api.post('/sales/leads/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+  },
+  // The ready-made .xlsx to fill in. Returned as a blob so it can be saved.
+  leadTemplate: () => api.get('/sales/leads/import-template', { responseType: 'blob' }).then(r => r.data),
   setTarget:   (body)     => api.post('/sales/targets', body).then(r => r.data),
   targets:     (month)    => api.get('/sales/targets', { params: { month } }).then(r => r.data),
   leaderboard: (params)   => api.get('/sales/leaderboard', { params }).then(r => r.data),
