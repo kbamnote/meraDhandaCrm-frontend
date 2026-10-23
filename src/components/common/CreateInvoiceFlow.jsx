@@ -122,6 +122,13 @@ export function allocateDiscount(amounts, discount, subtotal) {
  * discountType is 'percent', else a flat amount. Clamped to the line so it can
  * never go negative. Mirrors lineItemDiscount() on the server.
  */
+// What this line's own charges (Transport, Installation —) come to.
+// Exported so the running totals, the line row and the tests agree.
+export function lineExtrasTotal(item) {
+  return round2(((item && item.extras) || [])
+    .reduce((a, e) => a + (Number(e && e.amount) || 0), 0));
+}
+
 export function lineDiscount(item, amount) {
   const v = Number(item && item.discountValue);
   if (!(v > 0) || !(amount > 0)) return 0;
@@ -401,6 +408,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   );
   const [uploading, setUploading] = useState(false);
   const [defaults, setDefaults] = useState(null); // GET /invoice-defaults result
+  // Whether a PAN card / cancelled cheque is on file at all. Below
+  // `defaults` deliberately — reading it above is a TDZ crash.
+  const hasKycDocs = !!(defaults?.hasPanCard || defaults?.hasCancelledCheque);
   // Composition dealers cannot collect GST (CGST Act s.10); reverse charge moves
   // the liability to the recipient. Either way this invoice carries no tax.
   // MUST stay below `defaults` — reading a const before its declaration is a
@@ -504,7 +514,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     idx === i ? { ...it, extras: fn(Array.isArray(it.extras) ? it.extras : []) } : it
   )));
   const addExtra = (i) => setExtras(i, (xs) => (
-    xs.length >= 8 ? xs : [...xs, { label: EXTRA_PRESETS[xs.length] || '', value: '' }]
+    xs.length >= 8 ? xs : [...xs, { label: EXTRA_PRESETS[xs.length] || '', value: '', amount: '' }]
   ));
   const setExtra = (i, k, field, v) => setExtras(i, (xs) => xs.map((x, idx) => (
     idx === k ? { ...x, [field]: v } : x
@@ -583,13 +593,18 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     const noTax = isCash || isComposition || form.reverseCharge;
     const invoiceRate = billGst;
     const amounts = items.map((it) => round2((Number(it.qty) || 0) * (Number(it.rate) || 0)));
-    const subtotal = round2(amounts.reduce((a, n) => a + n, 0));
+    // Per-line charges. They are billed and taxed with the line, but sit
+    // OUTSIDE the discount base — a discount is agreed on the goods, not on
+    // the lorry. Mirrors priceLines() on the server exactly.
+    const extras = items.map((it) => lineExtrasTotal(it));
+    const extrasTotal = round2(extras.reduce((a, n) => a + n, 0));
+    const subtotal = round2(amounts.reduce((a, n) => a + n, 0) + extrasTotal);
     // Each line's own discount first, then the bill discount spread over what
     // the lines come to after it — capped there so the two can't exceed the bill.
     const itemDiscs = items.map((it, i) => lineDiscount(it, amounts[i]));
     const itemDiscount = round2(itemDiscs.reduce((a, n) => a + n, 0));
     const nets = amounts.map((a, i) => round2(a - itemDiscs[i]));
-    const netSubtotal = round2(subtotal - itemDiscount);
+    const netSubtotal = round2(amounts.reduce((a, n) => a + n, 0) - itemDiscount);
     // Where the bill discount sits relative to GST — see the switch beside the
     // Discount box. 'before' spreads it over the lines, so the tax falls with
     // it (the relief s.15(3)(a) allows); 'after' taxes the full value and takes
@@ -609,7 +624,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     // that mixes rates — one "GST" figure would hide which rate applied where.
     const byRate = new Map();
     items.forEach((it, i) => {
-      const taxable = round2(amounts[i] - shares[i]);
+      const taxable = round2(amounts[i] - shares[i] + extras[i]);
       const r = noTax ? 0 : effectiveRate(it, invoiceRate);
       tx += (taxable * r) / 100;
       byRate.set(r, round2((byRate.get(r) || 0) + taxable));
@@ -776,7 +791,9 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
           unit: it.unit || null, description: it.description || null,
           taxRate: effectiveRate(it, billRate), itemId: it.itemId || null,
           // Blank rows are the ones somebody opened and thought better of.
-          extras: (it.extras || []).filter((x) => (x.label || '').trim() || (x.value || '').trim()),
+          extras: (it.extras || [])
+            .filter((x) => (x.label || '').trim() || (x.value || '').trim() || Number(x.amount) > 0)
+            .map((x) => ({ label: x.label || '', value: x.value || '', amount: Number(x.amount) || 0 })),
           ...(Number(it.discountValue) > 0
             ? { discountType: it.discountType === 'amount' ? 'amount' : 'percent', discountValue: Number(it.discountValue) }
             : {}),
@@ -969,6 +986,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
             {items.map((it, i) => {
               const gross = round2((Number(it.qty) || 0) * (Number(it.rate) || 0));
               const itemDisc = lineDiscount(it, gross);
+              const lineExtras = lineExtrasTotal(it);
               const amount = round2(gross - itemDisc);
               const q = (it.name || '').trim().toLowerCase();
               const exactMatch = catalog.some((c) => c.name === it.name);
@@ -1119,7 +1137,12 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     </div>
                   )}
                   <span style={{ flex: 1.2, textAlign: 'right', fontSize: 13, fontWeight: 600 }} data-testid="line-amount">
-                    {inr(amount)}
+                    {inr(round2(amount + lineExtras))}
+                    {lineExtras > 0 && (
+                      <span style={{ display: 'block', fontSize: 10.5, fontWeight: 400, color: 'var(--text3)' }}>
+                        incl. {inr(lineExtras)} charges
+                      </span>
+                    )}
                     {itemDisc > 0 && (
                       <span style={{ display: 'block', fontSize: 10.5, fontWeight: 400, color: 'var(--text3)' }}>
                         <s>{inr(gross)}</s> − {inr(itemDisc)}
@@ -1160,21 +1183,46 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     the item but do not change any total; Additional Charges
                     below is what actually bills for something. */}
                 <div style={{ marginBottom: 8, marginLeft: 22 }}>
+                  {/* Two boxes per row, captioned the first time: "Details"
+                      alone did not read as "this is where the value goes". */}
+                  {(it.extras || []).length > 0 && (
+                    <div className="flex gap-2" style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 2 }}>
+                      <span style={{ width: 150 }}>Field name</span>
+                      <span style={{ width: 96 }}>Amount ₹</span>
+                      <span style={{ flex: 1 }}>Note (optional)</span>
+                      <span style={{ width: 18 }} />
+                    </div>
+                  )}
                   {(it.extras || []).map((x, k) => (
                     <div className="flex gap-2" key={k} style={{ marginBottom: 4, alignItems: 'center' }}>
-                      <input className="input" style={{ width: 150, fontSize: 12 }} placeholder="Field"
+                      <input className="input" style={{ width: 150, fontSize: 12 }} placeholder="e.g. Transport"
                         data-testid="line-extra-label" list={`xf${i}`}
                         value={x.label} onChange={(e) => setExtra(i, k, 'label', e.target.value)} />
                       <datalist id={`xf${i}`}>
                         {EXTRA_PRESETS.map((p) => <option key={p} value={p} />)}
                       </datalist>
-                      <input className="input" style={{ flex: 1, fontSize: 12 }} placeholder="Details"
+                      {/* An amount here is BILLED and taxed with the line. */}
+                      <input className="input input-num" style={{ width: 96, fontSize: 12 }}
+                        type="number" min="0" step="0.01" placeholder="0.00"
+                        data-testid="line-extra-amount" autoFocus={!!x.label && !x.amount}
+                        value={x.amount} onChange={(e) => setExtra(i, k, 'amount', e.target.value)} />
+                      <input className="input" style={{ flex: 1, fontSize: 12 }}
+                        placeholder="e.g. by road, delivered Sunday"
                         data-testid="line-extra-value"
                         value={x.value} onChange={(e) => setExtra(i, k, 'value', e.target.value)} />
                       <button type="button" className="btn btn-ghost btn-xs" style={{ width: 18 }}
+                        title="Remove this field"
                         onClick={() => removeExtra(i, k)}>×</button>
                     </div>
                   ))}
+                  {/* Said once, where the decision is made: this is a note on
+                      the line, not a charge. Billing for transport is what
+                      Additional Charges further down does. */}
+                  {(it.extras || []).length > 0 && (
+                    <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 4 }}>
+                      An amount is added to this line and taxed at its GST rate. Discounts do not apply to it.
+                    </div>
+                  )}
                   <button type="button" className="btn btn-ghost btn-xs" data-testid="line-extra-add"
                     style={{ fontSize: 11.5 }} onClick={() => addExtra(i)}>
                     + Transport / Installation / other field
@@ -1185,17 +1233,27 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
             })}
             <button className="btn btn-ghost btn-sm" onClick={() => setItems((a) => [...a, blankItem()])}>+ Add Item</button>
 
-            {/* Offered only when something is actually on file, so it can
-                never be ticked to attach nothing. */}
-            {(defaults?.hasPanCard || defaults?.hasCancelledCheque) && (
-              <label className="flex items-center gap-2" style={{ marginTop: 14, cursor: 'pointer', fontSize: 13 }}>
-                <input type="checkbox" data-testid="attach-kyc" checked={attachKyc}
+            {/* Always shown, even with nothing uploaded — hiding it meant
+                nobody could tell the option existed. Without the documents on
+                file it is disabled and says where to put them. */}
+            <div style={{ marginTop: 14 }}>
+              <label className="flex items-center gap-2"
+                style={{ cursor: hasKycDocs ? 'pointer' : 'not-allowed', fontSize: 13, opacity: hasKycDocs ? 1 : 0.65 }}>
+                <input type="checkbox" data-testid="attach-kyc" checked={attachKyc && hasKycDocs}
+                  disabled={!hasKycDocs}
                   onChange={(e) => setAttachKyc(e.target.checked)} style={{ width: 16, height: 16 }} />
                 <span>
-                  Attach {[defaults?.hasPanCard && 'PAN card', defaults?.hasCancelledCheque && 'cancelled cheque'].filter(Boolean).join(' and ')} to this bill
+                  Attach {hasKycDocs
+                    ? [defaults?.hasPanCard && 'PAN card', defaults?.hasCancelledCheque && 'cancelled cheque'].filter(Boolean).join(' and ')
+                    : 'PAN card / cancelled cheque'} to this bill
                 </span>
               </label>
-            )}
+              {!hasKycDocs && (
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginLeft: 24 }}>
+                  Upload them once in Company Settings — Invoicing, then this can be ticked on any bill.
+                </div>
+              )}
+            </div>
 
             <div className="flex items-center justify-between" style={{ margin: '14px 0 8px' }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>📎 Attachments / Images</div>

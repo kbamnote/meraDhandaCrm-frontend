@@ -354,7 +354,11 @@ export default function InvoiceDocument({ invoice }) {
                         <div style={{ fontSize: 8.5, marginTop: 1 }}>
                           {it.extras.map((e, k) => (
                             <div key={k}>
-                              {e.label ? <b>{e.label}:</b> : null} {e.value}
+                              {e.label ? <b>{e.label}:</b> : null}
+                              {e.value ? ` ${e.value}` : ''}
+                              {/* A charge has to show its amount, or the line
+                                  total cannot be checked against the parts. */}
+                              {Number(e.amount) > 0 ? ` ${plain(e.amount)}` : ''}
                             </div>
                           ))}
                         </div>
@@ -365,7 +369,11 @@ export default function InvoiceDocument({ invoice }) {
                     <td className="inv-r">{plain(it.rate)}</td>
                     {hasLineDisc && <td className="inv-c">{lineDisc(it) > 0 ? discLabel(it) : '—'}</td>}
                     {mixedRates && <td className="inv-c">{lineRate(it)}%</td>}
-                    <td className="inv-r">{plain(round2((Number(it.amount) || 0) - lineDisc(it)))}</td>
+                    {/* Goods less discount, PLUS this line's own charges — the
+                        same figure the subtotal is built from. */}
+                    <td className="inv-r">
+                      {plain(round2((Number(it.amount) || 0) - lineDisc(it) + (Number(it.extrasTotal) || 0)))}
+                    </td>
                   </tr>
                 ))}
 
