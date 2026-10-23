@@ -411,6 +411,10 @@ export const accountingApi = {
   reminders:         ()     => api.get('/accounting/automation/reminders').then(r => r.data),
   markReminderRead:  (id)   => api.post(`/accounting/automation/reminders/${id}/read`).then(r => r.data),
   // Purchase Orders CRUD
+  // Quotations / Estimates.
+  quotations:         (params)   => api.get('/accounting/quotations', { params }).then(r => r.data),
+  setQuotationStatus: (id, body) => api.post(`/accounting/quotation/${id}/status`, body).then(r => r.data),
+  quotationDraft:     (id)       => api.get(`/accounting/quotation/${id}/convert-draft`).then(r => r.data),
   purchaseOrders: ()        => api.get('/accounting/purchase-orders').then(r => r.data),
   createPO:      (body)     => api.post('/accounting/purchase-orders', body).then(r => r.data),
   updatePO:      (id, body) => api.put(`/accounting/purchase-orders/${id}`, body).then(r => r.data),

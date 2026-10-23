@@ -144,6 +144,7 @@ const SECTIONS = [
       { to: '/tracking',      label: '📍 Team Map',          legacy: 'page-tracking' },
       { to: '/visits',        label: '🏪 Shop Visits',       legacy: 'page-visits' },
       { to: '/tracking/route', label: '🛣 Route History',    legacy: 'page-tracking-route' },
+      { to: '/quotations',    label: '📄 Quotation / Estimate', legacy: 'page-quotations' },
       { to: '/sales-panel',   label: '💼 Sales Panel',       legacy: 'page-sales-panel' },
       { to: '/sales-admin',   label: '👔 Sales Admin',       legacy: 'page-sales-admin' },
       { to: '/enquiry',       label: '❓ Enquiry',           legacy: 'page-enquiry' },

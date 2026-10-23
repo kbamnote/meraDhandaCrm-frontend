@@ -19,6 +19,9 @@ export const PERM_OF = {
   '/production': 'production', '/assign-prod': 'production', '/prod-steps': 'production',
   '/qc': 'qc', '/dispatch': 'dispatch',
   '/designers': 'designers', '/designer': 'designers', '/designers-view': 'designers',
+  // A quotation is a priced sales document, so it sits with invoices rather
+  // than with leads — whoever may see what was billed may see what was quoted.
+  '/quotations': 'invoices',
   '/leads-crm': 'leads', '/sales-panel': 'leads',
   // The company's own sales figures — every colleague's revenue, the totals,
   // and the box that sets anybody's target. A different question from "let

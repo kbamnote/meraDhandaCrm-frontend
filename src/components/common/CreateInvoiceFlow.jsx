@@ -81,6 +81,7 @@ const TYPE_CARDS = [
 const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', taxRate: '', itemId: null, discountType: 'percent', discountValue: '' });
 
 const DOC_TYPES = [
+  { value: 'quotation', label: 'Quotation / Estimate' },
   { value: 'proforma', label: 'Proforma Invoice' },
   { value: 'invoice', label: 'Tax Invoice' },
   { value: 'cash', label: 'Cash / Non-GST Bill' },
@@ -193,10 +194,16 @@ export async function backfillItemHsn(lines, catalog, update = dbApi.update) {
   return saved;
 }
 
-export default function CreateInvoiceFlow({ job, party: forParty, invoice, onClose, onCreated }) {
+export default function CreateInvoiceFlow({
+  job, party: forParty, invoice, forceType, prefill, onClose, onCreated,
+}) {
   const t = useT(S);
-  // Editing an existing invoice: its type is already decided, so skip the picker.
-  const [type, setType] = useState(invoice ? (invoice.type || 'invoice') : null);
+  // Editing an existing invoice: its type is already decided, so skip the
+  // picker. `forceType` does the same for a screen that only makes one kind
+  // — the Quotation page has already answered "what sort of document".
+  const [type, setType] = useState(
+    invoice ? (invoice.type || 'invoice') : (forceType || null),
+  );
 
   if (!type) {
     return <InvoiceTypePicker t={t} onCancel={onClose} onPick={setType} />;
@@ -208,6 +215,7 @@ export default function CreateInvoiceFlow({ job, party: forParty, invoice, onClo
       job={job}
       party={forParty}
       invoice={invoice}
+      prefill={prefill}
       onClose={onClose}
       onCreated={onCreated}
     />
@@ -254,8 +262,13 @@ function Row({ label, value, bold, color }) {
   );
 }
 
-function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, party: forParty, invoice }) {
+function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, party: forParty, invoice, prefill }) {
   const isEdit = !!invoice;
+  // What the form OPENS with. Editing seeds from the invoice itself;
+  // `prefill` seeds a NEW document from an existing one (a quotation
+  // becoming a bill). Only `isEdit` decides create-vs-update, so a
+  // prefilled form still POSTs — it is a new document, not an edit.
+  const seed = invoice || prefill || null;
   const { tenant, profile } = useAuth();
   // Correcting the number of a bill that already exists is for the people who
   // answer for the books — the same list the server enforces (canRenumber in
@@ -266,7 +279,10 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   // document was issued under, even if branding changes later.
   const tenantLogo = tenant?.settings?.branding?.logo || '';
   const [type, setType] = useState(initialType);
+  // A quote is a price for a limited time; the form says how long.
+  const [validDays, setValidDays] = useState('7');
   const isCash = type === 'cash';
+  const isQuote = type === 'quotation';
 
   // Bill To — search-and-select (same pattern as the Job Cards client picker),
   // with the selected/typed party editable underneath.
@@ -274,20 +290,20 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const [clientMatches, setClientMatches] = useState([]);
   // `party` prop = opened from a specific customer (Parties page), so Bill To is
   // already known; `job` = opened from Dispatch, prefilled from the job card.
-  const [party, setParty] = useState(invoice ? {
+  const [party, setParty] = useState(seed ? {
     ...EMPTY_PARTY,
-    clientId: invoice.clientId || null,
-    clientName: invoice.clientName || '',
-    clientPhone: invoice.clientPhone || '',
-    clientAddress: invoice.clientAddress || '',
-    gstNo: invoice.clientGstNo || '',
-    clientPan: invoice.clientPan || '',
+    clientId: seed.clientId || null,
+    clientName: seed.clientName || '',
+    clientPhone: seed.clientPhone || '',
+    clientAddress: seed.clientAddress || '',
+    gstNo: seed.clientGstNo || '',
+    clientPan: seed.clientPan || '',
     // Only treat Ship To as separate when it genuinely differs from Bill To —
     // the server mirrors them when they match, so a blind copy would tick the
     // "different address" box on every edit.
-    shipDifferent: !!invoice.shipToAddress && invoice.shipToAddress !== invoice.clientAddress,
-    shipToName: invoice.shipToName || '',
-    shipToAddress: invoice.shipToAddress || '',
+    shipDifferent: !!seed.shipToAddress && seed.shipToAddress !== seed.clientAddress,
+    shipToName: seed.shipToName || '',
+    shipToAddress: seed.shipToAddress || '',
   } : {
     ...EMPTY_PARTY,
     clientId: forParty?.id || null,
@@ -301,24 +317,24 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const setP = (k, v) => setParty((p) => ({ ...p, [k]: v }));
 
   const [form, setForm] = useState({
-    jobNo: invoice?.jobNo || job?.jobNo || '',
-    date: invoice?.date || new Date().toISOString().slice(0, 10),
-    ewayBillNo: invoice?.ewayBillNo || '', vehicleNo: invoice?.vehicleNo || '',
-    poNumber: invoice?.poNumber || '', approvedBy: invoice?.approvedBy || '',
-    eventType: invoice?.eventType || '', salesPerson: invoice?.salesPerson || '',
-    deliveryType: invoice?.deliveryType || '', branchId: invoice?.branchId || '',
+    jobNo: seed?.jobNo || job?.jobNo || '',
+    date: seed?.date || new Date().toISOString().slice(0, 10),
+    ewayBillNo: seed?.ewayBillNo || '', vehicleNo: seed?.vehicleNo || '',
+    poNumber: seed?.poNumber || '', approvedBy: seed?.approvedBy || '',
+    eventType: seed?.eventType || '', salesPerson: seed?.salesPerson || '',
+    deliveryType: seed?.deliveryType || '', branchId: seed?.branchId || '',
     // The number as issued, so the boxes show THIS invoice rather than the next
     // one. They have to recompose to exactly what is stored — see splitInvoiceNo.
     invoicePrefix: invoice ? splitInvoiceNo(invoice).prefix : '',
     invoiceNumber: invoice ? splitInvoiceNo(invoice).number : '',
-    paymentTermDays: invoice?.paymentTermDays ?? '', dueDate: invoice?.dueDate || '',
-    placeOfSupply: invoice?.placeOfSupply || 'auto',
-    reverseCharge: !!invoice?.reverseCharge,
+    paymentTermDays: seed?.paymentTermDays ?? '', dueDate: seed?.dueDate || '',
+    placeOfSupply: seed?.placeOfSupply || 'auto',
+    reverseCharge: !!seed?.reverseCharge,
     // A stored rate outside the slab list opens on "Other…", with the figure in
     // the box beside it — otherwise the select falls back to its first option
     // and a 1.5% invoice silently reopens as 0%.
-    gstRate: invoice?.gstRate != null
-      ? (isListedRate(invoice.gstRate) ? String(invoice.gstRate) : CUSTOM_RATE)
+    gstRate: seed?.gstRate != null
+      ? (isListedRate(seed.gstRate) ? String(seed.gstRate) : CUSTOM_RATE)
       : '18',
     // The bill-level part only. `discount` on a saved invoice is the TOTAL (line
     // discounts included); invoices from before per-line discounts have no
@@ -327,13 +343,13 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     // say which it was: a taxable value below the billed total means the
     // discount had been taken off before the tax.
     // A rate the slab list does not carry is typed into its own box.
-    customRate: invoice && invoice.gstRate != null && !isListedRate(invoice.gstRate) ? String(invoice.gstRate) : '',
-    discountMode: invoice?.discountMode
-      || (invoice && invoice.taxableValue != null
-        && round2(invoice.taxableValue) < round2((invoice.subtotal || 0) - (invoice.itemDiscount || 0))
+    customRate: seed && seed.gstRate != null && !isListedRate(seed.gstRate) ? String(seed.gstRate) : '',
+    discountMode: seed?.discountMode
+      || (seed && seed.taxableValue != null
+        && round2(seed.taxableValue) < round2((seed.subtotal || 0) - (seed.itemDiscount || 0))
         ? 'before' : 'after'),
-    discount: invoice?.billDiscount != null ? String(invoice.billDiscount)
-      : (invoice?.discount != null ? String(invoice.discount) : '0'),
+    discount: seed?.billDiscount != null ? String(seed.billDiscount)
+      : (seed?.discount != null ? String(seed.discount) : '0'),
     // Payment capture belongs to creation only — the edit endpoint refuses any
     // invoice that already has a receipt against it.
     markFullyPaid: false,
@@ -341,14 +357,14 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
     paymentMode: 'Cash',
     bankAccountId: '',
     sendPaymentLink: !invoice, // don't re-queue the WhatsApp link on an edit
-    notes: invoice?.notes || '', showNotes: !!invoice?.notes,
-    terms: invoice?.terms || '', editingTerms: false,
+    notes: seed?.notes || '', showNotes: !!seed?.notes,
+    terms: seed?.terms || '', editingTerms: false,
   });
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const [items, setItems] = useState(
-    invoice && Array.isArray(invoice.items) && invoice.items.length
-      ? invoice.items.map((it) => ({
+    seed && Array.isArray(seed.items) && seed.items.length
+      ? seed.items.map((it) => ({
         ...blankItem(),
         name: it.name || '', hsn: it.hsn || '',
         qty: it.qty != null ? String(it.qty) : '',
@@ -356,19 +372,19 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         // Only a line that was saved with its OWN rate keeps one; on an invoice
         // taxed at a single rate the lines go on inheriting it, so changing the
         // invoice rate still moves every line.
-        taxRate: invoice.gstRate == null && it.taxRate != null ? String(it.taxRate) : '',
+        taxRate: seed.gstRate == null && it.taxRate != null ? String(it.taxRate) : '',
         itemId: it.itemId || null,
         discountType: it.discountType === 'amount' ? 'amount' : 'percent',
         discountValue: it.discountValue != null ? String(it.discountValue) : '',
       }))
       : [job ? { ...blankItem(), name: job.work || '' } : blankItem()]
   );
-  const [attachments, setAttachments] = useState(invoice?.attachments || []);
+  const [attachments, setAttachments] = useState(seed?.attachments || []);
   // Freight, packing, insurance — charged alongside the goods. Untaxed unless
   // the row says otherwise; a taxed one joins the taxable value.
   const [charges, setCharges] = useState(
-    Array.isArray(invoice?.additionalCharges)
-      ? invoice.additionalCharges.map((ch) => ({
+    Array.isArray(seed?.additionalCharges)
+      ? seed.additionalCharges.map((ch) => ({
         label: ch.label || '',
         amount: ch.amount != null ? String(ch.amount) : '',
         taxRate: ch.taxRate ? String(ch.taxRate) : '',
@@ -680,6 +696,14 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
       const agreedRate = lineRates.size === 1 ? [...lineRates][0] : (Number(billRate) || 0);
       const body = {
         type,
+        // Only a quotation has a shelf life. The server defaults to 7 days.
+        ...(type === 'quotation' && validDays ? { validDays: Number(validDays) } : {}),
+        // Raised FROM a quotation: the create route uses this to close the
+        // quote in the same request, so there is no window where the bill
+        // exists and the quote still looks open.
+        ...(!isEdit && prefill && prefill.quotationId
+          ? { quotationId: prefill.quotationId, quotationNo: prefill.quotationNo }
+          : {}),
         // Set only after the user confirms the credit-limit warning below.
         overrideCreditLimit: overrideCreditLimit || undefined,
         clientId: party.clientId, clientName: trim(party.clientName),
@@ -1198,6 +1222,19 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
               <div className="form-group" style={{ flex: 1 }}><label>Payment Terms (days)</label><input className="input" type="number" min="0" value={form.paymentTermDays} onChange={(e) => setPaymentDays(e.target.value)} /></div>
               <div className="form-group" style={{ flex: 1 }}><label>Due Date</label><input className="input" type="date" value={form.dueDate} onChange={(e) => setF('dueDate', e.target.value)} /></div>
             </div>
+            {/* How long the quoted price stands. Shown only for a quotation,
+                because nothing else expires. */}
+            {isQuote && (
+              <div className="form-group">
+                <label>Valid for (days)</label>
+                <input className="input" type="number" min="1" max="365" style={{ maxWidth: 140 }}
+                  data-testid="quote-valid-days"
+                  value={validDays} onChange={(e) => setValidDays(e.target.value)} />
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
+                  After this the quote shows as expired. It can still be accepted.
+                </div>
+              </div>
+            )}
             <div className="form-group">
               <label>Document Type</label>
               <select className="input" value={type} onChange={(e) => setType(e.target.value)}>

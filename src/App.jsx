@@ -83,6 +83,7 @@ import JobSetterPage from './pages/JobSetterPage';
 import ProdStepsPage from './pages/ProdStepsPage';
 import ManageProductionTypesPage from './pages/ManageProductionTypesPage';
 import SalesAdminPage from './pages/SalesAdminPage';
+import QuotationsPage from './pages/accounting/QuotationsPage';
 import SalesPage from './pages/SalesPage';
 import AuditLogPage from './pages/AuditLogPage';
 import ApiKeysPage from './pages/ApiKeysPage';
@@ -156,6 +157,7 @@ const CUSTOM_PAGES = {
   'jobsetter': JobSetterPage,
   'prod-steps': ProdStepsPage,
   'production-types': ManageProductionTypesPage,
+  quotations: QuotationsPage,
   'sales-admin': SalesAdminPage,
   'sales-panel': SalesPage,
   'audit-log': AuditLogPage,
@@ -206,6 +208,7 @@ const STUB_ROUTES = [
 
   ['leads-crm',       '📞 Leads CRM',         'page-leads-crm',       'mpw/leads'],
   ['sales-panel',     '💼 Sales Panel',       'page-sales-panel',     'mpw/sales'],
+  ['quotations',      '📄 Quotation / Estimate', 'page-quotations',   'mpw/invoices'],
   ['sales-admin',     '👔 Sales Admin',       'page-sales-admin',     'mpw/sales'],
   ['enquiry',         '❓ Enquiry',           'page-enquiry',         'mpw/enquiries'],
   ['sample-dm',       '📦 Sample DM',         'page-sample-dm',       'mpw/samples'],
