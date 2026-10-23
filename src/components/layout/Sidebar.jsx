@@ -44,6 +44,7 @@ const SECTION_S = {
   '📦 Stock':              { en: '📦 Stock',              hi: '📦 स्टॉक',               hinglish: '📦 Stock',              gu: '📦 સ્ટોક',               mr: '📦 स्टॉक',               mwr: '📦 स्टॉक' },
   '🏪 Vendors':            { en: '🏪 Vendors',            hi: '🏪 वेंडर',               hinglish: '🏪 Vendors',            gu: '🏪 વેન્ડર',              mr: '🏪 व्हेंडर',             mwr: '🏪 वेंडर' },
   '💰 Dashboard':         { en: '💰 Dashboard',         hi: '💰 डैशबोर्ड',            hinglish: '💰 Dashboard',          gu: '💰 ડેશબોર્ડ',            mr: '💰 डॅशबोर्ड',            mwr: '💰 डैशबोर्ड' },
+  '📄 Quotation / Estimate': { en: '📄 Quotation / Estimate', hi: '📄 कोटेशन / अनुमान', hinglish: '📄 Quotation / Estimate', gu: '📄 ક્વોટેશન / અંદાજ', mr: '📄 कोटेशन / अंदाज', mwr: '📄 कोटेशन / अंदाज' },
   '🧾 Sales Invoices':    { en: '🧾 Sales Invoices',    hi: '🧾 सेल्स इनवॉइस',        hinglish: '🧾 Sales Invoices',     gu: '🧾 સેલ્સ ઇન્વોઇસ',        mr: '🧾 सेल्स इनव्हॉइस',       mwr: '🧾 सेल्स इनवॉइस' },
   '🧾 Invoice View':      { en: '🧾 Invoice View',      hi: '🧾 इनवॉइस व्यू',          hinglish: '🧾 Invoice View',       gu: '🧾 ઇન્વોઇસ વ્યૂ',         mr: '🧾 इनव्हॉइस व्ह्यू',      mwr: '🧾 इनवॉइस व्यू' },
   '📦 Items':             { en: '📦 Items',             hi: '📦 आइटम',                hinglish: '📦 Items',             gu: '📦 આઇટમ્સ',              mr: '📦 आयटम',                mwr: '📦 आइटम' },
@@ -144,7 +145,6 @@ const SECTIONS = [
       { to: '/tracking',      label: '📍 Team Map',          legacy: 'page-tracking' },
       { to: '/visits',        label: '🏪 Shop Visits',       legacy: 'page-visits' },
       { to: '/tracking/route', label: '🛣 Route History',    legacy: 'page-tracking-route' },
-      { to: '/quotations',    label: '📄 Quotation / Estimate', legacy: 'page-quotations' },
       { to: '/sales-panel',   label: '💼 Sales Panel',       legacy: 'page-sales-panel' },
       { to: '/sales-admin',   label: '👔 Sales Admin',       legacy: 'page-sales-admin' },
       { to: '/enquiry',       label: '❓ Enquiry',           legacy: 'page-enquiry' },
@@ -159,6 +159,7 @@ const SECTIONS = [
     title: 'Accounting',
     items: [
       { to: '/accounting',       label: '💰 Dashboard',        legacy: 'page-accounting' },
+      { to: '/quotations',       label: '📄 Quotation / Estimate', legacy: 'page-quotations' },
       { to: '/accounting/sales', label: '🧾 Sales Invoices',   legacy: 'page-accounting-sales' },
       { to: '/invoice-view',     label: '🧾 Invoice View',     legacy: 'page-invoice-view' },
       { to: '/accounting/items', label: '📦 Items',            legacy: 'page-accounting-items' },
