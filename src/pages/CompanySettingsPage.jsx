@@ -19,6 +19,10 @@ const EMPTY = {
   // `pan` prints in the invoice header; `upiId` renders the payment QR on the
   // invoice; `signatureImage` is the stamp/sign shown above the signatory line.
   pan: '', upiId: '', signatureImage: '',
+  // Scans of the firm's PAN card and a cancelled cheque. Customers ask for
+  // these when they set you up as a vendor, so they are kept ONCE here and
+  // attached to a bill by ticking a box rather than hunted for each time.
+  panCardImage: '', cancelledChequeImage: '',
   authorizedSignatory: '',
   // Default Terms & Conditions per document type — prefilled on every new
   // invoice of that type, still editable per invoice via "Edit Terms".
@@ -226,6 +230,23 @@ export default function CompanySettingsPage() {
     } catch (err) {
       showToast(err.response?.data?.error || 'Upload failed', 'error');
     } finally { setSignBusy(false); }
+  };
+
+  // Same shape as the signature uploader above; `field` says which of the
+  // two documents is being replaced.
+  const [docBusy, setDocBusy] = useState('');
+  const uploadDoc = (field) => async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setDocBusy(field);
+    try {
+      const r = await uploadApi.upload(file);
+      setForm((f) => ({ ...f, [field]: r.url }));
+      showToast('Uploaded — press Save to apply', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Upload failed', 'error');
+    } finally { setDocBusy(''); }
   };
 
   useEffect(() => {
@@ -480,6 +501,33 @@ export default function CompanySettingsPage() {
             Printed above the “Authorised Signatory” line on every invoice. A transparent PNG works best.
           </div>
         </div>
+        {/* Kept once, sent with a bill when the box is ticked on it. */}
+        {[
+          { key: 'panCardImage', label: 'PAN card', hint: 'A scan or photo of the firm’s PAN card.' },
+          { key: 'cancelledChequeImage', label: 'Cancelled cheque', hint: 'A cancelled cheque showing the account these bills are paid into.' },
+        ].map((d) => (
+          <div className="form-group" key={d.key}>
+            <label>{d.label}</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {form[d.key] && (
+                <img src={form[d.key]} alt={d.label} style={{ height: 54, maxWidth: 160, objectFit: 'contain', background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: 4 }} />
+              )}
+              {canEdit && (
+                <>
+                  <input id={`up-${d.key}`} type="file" accept="image/*" style={{ display: 'none' }} onChange={uploadDoc(d.key)} />
+                  <button type="button" className="btn btn-ghost btn-sm" data-testid={`upload-${d.key}`}
+                    onClick={() => document.getElementById(`up-${d.key}`).click()} disabled={docBusy === d.key}>
+                    {docBusy === d.key ? 'Uploading…' : (form[d.key] ? 'Change image' : 'Upload image')}
+                  </button>
+                  {form[d.key] && <button type="button" className="btn btn-ghost btn-xs" onClick={() => setField(d.key, '')}>Remove</button>}
+                </>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+              {d.hint} Attach it to a bill by ticking “Attach PAN / cheque” on the invoice form.
+            </div>
+          </div>
+        ))}
         <div className="form-group">
           <label>Default Terms — Proforma Invoice</label>
           <textarea className="input" rows={3} placeholder="1. This is a Proforma Invoice and not a demand for payment.&#10;2. Prices are valid for 7 days from the date of issue." value={form.termsProforma} onChange={(e) => setField('termsProforma', e.target.value)} disabled={!canEdit} />

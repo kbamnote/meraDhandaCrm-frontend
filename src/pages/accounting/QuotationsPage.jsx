@@ -33,6 +33,7 @@ const S = {
   days:      { en: 'days', hi: 'दिन', hinglish: 'days', gu: 'દિવસ', mr: 'दिवस', mwr: 'दिन' },
   today:     { en: 'Expires today', hi: 'आज खत्म', hinglish: 'Aaj khatam', gu: 'આજે પૂરું', mr: 'आज संपेल', mwr: 'आज खतम' },
   inDays:    { en: 'in', hi: 'में', hinglish: 'in', gu: 'માં', mr: 'मध्ये', mwr: 'में' },
+  view:      { en: 'View / Print', hi: 'देखें / प्रिंट', hinglish: 'Dekhein / Print', gu: 'જુઓ / પ્રિન્ટ', mr: 'पहा / प्रिंट', mwr: 'देखो / प्रिंट' },
   accept:    { en: 'Mark accepted', hi: 'स्वीकृत करें', hinglish: 'Accepted karein', gu: 'સ્વીકાર્યું', mr: 'स्वीकारले', mwr: 'मंजूर करो' },
   reject:    { en: 'Mark rejected', hi: 'अस्वीकृत करें', hinglish: 'Rejected karein', gu: 'નકાર્યું', mr: 'नाकारले', mwr: 'नामंजूर करो' },
   convert:   { en: 'Convert to Invoice', hi: 'इनवॉइस बनाएं', hinglish: 'Invoice banayein', gu: 'ઇન્વોઇસ બનાવો', mr: 'इनव्हॉइस करा', mwr: 'इनवॉइस बणाओ' },
@@ -88,6 +89,11 @@ export default function QuotationsPage() {
     if (!needle) return list;
     return list.filter((r) => `${r.clientName || ''} ${r.invoiceNo || ''}`.toLowerCase().includes(needle));
   }, [data, q]);
+
+  // A quotation is stored in `invoices`, so the invoice viewer already
+  // renders and prints it — it reads the collection by id and does not care
+  // which kind of document it is.
+  const open = (row) => navigate(`/invoice-view?id=${encodeURIComponent(row.id)}`);
 
   const setStatusOf = async (row, next) => {
     try {
@@ -158,7 +164,15 @@ export default function QuotationsPage() {
               {rows.map((r) => (
                 <tr key={r.id} data-testid="quote-row">
                   <td style={{ whiteSpace: 'nowrap' }}>{pretty(r.date)}</td>
-                  <td style={{ fontFamily: 'monospace' }}>{r.invoiceNo}</td>
+                  {/* The number is the thing people reach for, so it is
+                      what opens the document. */}
+                  <td>
+                    <button type="button" className="btn btn-ghost btn-xs" data-testid="quote-open"
+                      style={{ fontFamily: 'monospace', padding: 0, color: 'var(--blue)' }}
+                      onClick={() => open(r)}>
+                      {r.invoiceNo}
+                    </button>
+                  </td>
                   <td>{r.clientName || '—'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {/* Once invoiced, how long it was valid for stops mattering. */}
@@ -178,6 +192,8 @@ export default function QuotationsPage() {
                           position: 'absolute', right: 8, top: '100%', zIndex: 6,
                           padding: 4, minWidth: 190, textAlign: 'left',
                         }}>
+                          <button className="btn btn-ghost btn-xs" style={{ width: '100%', textAlign: 'left' }}
+                            onClick={() => open(r)}>👁 {t('view')}</button>
                           {r.status === 'converted' ? (
                             <div style={{ padding: 8, fontSize: 12.5, color: 'var(--text3)' }}>
                               {t('becameInv')} <b>{r.convertedToInvoiceNo}</b>

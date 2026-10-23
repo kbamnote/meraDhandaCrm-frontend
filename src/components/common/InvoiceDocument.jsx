@@ -12,6 +12,7 @@
  */
 import { useMemo } from 'react';
 import { amountInWords } from './amountInWords';
+import { stateFromGstin, stateCodeFromGstin, codeForState } from '../../utils/gstState';
 
 const COPIES = ['ORIGINAL FOR RECIPIENT', 'DUPLICATE FOR TRANSPORTER', 'TRIPLICATE FOR SUPPLIER'];
 
@@ -147,6 +148,13 @@ export default function InvoiceDocument({ invoice }) {
   const halfRate = round2((Number(inv.gstRate) || 0) / 2);
   const qr = upiQrUrl(inv);
   const co = inv.company || {};
+
+  // The party's state and GST code. Read off their GSTIN where there is one
+  // (it carries both, so they can never disagree), else fall back to the
+  // Place of Supply chosen on the bill — an unregistered customer still has
+  // a state.
+  const partyState = stateFromGstin(inv.clientGstNo) || inv.placeOfSupply || '';
+  const partyStateCode = stateCodeFromGstin(inv.clientGstNo) || codeForState(inv.placeOfSupply);
   const bank = inv.bank || {};
 
   // The server decides the legal title at issue time and snapshots it, so a
@@ -193,6 +201,9 @@ export default function InvoiceDocument({ invoice }) {
           .inv-doc { background: #fff; padding: 0; }
           .inv-page { width: auto; min-height: auto; margin: 0; box-shadow: none; padding: 8mm; }
           .inv-page + .inv-page { page-break-before: always; }
+          /* Enclosures (PAN card, cancelled cheque) start their own sheet so
+             they can be filed apart from the bill and stay legible. */
+          .inv-page-break { page-break-before: always; break-before: page; }
           .no-print { display: none !important; }
           @page { size: A4; margin: 0; }
         }
@@ -254,6 +265,15 @@ export default function InvoiceDocument({ invoice }) {
                           <td>{inv.eventType || '—'}</td>
                           <td>{inv.salesPerson || '—'}</td>
                         </tr>
+                        {(inv.ewayBillNo || inv.poNumber) && (
+                          <>
+                            <tr><th>E-Way Bill No.</th><th colSpan={2}>P.O. No.</th></tr>
+                            <tr className="inv-c">
+                              <td>{inv.ewayBillNo || '—'}</td>
+                              <td colSpan={2}>{inv.poNumber || '—'}</td>
+                            </tr>
+                          </>
+                        )}
                         <tr><th colSpan={3} style={{ textAlign: 'left' }}>Delivery Type</th></tr>
                         <tr><td colSpan={3}>{inv.deliveryType || '—'}</td></tr>
                       </tbody>
@@ -276,6 +296,13 @@ export default function InvoiceDocument({ invoice }) {
                     {inv.clientAddress && <div><b>Address:</b> {inv.clientAddress}</div>}
                     <div>
                       {inv.clientGstNo && <><b>GSTIN:</b> {inv.clientGstNo}&nbsp;&nbsp;</>}
+                      {/* The state and its GST code, which a GST document is
+                          expected to carry. Derived from the GSTIN when the
+                          invoice did not store a Place of Supply of its own. */}
+                      {partyState && <><b>State:</b> {partyState}&nbsp;&nbsp;</>}
+                      {partyStateCode && <><b>Code:</b> {partyStateCode}</>}
+                    </div>
+                    <div>
                       {inv.placeOfSupply && <><b>Place of Supply:</b> {inv.placeOfSupply}</>}
                     </div>
                     <div>
@@ -286,6 +313,14 @@ export default function InvoiceDocument({ invoice }) {
                   <td>
                     <div style={{ fontWeight: 700 }}>{inv.shipToName || inv.clientName || '—'}</div>
                     {(inv.shipToAddress || inv.clientAddress) && <div>{inv.shipToAddress || inv.clientAddress}</div>}
+                    {/* Same identity details on the consignee side — a shipment
+                        to a different state is what decides IGST, so the state
+                        has to be readable here too. */}
+                    <div>
+                      {inv.clientGstNo && <><b>GSTIN:</b> {inv.clientGstNo}&nbsp;&nbsp;</>}
+                      {partyState && <><b>State:</b> {partyState}&nbsp;&nbsp;</>}
+                      {partyStateCode && <><b>Code:</b> {partyStateCode}</>}
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -312,6 +347,18 @@ export default function InvoiceDocument({ invoice }) {
                     <td>
                       <div style={{ fontWeight: 600 }}>{it.name}</div>
                       {it.description && <div className="inv-muted" style={{ fontSize: 8.5 }}>{it.description}</div>}
+                      {/* This line's own extra fields — Transport, Installation,
+                          a site or reference. They sit in the ITEMS column, so
+                          they read before HSN without widening the table. */}
+                      {Array.isArray(it.extras) && it.extras.length > 0 && (
+                        <div style={{ fontSize: 8.5, marginTop: 1 }}>
+                          {it.extras.map((e, k) => (
+                            <div key={k}>
+                              {e.label ? <b>{e.label}:</b> : null} {e.value}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="inv-c">{it.hsn || '—'}</td>
                     <td className="inv-c">{plain(it.qty)}{it.unit ? ` ${it.unit}` : ''}</td>
@@ -494,17 +541,19 @@ export default function InvoiceDocument({ invoice }) {
               <tbody>
                 <tr>
                   <th style={{ width: '62%', textAlign: 'left' }}>Terms and Conditions</th>
-                  <th style={{ textAlign: 'left' }}>&nbsp;</th>
-                </tr>
-                <tr>
-                  <td style={{ whiteSpace: 'pre-line', fontSize: 8.5 }}>{inv.terms || '—'}</td>
-                  <td className="inv-c" style={{ verticalAlign: 'bottom' }}>
+                  {/* rowSpan, not an empty header above the signature: the
+                      border between the two printed as a rule across the
+                      signing space. Merged, it is one tall box to sign in. */}
+                  <td rowSpan={2} className="inv-c" style={{ verticalAlign: 'bottom', paddingTop: 10 }}>
                     {inv.signatureImage && (
                       <img src={inv.signatureImage} alt="" style={{ height: 54, maxWidth: 150, objectFit: 'contain' }} />
                     )}
                     <div style={{ marginTop: 4 }}>Authorised Signatory For</div>
                     <div><b>{inv.authorizedSignatory || co.name || '—'}</b></div>
                   </td>
+                </tr>
+                <tr>
+                  <td style={{ whiteSpace: 'pre-line', fontSize: 8.5 }}>{inv.terms || '—'}</td>
                 </tr>
               </tbody>
             </table>
@@ -513,6 +562,32 @@ export default function InvoiceDocument({ invoice }) {
               <div className="inv-b" style={{ marginTop: 6, padding: '4px 6px' }}>
                 <b>Notes</b>
                 <div style={{ whiteSpace: 'pre-line' }}>{inv.notes}</div>
+              </div>
+            )}
+
+            {/* PAN card / cancelled cheque, when this bill was asked to carry
+                them. On their own page: a customer's accounts team files these
+                separately from the bill, and shrinking them to fit beside the
+                totals would make the numbers on them unreadable. */}
+            {(inv.panCardImage || inv.cancelledChequeImage) && (
+              <div className="inv-page-break" style={{ marginTop: 10 }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                  Enclosed with {inv.invoiceNo}
+                </div>
+                {inv.panCardImage && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 9, marginBottom: 2 }}><b>PAN Card</b></div>
+                    <img src={inv.panCardImage} alt="PAN card"
+                      style={{ maxWidth: '100%', maxHeight: 330, objectFit: 'contain', border: '1px solid #ddd' }} />
+                  </div>
+                )}
+                {inv.cancelledChequeImage && (
+                  <div>
+                    <div style={{ fontSize: 9, marginBottom: 2 }}><b>Cancelled Cheque</b></div>
+                    <img src={inv.cancelledChequeImage} alt="Cancelled cheque"
+                      style={{ maxWidth: '100%', maxHeight: 330, objectFit: 'contain', border: '1px solid #ddd' }} />
+                  </div>
+                )}
               </div>
             )}
           </section>

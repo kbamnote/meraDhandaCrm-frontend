@@ -78,7 +78,11 @@ const TYPE_CARDS = [
 // discountType/discountValue: an optional discount on THIS line only, as a %
 // of the line or a flat ₹ amount. It comes off before GST, and before the
 // bill-level Discount is spread over what is left (the server does the same).
-const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', taxRate: '', itemId: null, discountType: 'percent', discountValue: '' });
+const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', taxRate: '', itemId: null, discountType: 'percent', discountValue: '', extras: [] });
+
+// The ones people reach for most, offered as a starting label so nobody
+// has to think of the word. Anything else can be typed over it.
+const EXTRA_PRESETS = ['Transport', 'Installation', 'Site', 'Ref. No.'];
 
 const DOC_TYPES = [
   { value: 'quotation', label: 'Quotation / Estimate' },
@@ -281,6 +285,10 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const [type, setType] = useState(initialType);
   // A quote is a price for a limited time; the form says how long.
   const [validDays, setValidDays] = useState('7');
+  // Send the firm's PAN card and cancelled cheque with this bill. Customers
+  // ask for them when setting up a new vendor, so it is a tick rather than a
+  // hunt through email — but only on the bills that need it, not every one.
+  const [attachKyc, setAttachKyc] = useState(!!(seed && seed.attachKyc));
   const isCash = type === 'cash';
   const isQuote = type === 'quotation';
 
@@ -490,6 +498,19 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   // so stock won't be deducted for a name the user changed after picking.
   const setItem = (i, k, v) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, [k]: v, ...(k === 'name' ? { itemId: null } : {}) } : it)));
 
+  // Extra fields on ONE line — Transport, Installation, a site or a
+  // reference. They print under the item name, before the HSN column.
+  const setExtras = (i, fn) => setItems((arr) => arr.map((it, idx) => (
+    idx === i ? { ...it, extras: fn(Array.isArray(it.extras) ? it.extras : []) } : it
+  )));
+  const addExtra = (i) => setExtras(i, (xs) => (
+    xs.length >= 8 ? xs : [...xs, { label: EXTRA_PRESETS[xs.length] || '', value: '' }]
+  ));
+  const setExtra = (i, k, field, v) => setExtras(i, (xs) => xs.map((x, idx) => (
+    idx === k ? { ...x, [field]: v } : x
+  )));
+  const removeExtra = (i, k) => setExtras(i, (xs) => xs.filter((_, idx) => idx !== k));
+
   // Typing a name that exactly matches an item in the list links it, the same as
   // picking it from the dropdown would. Without this, someone who types the name
   // out in full (or pastes it) gets a free-text line: no HSN, no GST rate, and no
@@ -698,6 +719,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         type,
         // Only a quotation has a shelf life. The server defaults to 7 days.
         ...(type === 'quotation' && validDays ? { validDays: Number(validDays) } : {}),
+        attachKyc,
         // Raised FROM a quotation: the create route uses this to close the
         // quote in the same request, so there is no window where the bill
         // exists and the quote still looks open.
@@ -753,6 +775,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
           name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate),
           unit: it.unit || null, description: it.description || null,
           taxRate: effectiveRate(it, billRate), itemId: it.itemId || null,
+          // Blank rows are the ones somebody opened and thought better of.
+          extras: (it.extras || []).filter((x) => (x.label || '').trim() || (x.value || '').trim()),
           ...(Number(it.discountValue) > 0
             ? { discountType: it.discountType === 'amount' ? 'amount' : 'percent', discountValue: Number(it.discountValue) }
             : {}),
@@ -1131,10 +1155,47 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                   />
                   <span style={{ width: 18 }} />
                 </div>
+
+                {/* Extra fields for THIS line. Descriptive — they print with
+                    the item but do not change any total; Additional Charges
+                    below is what actually bills for something. */}
+                <div style={{ marginBottom: 8, marginLeft: 22 }}>
+                  {(it.extras || []).map((x, k) => (
+                    <div className="flex gap-2" key={k} style={{ marginBottom: 4, alignItems: 'center' }}>
+                      <input className="input" style={{ width: 150, fontSize: 12 }} placeholder="Field"
+                        data-testid="line-extra-label" list={`xf${i}`}
+                        value={x.label} onChange={(e) => setExtra(i, k, 'label', e.target.value)} />
+                      <datalist id={`xf${i}`}>
+                        {EXTRA_PRESETS.map((p) => <option key={p} value={p} />)}
+                      </datalist>
+                      <input className="input" style={{ flex: 1, fontSize: 12 }} placeholder="Details"
+                        data-testid="line-extra-value"
+                        value={x.value} onChange={(e) => setExtra(i, k, 'value', e.target.value)} />
+                      <button type="button" className="btn btn-ghost btn-xs" style={{ width: 18 }}
+                        onClick={() => removeExtra(i, k)}>×</button>
+                    </div>
+                  ))}
+                  <button type="button" className="btn btn-ghost btn-xs" data-testid="line-extra-add"
+                    style={{ fontSize: 11.5 }} onClick={() => addExtra(i)}>
+                    + Transport / Installation / other field
+                  </button>
+                </div>
                 </div>
               );
             })}
             <button className="btn btn-ghost btn-sm" onClick={() => setItems((a) => [...a, blankItem()])}>+ Add Item</button>
+
+            {/* Offered only when something is actually on file, so it can
+                never be ticked to attach nothing. */}
+            {(defaults?.hasPanCard || defaults?.hasCancelledCheque) && (
+              <label className="flex items-center gap-2" style={{ marginTop: 14, cursor: 'pointer', fontSize: 13 }}>
+                <input type="checkbox" data-testid="attach-kyc" checked={attachKyc}
+                  onChange={(e) => setAttachKyc(e.target.checked)} style={{ width: 16, height: 16 }} />
+                <span>
+                  Attach {[defaults?.hasPanCard && 'PAN card', defaults?.hasCancelledCheque && 'cancelled cheque'].filter(Boolean).join(' and ')} to this bill
+                </span>
+              </label>
+            )}
 
             <div className="flex items-center justify-between" style={{ margin: '14px 0 8px' }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>📎 Attachments / Images</div>
