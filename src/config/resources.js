@@ -85,6 +85,11 @@ export const RESOURCES = {
 
   'purchase-orders': {
     collection: 'purchaseOrders', title: '📦 Purchase Orders', plural: 'Purchase Orders', singular: 'PO',
+    // Supplier BILLS live in this collection too, marked docType:
+    // 'purchase_invoice'. Orders carry no docType at all (they predate
+    // bills), so exclude bills rather than require a marker the older
+    // orders do not have.
+    filter: (p) => p && p.docType !== 'purchase_invoice',
     legacyId: 'page-purchase-orders', writeRoles: ADMIN,
     fields: [
       { key: 'poNo', label: 'PO No.', type: 'text', table: true },
