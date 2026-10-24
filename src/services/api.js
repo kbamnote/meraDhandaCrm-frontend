@@ -399,7 +399,12 @@ export const accountingApi = {
   gstExport:     (params)   => api.get('/accounting/gst/export', { params }).then(r => r.data),
   // The read-only GST registers behind the returns. All three read the
   // documents, not the ledger, so a register and the return agree.
+  gstr1:         (params)   => api.get('/accounting/gstr1', { params }).then(r => r.data),
   gstr2:         (params)   => api.get('/accounting/gstr2', { params }).then(r => r.data),
+  // Mail the spreadsheet the reader is looking at. `content` is base64 of a
+  // workbook the BROWSER built, so the mail matches the filtered view on
+  // screen rather than a second, server-side rendering of the same report.
+  emailReport:   (body)     => api.post('/accounting/report-email', body).then(r => r.data),
   gstr3b:        (params)   => api.get('/accounting/gstr3b', { params }).then(r => r.data),
   gstHsn:        (params)   => api.get('/accounting/gst-hsn', { params }).then(r => r.data),
   creditNote:    (body)     => api.post('/accounting/credit-note', body).then(r => r.data),

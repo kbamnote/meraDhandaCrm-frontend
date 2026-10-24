@@ -85,8 +85,9 @@ import ManageProductionTypesPage from './pages/ManageProductionTypesPage';
 import SalesAdminPage from './pages/SalesAdminPage';
 import QuotationsPage from './pages/accounting/QuotationsPage';
 import ReportsHubPage from './pages/reports/ReportsHubPage';
-import Gstr2Page from './pages/reports/Gstr2Page';
 import Gstr3bPage from './pages/reports/Gstr3bPage';
+import HsnSalesSummaryPage from './pages/reports/HsnSalesSummaryPage';
+import { Gstr1Page, Gstr2Page } from './pages/reports/GstRegisterPage';
 import { GstSalesHsnPage, GstPurchaseHsnPage } from './pages/reports/GstHsnPage';
 import SalesPage from './pages/SalesPage';
 import AuditLogPage from './pages/AuditLogPage';
@@ -164,8 +165,10 @@ const CUSTOM_PAGES = {
   quotations: QuotationsPage,
   // The Reports hub and the registers that hang off it.
   'reports': ReportsHubPage,
+  'reports/gstr1': Gstr1Page,
   'reports/gstr2': Gstr2Page,
   'reports/gstr3b': Gstr3bPage,
+  'reports/hsn-sales-summary': HsnSalesSummaryPage,
   'reports/gst-sales-hsn': GstSalesHsnPage,
   'reports/gst-purchase-hsn': GstPurchaseHsnPage,
   'sales-admin': SalesAdminPage,
@@ -234,7 +237,9 @@ const STUB_ROUTES = [
   ['accounting/reports', '📊 Reports',        'page-accounting-reports', null],
   ['accounting/gst',  '🧮 GST',               'page-accounting-gst',  null],
   ['reports',         '📑 Reports',           'page-reports',         null],
+  ['reports/gstr1',   '🧾 GSTR-1 (Sales)',    'page-reports-gstr1',   null],
   ['reports/gstr2',   '🧾 GSTR-2 (Purchase)', 'page-reports-gstr2',   null],
+  ['reports/hsn-sales-summary', '🧾 HSN Wise Sales Summary', 'page-reports-hsn-sales-summary', null],
   ['reports/gstr3b',  '🧾 GSTR-3B',           'page-reports-gstr3b',  null],
   ['reports/gst-sales-hsn',    '🧾 GST Sales (With HSN)',    'page-reports-gst-sales-hsn',    null],
   ['reports/gst-purchase-hsn', '🧾 GST Purchase (With HSN)', 'page-reports-gst-purchase-hsn', null],

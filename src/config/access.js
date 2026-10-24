@@ -36,7 +36,9 @@ export const PERM_OF = {
   '/reports': ['reports', 'gst'],
   // The GST registers. Their APIs are behind requireModule('gst'), so anything
   // looser here would put links in the nav that answer 403.
+  '/reports/gstr1': 'gst',
   '/reports/gstr2': 'gst',
+  '/reports/hsn-sales-summary': 'gst',
   '/reports/gstr3b': 'gst',
   '/reports/gst-sales-hsn': 'gst',
   '/reports/gst-purchase-hsn': 'gst',

@@ -48,15 +48,18 @@ const GROUPS = [
       { key: 'gstr3b', name: 'GSTR-3b', to: '/reports/gstr3b', tags: ['summary'] },
       { key: 'gst-purchase-hsn', name: 'GST Purchase (With HSN)', to: '/reports/gst-purchase-hsn', tags: ['item', 'invoice'] },
       { key: 'gst-sales-hsn', name: 'GST Sales (With HSN)', to: '/reports/gst-sales-hsn', tags: ['item', 'invoice'] },
-      { key: 'gstr1', name: 'GSTR-1 (Sales)', to: '/accounting/gst', tags: ['invoice', 'summary'] },
-      { key: 'hsn-summary', name: 'HSN Wise Sales Summary', to: '/accounting/gst', tags: ['item', 'summary'] },
+      { key: 'gstr1', name: 'GSTR-1 (Sales)', to: '/reports/gstr1', tags: ['invoice', 'summary'] },
+      { key: 'hsn-summary', name: 'HSN Wise Sales Summary', to: '/reports/hsn-sales-summary', tags: ['item', 'summary'] },
+      // The older GST screen, kept: it carries the net-liability view (output
+      // tax less input credit) that none of the registers above show.
+      { key: 'gst-liability', name: 'GST Liability & Input Credit', to: '/accounting/gst', tags: ['summary'] },
     ],
   },
   {
     key: 'transaction', icon: '📄', title: 'Transaction',
     reports: [
       { key: 'daybook', name: 'Daybook', to: '/accounting/daybook', tags: ['invoice'] },
-      { key: 'cashbank', name: 'Cash and Bank Report (All Payments)', to: '/accounting/cashbank', tags: ['payment'] },
+      { key: 'cashbank', name: 'Cash and Bank Report (All Payments)', to: '/accounting/cash', tags: ['payment'] },
       { key: 'expense-category', name: 'Expense Category Report', to: '/expenses', tags: ['category'] },
       { key: 'expense-txn', name: 'Expense Transaction Report', to: '/expenses', tags: ['invoice'] },
       { key: 'purchase-summary', name: 'Purchase Summary', to: '/accounting/purchases', tags: ['summary'] },

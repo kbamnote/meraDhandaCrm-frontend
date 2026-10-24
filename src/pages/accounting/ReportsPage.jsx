@@ -17,6 +17,7 @@ import { accountingApi, ledgerApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { inr } from '../../components/common/DashboardCharts';
 import BranchSelect from '../../components/common/BranchSelect';
+import ExportButtons from '../../components/common/reportExport';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const money = (n) => inr(round2(n));
@@ -80,75 +81,6 @@ const S = {
   prevFy:   { en: 'Previous FY', hi: 'पिछला वित्तीय वर्ष', hinglish: 'Previous FY' },
 };
 
-// ── Export helpers (CSV / Excel / PDF / Print) ──────────────────────────────
-export function downloadCsv(filename, grid) {
-  const esc = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const csv = [grid.headers, ...grid.rows].map((r) => r.map(esc).join(',')).join('\r\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-
-export function downloadExcel(filename, grid) {
-  import('xlsx').then((XLSX) => {
-    const ws = XLSX.utils.aoa_to_sheet([grid.headers, ...grid.rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Report');
-    XLSX.writeFile(wb, filename);
-  }).catch(() => {});
-}
-
-// Pretty-printed JSON (GSTR-1 export, backup, etc.)
-export function downloadJson(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-
-export async function downloadPdf(title, grid, filename) {
-  try {
-    const [{ default: pdfMake }, { default: pdfFonts }] = await Promise.all([
-      import('pdfmake/build/pdfmake'),
-      import('pdfmake/build/vfs_fonts'),
-    ]);
-    pdfMake.vfs = pdfFonts.pdfMake && pdfFonts.pdfMake.vfs;
-    const body = [grid.headers.map((h) => ({ text: h, bold: true })), ...grid.rows.map((r) => r.map((c) => ({ text: String(c) })))];
-    const doc = {
-      content: [
-        { text: title, style: 'title' },
-        { text: new Date().toLocaleDateString(), style: 'sub' },
-        { layout: 'lightHorizontalLines', table: { headerRows: 1, widths: grid.headers.map((_, i) => (i === 0 ? 'auto' : '*')), body } },
-      ],
-      styles: { title: { fontSize: 16, bold: true, margin: [0, 0, 0, 4] }, sub: { fontSize: 10, margin: [0, 0, 0, 12] } },
-    };
-    pdfMake.createPdf(doc).download(filename);
-  } catch (e) { /* pdfmake failed to load — the CSV/Excel/Print paths still work */ }
-}
-
-export function printReport(title, grid) {
-  const w = window.open('', '_blank', 'width=900,height=650');
-  if (!w) return;
-  const right = (h) => /₹|Amount|Debit|Credit|Balance|Total|In|Out|Net/.test(h);
-  w.document.write(`<html><head><title>${title}</title><style>
-    body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111}
-    h2{font-size:20px;margin:0 0 4px} .sub{color:#666;font-size:12px;margin-bottom:16px}
-    table{width:100%;border-collapse:collapse;font-size:12px}
-    th,td{border:1px solid #ccc;padding:4px 8px;text-align:left}
-    th{background:#f4f4f4;font-weight:700} td.r,th.r{text-align:right}
-  </style></head><body>`);
-  w.document.write(`<h2>${title}</h2><div class="sub">${new Date().toLocaleString()}</div>`);
-  w.document.write('<table><thead><tr>' + grid.headers.map((h) => `<th class="${right(h) ? 'r' : ''}">${h}</th>`).join('') + '</tr></thead><tbody>');
-  grid.rows.forEach((r) => w.document.write('<tr>' + r.map((c) => `<td>${c}</td>`).join('') + '</tr>'));
-  w.document.write('</tbody></table></body></html>');
-  w.document.close();
-  w.focus();
-  w.print();
-}
-
 // The tabs, in order. Named once so the chip row, the ?tab= deep link and the
 // hub's tiles cannot disagree about which reports exist.
 const TABS = ['trialBalance', 'pnl', 'balanceSheet', 'cashFlow', 'ledger', 'outstanding'];
@@ -157,11 +89,9 @@ const TABS = ['trialBalance', 'pnl', 'balanceSheet', 'cashFlow', 'ledger', 'outs
 function ReportView({ title, grid, t, rightCols, onExport }) {
   return (
     <div>
-      <div className="flex" style={{ gap: 6, marginBottom: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-        <button className="btn btn-sm btn-ghost" onClick={() => downloadCsv('report.csv', grid)}>{t('exportCsv')}</button>
-        <button className="btn btn-sm btn-ghost" onClick={() => downloadExcel('report.xlsx', grid)}>{t('exportExcel')}</button>
-        <button className="btn btn-sm btn-ghost" onClick={() => downloadPdf(title, grid, 'report.pdf')}>{t('exportPdf')}</button>
-        <button className="btn btn-sm btn-ghost" onClick={() => printReport(title, grid)}>{t('print')}</button>
+      <div className="flex" style={{ marginBottom: 10, justifyContent: 'flex-end' }}>
+        <ExportButtons title={title} grid={grid} fileBase={title}
+          labels={{ csv: t('exportCsv'), excel: t('exportExcel'), pdf: t('exportPdf'), print: t('print') }} />
       </div>
       {onExport ? onExport() : null}
       <div className="card" style={{ padding: 0, overflow: 'auto' }}>

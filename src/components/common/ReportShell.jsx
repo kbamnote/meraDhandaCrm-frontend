@@ -1,6 +1,6 @@
 /**
  * The frame every report screen shares: back arrow, title, a Favourite star,
- * the period picker, and the three export buttons.
+ * the period picker, and the export row.
  *
  * It exists so a new report is a query and a table, not another copy of this
  * header — and so every report exports the same way. The page hands it a
@@ -13,7 +13,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { downloadCsv, downloadExcel, downloadPdf, printReport } from '../../pages/accounting/ReportsPage';
+import ExportButtons from './reportExport';
 
 const FAV_KEY = 'md.reportFavourites';
 
@@ -97,8 +97,9 @@ export default function ReportShell({ reportKey, title, period, grid, busy, chil
   const navigate = useNavigate();
   const [favs, setFavs] = useState(loadFavourites);
   const isFav = favs.has(reportKey);
-  const file = (ext) => `${reportKey}-${(period && period.range.from) || ''}-to-${(period && period.range.to) || ''}.${ext}`;
-  const empty = !grid || !grid.rows || grid.rows.length === 0;
+  // The period is in the filename, so a folder of downloads stays sortable and
+  // two runs of the same report do not overwrite each other.
+  const span = period ? `-${period.range.from}-to-${period.range.to}` : '';
 
   useEffect(() => { document.title = `${title} · Reports`; }, [title]);
 
@@ -120,18 +121,7 @@ export default function ReportShell({ reportKey, title, period, grid, busy, chil
           <PeriodPicker period={period} />
           {extraControls}
         </div>
-        {/* Disabled on an empty report: a spreadsheet with only headers in it
-            looks like the data was lost rather than absent. */}
-        <div className="flex" style={{ gap: 6, flexWrap: 'wrap' }}>
-          <button className="btn btn-ghost btn-sm" disabled={empty}
-            onClick={() => downloadCsv(file('csv'), grid)}>CSV</button>
-          <button className="btn btn-ghost btn-sm" data-testid="report-excel" disabled={empty}
-            onClick={() => downloadExcel(file('xlsx'), grid)}>Download Excel</button>
-          <button className="btn btn-ghost btn-sm" disabled={empty}
-            onClick={() => downloadPdf(title, grid, file('pdf'))}>PDF</button>
-          <button className="btn btn-ghost btn-sm" data-testid="report-print" disabled={empty}
-            onClick={() => printReport(title, grid)}>Print</button>
-        </div>
+        <ExportButtons title={title} grid={grid} fileBase={`${reportKey}${span}`} />
       </div>
 
       {busy && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Loading…</div>}

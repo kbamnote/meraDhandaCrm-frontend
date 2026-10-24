@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { accountingApi, ledgerApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
-import { downloadCsv, downloadExcel, downloadPdf, printReport, downloadJson } from './ReportsPage';
+import ExportButtons, { downloadJson } from '../../components/common/reportExport';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const money = (n) => inr(round2(n));
@@ -83,13 +83,10 @@ export default function GstPage() {
       <div className="flex items-center justify-between mb-4" style={{ flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
         {grid && (
-          <div className="flex" style={{ gap: 6 }}>
-            <button className="btn btn-sm btn-ghost" onClick={() => downloadCsv('gstr1.csv', grid)}>{t('exportCsv')}</button>
-            <button className="btn btn-sm btn-ghost" onClick={() => downloadExcel('gstr1.xlsx', grid)}>{t('exportExcel')}</button>
-            <button className="btn btn-sm btn-ghost" onClick={() => downloadPdf(t('gstr1'), grid, 'gstr1.pdf')}>{t('exportPdf')}</button>
-            <button className="btn btn-sm btn-ghost" onClick={() => printReport(t('gstr1'), grid)}>{t('print')}</button>
+          <ExportButtons title={t('gstr1')} grid={grid} fileBase="gstr1"
+            labels={{ csv: t('exportCsv'), excel: t('exportExcel'), pdf: t('exportPdf'), print: t('print') }}>
             <button className="btn btn-sm btn-primary" onClick={downloadGstr1Json} disabled={exporting}>{exporting ? t('busyExport') : t('exportGstr1')}</button>
-          </div>
+          </ExportButtons>
         )}
       </div>
 

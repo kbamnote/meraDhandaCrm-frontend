@@ -26,7 +26,7 @@ import CreatePurchaseFlow from '../../components/common/CreatePurchaseFlow';
 import BankAccountSelect from '../../components/common/BankAccountSelect';
 // Reuse the report exporters so a party statement downloads in the same shapes
 // as every other report, instead of a second CSV/PDF implementation.
-import { downloadCsv, downloadExcel, downloadPdf, printReport } from './ReportsPage';
+import ExportButtons from '../../components/common/reportExport';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -916,11 +916,9 @@ function LedgerTab({ party, t, feed, openingBalance }) {
           <option value="thisMonth">{t('thisMonth')}</option>
           <option value="thisFy">{t('thisFy')}</option>
         </select>
-        <div className="flex" style={{ gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-          <button className="btn btn-xs btn-ghost" onClick={() => downloadCsv(`${fileBase}.csv`, grid)}>CSV</button>
-          <button className="btn btn-xs btn-ghost" onClick={() => downloadExcel(`${fileBase}.xlsx`, grid)}>Excel</button>
-          <button className="btn btn-xs btn-ghost" onClick={() => downloadPdf(docTitle, grid, `${fileBase}.pdf`)}>PDF</button>
-          <button className="btn btn-xs btn-ghost" onClick={() => printReport(docTitle, grid)}>🖨 {t('print')}</button>
+        <div style={{ marginLeft: 'auto' }}>
+          <ExportButtons title={docTitle} grid={grid} fileBase={fileBase} size="xs"
+            labels={{ excel: 'Excel', print: `🖨 ${t('print')}` }} />
         </div>
       </div>
 
@@ -1039,11 +1037,9 @@ function ItemsTab({ party, t }) {
           <option value="thisFy">{t('thisFy')}</option>
           <option value="all">{t('allTime')}</option>
         </select>
-        <div className="flex" style={{ gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-          <button className="btn btn-xs btn-ghost" onClick={() => downloadCsv(`${fileBase}.csv`, grid)}>CSV</button>
-          <button className="btn btn-xs btn-ghost" onClick={() => downloadExcel(`${fileBase}.xlsx`, grid)}>Excel</button>
-          <button className="btn btn-xs btn-ghost" onClick={() => downloadPdf(docTitle, grid, `${fileBase}.pdf`)}>PDF</button>
-          <button className="btn btn-xs btn-ghost" onClick={() => printReport(docTitle, grid)}>🖨 {t('print')}</button>
+        <div style={{ marginLeft: 'auto' }}>
+          <ExportButtons title={docTitle} grid={grid} fileBase={fileBase} size="xs"
+            labels={{ excel: 'Excel', print: `🖨 ${t('print')}` }} />
         </div>
       </div>
 
