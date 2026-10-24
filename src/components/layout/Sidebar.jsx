@@ -167,7 +167,11 @@ const SECTIONS = [
       { to: '/expenses',         label: '🧾 Expenses',         legacy: 'page-expenses' },
       { to: '/purchase-orders',  label: '📦 Purchase Orders',  legacy: 'page-purchase-orders' },
       { to: '/accounting/purchases', label: '📦 Purchase Invoices',     legacy: 'page-accounting-purchases' },
-      { to: '/accounting/reports', label: '📊 Reports',        legacy: 'page-accounting-reports' },
+      // The one Reports entry. Everything — the GST registers, the six ledger
+      // reports that used to sit at /accounting/reports, and the rest — is
+      // reached from this directory, so there is a single place to look and no
+      // second list to keep in step with it.
+      { to: '/reports',          label: '📊 Reports',          legacy: 'page-reports' },
       { to: '/accounting/gst',   label: '🧮 GST',              legacy: 'page-accounting-gst' },
       { to: '/accounting/credit-notes', label: '📝 Credit Notes', legacy: 'page-accounting-credit-notes' },
       { to: '/accounting/debit-notes',  label: '📝 Debit Notes',  legacy: 'page-accounting-debit-notes' },

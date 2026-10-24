@@ -84,6 +84,10 @@ import ProdStepsPage from './pages/ProdStepsPage';
 import ManageProductionTypesPage from './pages/ManageProductionTypesPage';
 import SalesAdminPage from './pages/SalesAdminPage';
 import QuotationsPage from './pages/accounting/QuotationsPage';
+import ReportsHubPage from './pages/reports/ReportsHubPage';
+import Gstr2Page from './pages/reports/Gstr2Page';
+import Gstr3bPage from './pages/reports/Gstr3bPage';
+import { GstSalesHsnPage, GstPurchaseHsnPage } from './pages/reports/GstHsnPage';
 import SalesPage from './pages/SalesPage';
 import AuditLogPage from './pages/AuditLogPage';
 import ApiKeysPage from './pages/ApiKeysPage';
@@ -158,6 +162,12 @@ const CUSTOM_PAGES = {
   'prod-steps': ProdStepsPage,
   'production-types': ManageProductionTypesPage,
   quotations: QuotationsPage,
+  // The Reports hub and the registers that hang off it.
+  'reports': ReportsHubPage,
+  'reports/gstr2': Gstr2Page,
+  'reports/gstr3b': Gstr3bPage,
+  'reports/gst-sales-hsn': GstSalesHsnPage,
+  'reports/gst-purchase-hsn': GstPurchaseHsnPage,
   'sales-admin': SalesAdminPage,
   'sales-panel': SalesPage,
   'audit-log': AuditLogPage,
@@ -223,6 +233,11 @@ const STUB_ROUTES = [
   ['accounting/parties', '🤝 Parties',        'page-accounting-parties', 'mpw/clients'],
   ['accounting/reports', '📊 Reports',        'page-accounting-reports', null],
   ['accounting/gst',  '🧮 GST',               'page-accounting-gst',  null],
+  ['reports',         '📑 Reports',           'page-reports',         null],
+  ['reports/gstr2',   '🧾 GSTR-2 (Purchase)', 'page-reports-gstr2',   null],
+  ['reports/gstr3b',  '🧾 GSTR-3B',           'page-reports-gstr3b',  null],
+  ['reports/gst-sales-hsn',    '🧾 GST Sales (With HSN)',    'page-reports-gst-sales-hsn',    null],
+  ['reports/gst-purchase-hsn', '🧾 GST Purchase (With HSN)', 'page-reports-gst-purchase-hsn', null],
   // Phase 2 — real pages backed by CUSTOM_PAGES components.
   ['accounting/inventory', '📦 Inventory',    'page-accounting-inventory', null],
   ['accounting/purchases', '📦 Purchases',   'page-accounting-purchases', null],

@@ -31,6 +31,15 @@ export const PERM_OF = {
   '/accounting/sales': 'invoices', '/accounting/purchases': 'purchases',
   '/purchase-view': 'purchases',
   '/accounting/parties': 'parties', '/accounting/reports': 'reports', '/accounting/gst': 'gst',
+  // The Reports directory is a list of links, not data, so either grant opens
+  // it — and the list itself hides whatever the reader cannot reach.
+  '/reports': ['reports', 'gst'],
+  // The GST registers. Their APIs are behind requireModule('gst'), so anything
+  // looser here would put links in the nav that answer 403.
+  '/reports/gstr2': 'gst',
+  '/reports/gstr3b': 'gst',
+  '/reports/gst-sales-hsn': 'gst',
+  '/reports/gst-purchase-hsn': 'gst',
   '/accounting/cash': 'cashbank', '/accounting/recon': 'cashbank', '/accounting/inventory': 'inventory', '/accounting/entries': 'entries',
   '/accounting/tds': 'tds',
   // Routes with NO entry here are treated as ungated and shown to every role

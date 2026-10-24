@@ -148,11 +148,14 @@ export default function AccountingDashboardPage() {
         <Kpi label={t('sales')} value={inr(sales)} icon="📈" color="var(--green)" onClick={() => nav('/accounting/sales')} />
         <Kpi label={t('purchases')} value={inr(purchases)} icon="🛒" color="var(--blue)" onClick={() => nav('/purchase-orders')} />
         <Kpi label={t('expenses')} value={inr(expensesSum)} icon="🧾" color="var(--red)" onClick={() => nav('/expenses')} />
-        <Kpi label={t('profit')} value={inr(profit)} icon="💹" color={profit >= 0 ? 'var(--green)' : 'var(--red)'} onClick={() => nav('/accounting/reports')} />
+        {/* Each of these three drills into the report that explains the number,
+            not into a tab chooser: profit is the P&L, cash and bank are the
+            Trial Balance rows they come from. */}
+        <Kpi label={t('profit')} value={inr(profit)} icon="💹" color={profit >= 0 ? 'var(--green)' : 'var(--red)'} onClick={() => nav('/accounting/reports?tab=pnl')} />
         <Kpi label={t('receivables')} value={inr(outstanding)} icon="🤝" color="var(--amber)" onClick={() => nav('/accounting/parties')} />
         <Kpi label={t('payables')} value={inr(payables)} icon="🏢" color="var(--amber)" onClick={() => nav('/accounting/parties')} />
-        <Kpi label={t('cash')} value={inr(cash)} icon="💵" color="var(--green)" onClick={() => nav('/accounting/reports')} />
-        <Kpi label={t('bank')} value={inr(bank)} icon="🏦" color="var(--green)" onClick={() => nav('/accounting/reports')} />
+        <Kpi label={t('cash')} value={inr(cash)} icon="💵" color="var(--green)" onClick={() => nav('/accounting/reports?tab=trialBalance')} />
+        <Kpi label={t('bank')} value={inr(bank)} icon="🏦" color="var(--green)" onClick={() => nav('/accounting/reports?tab=trialBalance')} />
         <Kpi label={t('stockValue')} value={inr(valuation.total)} icon="📦" color="var(--blue)" onClick={() => nav('/stock')} />
         <Kpi label={t('gstPayable')} value={inr(gstPayable)} icon="🧮" color="var(--red)" onClick={() => nav('/accounting/gst')} />
         <Kpi label={t('gstInput')} value={inr(gstInput)} icon="🧮" color="var(--green)" onClick={() => nav('/accounting/gst')} />

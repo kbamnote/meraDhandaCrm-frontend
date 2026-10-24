@@ -1,10 +1,17 @@
 /**
- * Reports — /accounting/reports. Trial Balance, P&L, Balance Sheet, Cash Flow,
- * Ledger (journal) and Outstanding — every one reading the double-entry ledger
- * projection, so they agree by construction. Each report exports to CSV, Excel
+ * The six ledger reports — Trial Balance, P&L, Balance Sheet, Cash Flow,
+ * Ledger (journal) and Outstanding. Every one reads the double-entry ledger
+ * projection, so they agree by construction. Each exports to CSV, Excel
  * (xlsx), PDF (pdfmake) or Print.
+ *
+ * This is no longer its own sidebar entry: the Reports hub at /reports is the
+ * one way in, and each of its tiles deep-links to a tab here with ?tab=. The
+ * page keeps its own route because the hub is a directory, not a renderer —
+ * and because the export helpers below are shared by every other report
+ * screen in the app.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ref, onValue, db } from '../../services/realtime';
 import { accountingApi, ledgerApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
@@ -142,6 +149,10 @@ export function printReport(title, grid) {
   w.print();
 }
 
+// The tabs, in order. Named once so the chip row, the ?tab= deep link and the
+// hub's tiles cannot disagree about which reports exist.
+const TABS = ['trialBalance', 'pnl', 'balanceSheet', 'cashFlow', 'ledger', 'outstanding'];
+
 // ── Generic renderer ─────────────────────────────────────────────────────────
 function ReportView({ title, grid, t, rightCols, onExport }) {
   return (
@@ -171,7 +182,10 @@ function ReportView({ title, grid, t, rightCols, onExport }) {
 
 export default function ReportsPage() {
   const t = useT(S);
-  const [tab, setTab] = useState('trialBalance');
+  // Which report the hub asked for. Anything unrecognised falls back to the
+  // Trial Balance rather than rendering a blank tab.
+  const [params, setParams] = useSearchParams();
+  const [tab, setTab] = useState(() => (TABS.includes(params.get('tab')) ? params.get('tab') : 'trialBalance'));
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [preset, setPreset] = useState('custom');
@@ -360,13 +374,18 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4" style={{ flexWrap: 'wrap', gap: 8 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
+      {/* Reached from the hub now, so it needs the way back the hub's own
+          report screens have. */}
+      <div className="flex items-center mb-4" style={{ flexWrap: 'wrap', gap: 10 }}>
+        <Link to="/reports" className="btn btn-ghost btn-sm" title="Back to Reports">←</Link>
+        <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>{t(tab)}</h2>
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        {['trialBalance', 'pnl', 'balanceSheet', 'cashFlow', 'ledger', 'outstanding'].map((k) => (
-          <button key={k} className="btn btn-xs" onClick={() => { setTab(k); run(k); }}
+        {TABS.map((k) => (
+          // Writing the tab into the URL keeps a shared or bookmarked link
+          // pointing at the report the sender was looking at.
+          <button key={k} className="btn btn-xs" onClick={() => { setTab(k); setParams({ tab: k }, { replace: true }); run(k); }}
             style={{ background: tab === k ? 'var(--blue, #C05621)' : 'var(--surface2)', color: tab === k ? '#fff' : 'var(--text2)', border: 'none', borderRadius: 14 }}>
             {t(k)}
           </button>

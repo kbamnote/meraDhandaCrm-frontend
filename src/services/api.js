@@ -397,6 +397,11 @@ export const accountingApi = {
   gstReport:     (params)   => api.get('/accounting/gst-report', { params }).then(r => r.data),
   // GSTR-1 offline-tool JSON (GSTN common schema) for the period — file-ready.
   gstExport:     (params)   => api.get('/accounting/gst/export', { params }).then(r => r.data),
+  // The read-only GST registers behind the returns. All three read the
+  // documents, not the ledger, so a register and the return agree.
+  gstr2:         (params)   => api.get('/accounting/gstr2', { params }).then(r => r.data),
+  gstr3b:        (params)   => api.get('/accounting/gstr3b', { params }).then(r => r.data),
+  gstHsn:        (params)   => api.get('/accounting/gst-hsn', { params }).then(r => r.data),
   creditNote:    (body)     => api.post('/accounting/credit-note', body).then(r => r.data),
   creditNotes:   ()         => api.get('/accounting/credit-notes').then(r => r.data),
   debitNote:     (body)     => api.post('/accounting/debit-note', body).then(r => r.data),
