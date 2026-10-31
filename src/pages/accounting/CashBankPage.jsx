@@ -33,10 +33,23 @@ const RANGES = [
   { key: '90', label: 'Last 90 Days' },
   { key: 'fy', label: 'This Financial Year' },
   { key: 'all', label: 'All Time' },
+  { key: 'custom', label: 'Custom Range' },
 ];
 
-function rangeDates(key) {
+/**
+ * @param custom  { from, to } — only read when key is 'custom'.
+ *
+ * A half-filled custom range returns the half that is filled: the statement
+ * endpoint treats a missing bound as open-ended, so typing the From date gives
+ * you everything since then while you are still reaching for the To date,
+ * rather than an empty screen.
+ */
+function rangeDates(key, custom) {
   if (key === 'all') return {};
+  if (key === 'custom') {
+    const { from, to } = custom || {};
+    return { ...(from ? { from } : {}), ...(to ? { to } : {}) };
+  }
   const to = todayStr();
   if (key === 'fy') {
     const d = new Date();
@@ -102,6 +115,9 @@ export default function CashBankPage() {
   const [totalBalance, setTotalBalance] = useState(0);
   const [selectedId, setSelectedId] = useState('cash');
   const [range, setRange] = useState('30');
+  // Seeded with this month so picking "Custom Range" shows a sensible window
+  // immediately instead of two empty boxes and the whole ledger.
+  const [custom, setCustom] = useState(() => ({ from: todayStr().slice(0, 8) + '01', to: todayStr() }));
   const [statement, setStatement] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -137,11 +153,13 @@ export default function CashBankPage() {
     if (!selectedId) return;
     setStatement(null);
     try {
-      setStatement(await accountingApi.bankTransactions(selectedId, rangeDates(range)));
+      setStatement(await accountingApi.bankTransactions(selectedId, rangeDates(range, custom)));
     } catch (e) {
       setStatement({ rows: [], error: describeError(e, 'Could not load transactions') });
     }
-  }, [selectedId, range]);
+    // The two custom dates are read individually: keying on the object itself
+    // would refetch on every render, since a new one is made each time.
+  }, [selectedId, range, custom.from, custom.to]);
 
   useEffect(() => { loadStatement(); }, [loadStatement]);
 
@@ -296,14 +314,28 @@ export default function CashBankPage() {
           )}
 
           <div className="flex items-center justify-between" style={{ padding: '10px 16px', gap: 8, flexWrap: 'wrap' }}>
-            <select
-              className="input"
-              style={{ width: 'auto', minWidth: 190 }}
-              value={range}
-              onChange={(e) => setRange(e.target.value)}
-            >
-              {RANGES.map((r) => <option key={r.key} value={r.key}>📅 {r.label}</option>)}
-            </select>
+            <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <select
+                className="input"
+                style={{ width: 'auto', minWidth: 190 }}
+                value={range}
+                data-testid="statement-range"
+                onChange={(e) => setRange(e.target.value)}
+              >
+                {RANGES.map((r) => <option key={r.key} value={r.key}>📅 {r.label}</option>)}
+              </select>
+              {range === 'custom' && (
+                <>
+                  <input className="input" type="date" style={{ width: 150 }} value={custom.from}
+                    data-testid="statement-from" max={custom.to || undefined}
+                    onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
+                  <span style={{ color: 'var(--text3)' }}>→</span>
+                  <input className="input" type="date" style={{ width: 150 }} value={custom.to}
+                    data-testid="statement-to" min={custom.from || undefined}
+                    onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+                </>
+              )}
+            </div>
             <div className="flex items-center" style={{ gap: 10, flexWrap: 'wrap' }}>
               <button
                 type="button"
@@ -815,6 +847,8 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
   const [err, setErr] = useState('');
   const [toId, setToId] = useState('');
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState('view');   // view | edit
+  const [form, setForm] = useState(null);
 
   useEffect(() => {
     let dead = false;
@@ -823,6 +857,50 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
       .catch((e) => { if (!dead) setErr(describeError(e, 'Could not open this transaction')); });
     return () => { dead = true; };
   }, [entryId]);
+
+  // What kind of row this is, as far as editing goes. The server decides
+  // `editable`; this is only which form to show.
+  const isTransfer = entry && entry.ref && entry.ref.collection === 'bankTransfers';
+
+  const startEdit = () => {
+    const src = entry.source || {};
+    setForm(isTransfer
+      ? { amount: src.amount ?? '', date: src.date || entry.date, fromId: src.fromId || '', toId: src.toId || '', memo: src.memo || '' }
+      : { amount: src.amount ?? '', date: src.date || entry.date, accountId: src.accountId || '', direction: src.direction || 'add', reason: src.reason || '' });
+    setMode('edit');
+  };
+
+  const save = async () => {
+    if (!(Number(form.amount) > 0)) { showToast('Amount must be greater than 0', 'error'); return; }
+    setBusy(true);
+    try {
+      await accountingApi.bankEntryUpdate(entryId, form);
+      showToast('Saved', 'success');
+      onMoved();                       // closes and refreshes, same as a move
+    } catch (e) {
+      showToast(describeError(e, 'Could not save'), 'error');
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    const what = isTransfer ? 'transfer' : 'entry';
+    if (!window.confirm(`Delete this ${what}?\n\nIt is removed from the books and the balances recalculate. This cannot be undone.`)) return;
+    setBusy(true);
+    try {
+      await accountingApi.bankEntryDelete(entryId);
+      showToast('Deleted', 'success');
+      onMoved();
+    } catch (e) {
+      showToast(describeError(e, 'Could not delete'), 'error');
+      setBusy(false);
+    }
+  };
+
+  // Where a row that belongs to another screen is actually edited. The server
+  // resolves the link, because only it knows that a payment's screen is keyed
+  // by the invoice it settled rather than by the payment itself.
+  const sourceHref = entry && entry.sourceScreen && entry.sourceScreen.href;
 
   const destinations = accounts.filter(
     (a) => a.type !== 'unlinked' && a.key !== (entry && entry.fundingAccount && entry.fundingAccount.key),
@@ -848,12 +926,30 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
 
   return (
     <Modal
-      title="Transaction"
+      title={mode === 'edit' ? (isTransfer ? 'Edit Transfer' : 'Edit Entry') : 'Transaction'}
       onClose={onClose}
       width={520}
-      footer={(
+      footer={mode === 'edit' ? (
         <>
+          <button className="btn btn-sm btn-ghost" onClick={() => setMode('view')} disabled={busy}>Cancel</button>
+          <button className="btn btn-sm btn-primary" onClick={save} disabled={busy} data-testid="entry-save">
+            {busy ? '…' : 'Save'}
+          </button>
+        </>
+      ) : (
+        <>
+          {/* Delete sits apart from the others: it is the one button here that
+              cannot be taken back. */}
+          {entry && entry.editable && (
+            <button className="btn btn-sm btn-ghost" style={{ color: 'var(--red)', marginRight: 'auto' }}
+              onClick={remove} disabled={busy} data-testid="entry-delete">Delete</button>
+          )}
           <button className="btn btn-sm btn-ghost" onClick={onClose} disabled={busy}>Close</button>
+          {entry && entry.editable && (
+            <button className="btn btn-sm btn-primary" onClick={startEdit} disabled={busy} data-testid="entry-edit">
+              Edit
+            </button>
+          )}
           {entry && entry.reassignable && (
             <button className="btn btn-sm btn-primary" onClick={move} disabled={busy || !toId}>
               {busy ? '…' : 'Move'}
@@ -864,7 +960,79 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
     >
       {err && <div style={{ color: 'var(--red)', fontSize: 13 }}>{err}</div>}
       {!entry && !err && <div style={{ color: 'var(--text3)', fontSize: 13 }}>Loading…</div>}
-      {entry && (
+
+      {entry && mode === 'edit' && (
+        <>
+          <div className="form-group">
+            <label>Date</label>
+            <input className="input" type="date" value={form.date || ''}
+              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label>Amount</label>
+            <input className="input" type="number" min="0" step="0.01" value={form.amount}
+              data-testid="entry-amount"
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+          </div>
+
+          {isTransfer ? (
+            <>
+              <div className="form-group">
+                <label>From</label>
+                <select className="input" value={form.fromId}
+                  onChange={(e) => setForm((f) => ({ ...f, fromId: e.target.value }))}>
+                  {accounts.filter((a) => a.type !== 'unlinked')
+                    .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>To</label>
+                <select className="input" value={form.toId}
+                  onChange={(e) => setForm((f) => ({ ...f, toId: e.target.value }))}>
+                  {accounts.filter((a) => a.type !== 'unlinked')
+                    .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Note</label>
+                <input className="input" value={form.memo || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, memo: e.target.value }))} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="form-group">
+                <label>Account</label>
+                <select className="input" value={form.accountId}
+                  onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))}>
+                  {accounts.filter((a) => a.type !== 'unlinked')
+                    .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Direction</label>
+                <select className="input" value={form.direction} data-testid="entry-direction"
+                  onChange={(e) => setForm((f) => ({ ...f, direction: e.target.value }))}>
+                  <option value="add">Money Added</option>
+                  <option value="reduce">Money Reduced</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Reason</label>
+                <input className="input" value={form.reason || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} />
+              </div>
+            </>
+          )}
+
+          <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>
+            Saving rewrites this entry in the books and recalculates the balances
+            from it. The Balance Sheet and the Day Book follow automatically.
+          </div>
+        </>
+      )}
+
+      {entry && mode === 'view' && (
         <>
           <Detail label="Date" value={entry.date} />
           <Detail label="Type" value={typeLabel(entry.type)} />
@@ -906,6 +1074,20 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
           ) : (
             <div style={{ marginTop: 14, padding: '9px 12px', borderRadius: 8, background: 'rgba(245,158,11,.12)', color: 'var(--amber, #B45309)', fontSize: 12.5 }}>
               {entry.reassignBlockedReason || 'This transaction cannot be moved.'}
+            </div>
+          )}
+
+          {/* A row the books derived from somewhere else. Editing it here would
+              look right until that document re-posted, and deleting it would
+              leave an invoice still claiming it was paid — so this points at
+              the screen that owns it instead of offering buttons that lie. */}
+          {!entry.editable && entry.sourceScreen && (
+            <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--text3)' }}>
+              This row comes from a <b>{entry.sourceScreen.label}</b>. Edit or delete
+              it there and this statement follows.
+              {sourceHref && (
+                <> <a href={sourceHref} style={{ fontWeight: 600 }}>Open the {entry.sourceScreen.label} →</a></>
+              )}
             </div>
           )}
         </>

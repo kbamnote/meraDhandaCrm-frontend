@@ -364,6 +364,11 @@ export const accountingApi = {
   bankTransfer:       (body)      => api.post('/accounting/bank-accounts/transfer', body).then(r => r.data),
   bankAdjust:         (body)      => api.post('/accounting/bank-accounts/adjust', body).then(r => r.data),
   bankEntry:          (entryId)   => api.get(`/accounting/bank-accounts/entry/${entryId}`).then(r => r.data),
+  // Correct or remove a statement row. Only rows Cash & Bank itself created
+  // (a transfer or an Add/Reduce Money) — anything derived from an invoice or
+  // an expense is edited on the screen that owns it, and the server says so.
+  bankEntryUpdate:    (entryId, body) => api.put(`/accounting/bank-accounts/entry/${entryId}`, body).then(r => r.data),
+  bankEntryDelete:    (entryId)   => api.delete(`/accounting/bank-accounts/entry/${entryId}`).then(r => r.data),
   // Correct WHICH account past transactions went through. Not a transfer: no
   // money moves and no entry is created — it rewrites the existing one AND the
   // document behind it, so a later re-post reproduces the correction.
