@@ -20,6 +20,7 @@ import { useT } from '../../i18n/LanguageContext';
 import { showToast } from '../../components/common/toast';
 import { inr } from '../../components/common/DashboardCharts';
 import { invalidateFundingAccounts } from '../../components/common/BankAccountSelect';
+import { isCashMode, modeOptions } from '../../config/payModes';
 
 const round2 = (n) => Math.round(((Number(n) || 0) * 100) + 1e-8) / 100;
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -863,6 +864,11 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
   const kind = entry && entry.ref ? entry.ref.collection : null;
   const isTransfer = kind === 'bankTransfers';
   const isPayment = kind === 'payments';
+  // Is the edit form currently pointing at the cash drawer? Decides whether
+  // Mode is a free choice or forced to Cash.
+  const cashSelected = !!(form && accounts.find(
+    (a) => String(a.id) === String(form.accountId) && a.type === 'cash',
+  ));
 
   const startEdit = () => {
     const src = entry.source || {};
@@ -998,15 +1004,43 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
               <div className="form-group">
                 <label>Paid through</label>
                 <select className="input" value={form.accountId} data-testid="entry-account"
-                  onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))}>
+                  onChange={(e) => {
+                    const acc = accounts.find((a) => String(a.id) === String(e.target.value));
+                    // Moving a receipt into the drawer makes its mode Cash, and
+                    // out of the drawer stops it claiming to be. The server
+                    // resolves a cash account by MODE when there is no bank
+                    // account behind it, so a mismatch here would file the money
+                    // under Unlinked Transactions instead of the drawer.
+                    setForm((f) => ({
+                      ...f,
+                      accountId: e.target.value,
+                      mode: acc && acc.type === 'cash'
+                        ? 'Cash'
+                        : (isCashMode(f.mode) ? 'Bank Transfer' : f.mode),
+                    }));
+                  }}>
                   {accounts.filter((a) => a.type !== 'unlinked')
                     .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label>Mode</label>
-                <input className="input" value={form.mode || ''} placeholder="Cash, Bank Transfer, UPI…"
-                  onChange={(e) => setForm((f) => ({ ...f, mode: e.target.value }))} />
+                {/* Locked on the drawer, because there the mode is not a label:
+                    with no bank account behind it, the mode is what tells the
+                    server this is cash rather than an unattributed bank
+                    receipt. On a bank account it is descriptive — the account
+                    decides — so it stays free to pick. */}
+                <select className="input" value={form.mode || ''} data-testid="entry-mode"
+                  disabled={cashSelected}
+                  onChange={(e) => setForm((f) => ({ ...f, mode: e.target.value }))}>
+                  {!form.mode && <option value="">— choose —</option>}
+                  {modeOptions(form.mode).map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                {cashSelected && (
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
+                    Money in the drawer is always Cash. Pick a bank account above to change this.
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label>Reference</label>

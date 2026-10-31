@@ -22,6 +22,7 @@ import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
 import CreatePurchaseFlow from '../../components/common/CreatePurchaseFlow';
 import PurchaseBulkUpload from '../../components/common/PurchaseBulkUpload';
 import BankAccountSelect from '../../components/common/BankAccountSelect';
+import { PAY_MODES } from '../../config/payModes';
 
 const round2 = (n) => Math.round(((Number(n) || 0) * 100) + 1e-8) / 100;
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -56,8 +57,6 @@ const S = {
   },
   failed:    { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua' },
 };
-
-const PAY_MODES = ['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Card'];
 
 // Where a purchase stands. A bill's payment progress lives in `paidAmount`; its
 // `status` is the ORDER lifecycle (draft → sent → received), so an unreceived

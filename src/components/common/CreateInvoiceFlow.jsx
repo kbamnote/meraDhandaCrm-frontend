@@ -23,6 +23,7 @@ import BranchSelect from './BranchSelect';
 import BankAccountSelect from './BankAccountSelect';
 import NewItemDialog from './NewItemDialog';
 import { ref, onValue, db } from '../../services/realtime';
+import { PAY_MODES } from '../../config/payModes';
 
 // Null-safe .trim() — building the request body must never throw on a field that
 // happens to be absent, or the failure surfaces as an unexplained "Failed" with
@@ -182,7 +183,6 @@ export function splitInvoiceNo(invoice) {
   if (cut > 0) return { prefix: no.slice(0, cut), number: no.slice(cut + 1) };
   return { prefix: '', number: no };
 }
-const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer'];
 
 // Save HSN codes typed on the bill onto the catalog items that lack them.
 // Best-effort and after the invoice is saved: the bill is the thing that

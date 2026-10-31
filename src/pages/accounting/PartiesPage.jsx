@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ref, onValue, db } from '../../services/realtime';
-import { accountingApi, describeError } from '../../services/api';
+import { accountingApi, ordersApi, describeError } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from '../../components/common/toast';
 import { inr } from '../../components/common/DashboardCharts';
@@ -27,6 +27,7 @@ import BankAccountSelect from '../../components/common/BankAccountSelect';
 // Reuse the report exporters so a party statement downloads in the same shapes
 // as every other report, instead of a second CSV/PDF implementation.
 import ExportButtons from '../../components/common/reportExport';
+import { PAY_MODES } from '../../config/payModes';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -239,6 +240,7 @@ export default function PartiesPage() {
   const [sel, setSel] = useState(null);        // { type, id, name }
   const [partyForm, setPartyForm] = useState(null);
   const [showImport, setShowImport] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
   useEffect(() => {
     const a = onValue(ref(db, 'mpw/clients'), (s) => setClients(s.val() || {}));
@@ -265,16 +267,20 @@ export default function PartiesPage() {
   }, [pos]);
 
   const customerRows = useMemo(() => Object.entries(clients)
-    .map(([id, c]) => ({ id, type: 'client', name: partyName(c), phone: partyPhone(c), gstNo: c.gstNo || c.gstin || '', balance: clientOut[id] || 0 }))
+    .map(([id, c]) => ({ id, type: 'client', name: partyName(c), phone: partyPhone(c), gstNo: c.gstNo || c.gstin || '', balance: clientOut[id] || 0, archived: !!c.archived }))
     .filter((r) => r.name !== '—')
     .sort((a, b) => a.name.localeCompare(b.name)), [clients, clientOut]);
 
   const supplierRows = useMemo(() => Object.entries(vendors)
-    .map(([id, v]) => ({ id, type: 'vendor', name: partyName(v), phone: partyPhone(v), gstNo: v.gstNo || v.gstin || '', balance: vendorOut[id] || vendorOut[v.name] || 0 }))
+    .map(([id, v]) => ({ id, type: 'vendor', name: partyName(v), phone: partyPhone(v), gstNo: v.gstNo || v.gstin || '', balance: vendorOut[id] || vendorOut[v.name] || 0, archived: !!v.archived }))
     .filter((r) => r.name !== '—')
     .sort((a, b) => a.name.localeCompare(b.name)), [vendors, vendorOut]);
 
-  const rows = tab === 'customers' ? customerRows : tab === 'suppliers' ? supplierRows : [...customerRows, ...supplierRows];
+  const allRows = tab === 'customers' ? customerRows : tab === 'suppliers' ? supplierRows : [...customerRows, ...supplierRows];
+  // Inactive parties are retired, not gone: their history is still in the
+  // books, so they stay one toggle away rather than disappearing.
+  const inactiveCount = allRows.filter((r) => r.archived).length;
+  const rows = showInactive ? allRows : allRows.filter((r) => !r.archived);
 
   const filtered = useMemo(() => {
     if (!q) return rows;
@@ -323,6 +329,16 @@ export default function PartiesPage() {
                   {t(k)}
                 </button>
               ))}
+              {/* Only offered when there is something to show. A permanent
+                  toggle for an empty set is noise. */}
+              {inactiveCount > 0 && (
+                <button className="btn btn-xs" data-testid="toggle-inactive"
+                  onClick={() => setShowInactive((v) => !v)}
+                  title="Parties retired because they still have history"
+                  style={{ background: showInactive ? 'var(--blue, #C05621)' : 'var(--surface2)', color: showInactive ? '#fff' : 'var(--text2)', border: 'none', borderRadius: 14 }}>
+                  Inactive ({inactiveCount})
+                </button>
+              )}
             </div>
           </div>
           <div style={{ maxHeight: '64vh', overflowY: 'auto' }}>
@@ -339,8 +355,11 @@ export default function PartiesPage() {
                     borderLeft: active ? '3px solid var(--blue, #C05621)' : '3px solid transparent',
                   }}>
                   <span style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', fontWeight: 600, fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
-                    <span style={{ fontSize: 11.5, color: 'var(--text3)' }}>{r.type === 'client' ? t('customer') : t('supplier')}</span>
+                    <span style={{ display: 'block', fontWeight: 600, fontSize: 13, color: r.archived ? 'var(--text3)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                    <span style={{ fontSize: 11.5, color: 'var(--text3)' }}>
+                      {r.type === 'client' ? t('customer') : t('supplier')}
+                      {r.archived && ' · Inactive'}
+                    </span>
                   </span>
                   <span style={{ whiteSpace: 'nowrap', fontSize: 13, fontWeight: 700, color: owes ? (r.type === 'client' ? 'var(--green, #059669)' : 'var(--red, #DC2626)') : 'var(--text3)' }}>
                     {inr(r.balance)} {owes ? (r.type === 'client' ? '↓' : '↑') : '↑'}
@@ -376,6 +395,7 @@ function PartyDetail({ party, t, onBack }) {
   const [editingParty, setEditingParty] = useState(null);
   const [paying, setPaying] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
+  const [removing, setRemoving] = useState(false);
   // Advance held by this party, surfaced so an unapplied receipt is visible
   // rather than just quietly lowering the balance.
   const advance = useMemo(
@@ -397,6 +417,48 @@ function PartyDetail({ party, t, onBack }) {
   const sum = data?.summary;
   const isClient = party.type === 'client';
   const balance = sum ? sum.outstanding : 0;
+
+  /**
+   * Delete, or retire.
+   *
+   * The server decides which: a party that was never used is deleted outright,
+   * one with invoices or payments behind it is marked inactive instead, and it
+   * says which it did. The confirmation therefore promises neither — it says
+   * what will be attempted and lets the result speak.
+   */
+  const removeParty = async () => {
+    const name = (p && p.name) || party.name;
+    if (!window.confirm(
+      `Remove ${name}?\n\n`
+      + 'If this party has never been billed it is deleted. If it has any history '
+      + 'it is marked inactive instead — the books keep it, and it stops appearing '
+      + 'when you raise a bill.',
+    )) return;
+    setRemoving(true);
+    try {
+      const r = await accountingApi.deleteParty(party.id, party.type);
+      if (r.removed) {
+        showToast(`${name} deleted`, 'success');
+        onBack();                       // nothing left to show
+      } else {
+        showToast(r.reason || `${name} marked inactive`, 'success');
+        load();
+      }
+    } catch (e) {
+      showToast(describeError(e, 'Could not remove this party'), 'error');
+    } finally { setRemoving(false); }
+  };
+
+  const reactivate = async () => {
+    setRemoving(true);
+    try {
+      await accountingApi.updateParty(party.id, party.type, { archived: false });
+      showToast('Made active', 'success');
+      load();
+    } catch (e) {
+      showToast(describeError(e, 'Could not reactivate'), 'error');
+    } finally { setRemoving(false); }
+  };
 
   const remind = () => {
     // The alternate number is a fallback, not a second message: a party whose
@@ -443,6 +505,15 @@ function PartyDetail({ party, t, onBack }) {
             <button className="btn btn-sm btn-ghost" onClick={() => setEditingParty(p)}>
               ✏️ {t('editDetails')}
             </button>
+            {p && p.archived ? (
+              <button className="btn btn-sm btn-ghost" onClick={reactivate} disabled={removing}
+                data-testid="party-reactivate">↩ Make active</button>
+            ) : (
+              <button className="btn btn-sm btn-ghost" style={{ color: 'var(--red)' }}
+                onClick={removeParty} disabled={removing} data-testid="party-delete">
+                {removing ? '…' : '🗑 Delete'}
+              </button>
+            )}
             {isClient ? (
               <button className="btn btn-primary btn-sm" onClick={() => setInvoiceFor(p)}>
                 🧾 {t('createInvoice')}
@@ -497,7 +568,9 @@ function PartyDetail({ party, t, onBack }) {
       <div style={{ padding: 14 }}>
         {err && <div style={{ color: 'var(--red)', fontSize: 13, padding: 10 }}>{err}</div>}
         {!data && !err && <div style={{ color: 'var(--text3)', fontSize: 13, padding: 24 }}>{t('loading')}</div>}
-        {data && tab === 'txns' && <TransactionsTab rows={data.transactions} t={t} />}
+        {data && tab === 'txns' && (
+          <TransactionsTab rows={data.transactions} t={t} party={party} onChanged={load} />
+        )}
         {data && tab === 'profile' && <ProfileTab p={p} t={t} />}
         {data && tab === 'ledger' && (
           <LedgerTab
@@ -592,11 +665,55 @@ export const canOpenTxn = (r) => txnTarget(r) !== null;
 
 // Exported for the regression test — clicking a bill here was dead, and a
 // source-level check could not tell a live handler from a commented-out one.
-export function TransactionsTab({ rows, t }) {
+/**
+ * @param party     when given, invoice rows offer "move to another party".
+ *                  Optional because this tab is reused on screens where
+ *                  re-addressing a bill makes no sense.
+ * @param onChanged called after a successful move, to reload the party.
+ */
+export function TransactionsTab({ rows, t, party, onChanged }) {
   const navigate = useNavigate();
   const [range, setRange] = useState('all');
   const [docType, setDocType] = useState('all');
   const [status, setStatus] = useState('all');
+  const [moving, setMoving] = useState(null);   // the invoice row being moved
+  const [busyId, setBusyId] = useState(null);
+  // Only a sales invoice moves. A payment follows the bill it settles, and a
+  // purchase belongs to the supplier who sent it.
+  const canMove = (r) => !!party && party.type === 'client' && r.collectionName === 'invoices' && !r.voided;
+
+  /**
+   * What can be removed from here.
+   *
+   * Invoices and payments only. A purchase bill is always stored as
+   * `received`, and the purchase route refuses to delete a received one — a
+   * button there would error every time it was pressed. Credit and debit
+   * notes are corrections to a bill, so they are undone where they were
+   * raised.
+   */
+  const canDelete = (r) => !!party && ['invoices', 'payments'].includes(r.collectionName);
+
+  const removeTxn = async (r) => {
+    const isInvoice = r.collectionName === 'invoices';
+    const what = isInvoice ? `invoice ${r.number || ''}`.trim() : `payment of ${inr(r.amount)}`;
+    const note = isInvoice
+      // unwindInvoice puts the stock back and reverses the ledger.
+      ? '\n\nAny stock it consumed goes back and its ledger entries are reversed.'
+      : '\n\nThe bill it settled gets its balance back and may stop showing as paid.';
+    if (!window.confirm(`Delete this ${what}?${note}\n\nThis cannot be undone.`)) return;
+
+    setBusyId(r.id);
+    try {
+      if (isInvoice) await accountingApi.deleteInvoice(r.id);
+      else await accountingApi.undoPayment(r.id);
+      showToast('Deleted', 'success');
+      if (onChanged) onChanged();
+    } catch (e) {
+      // The server's refusals are instructions, not failures — it says which
+      // payment or note is in the way, so show it rather than a generic error.
+      showToast(describeError(e, 'Could not delete this'), 'error');
+    } finally { setBusyId(null); }
+  };
 
   // The full standard list, in the order a shopkeeper thinks about them, with a
   // count beside each. Types the party has no history of are shown DISABLED
@@ -724,19 +841,144 @@ export function TransactionsTab({ rows, t }) {
                     </span>
                   )}
                 </div>
-                <div>
-                  {r.status && (
+                <div className="flex items-center" style={{ gap: 6, justifyContent: 'space-between' }}>
+                  {r.status ? (
                     <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: st ? st.bg : 'var(--surface2)', color: st ? st.fg : 'var(--text2)' }}>
                       {r.status}
                     </span>
-                  )}
+                  ) : <span />}
+                  {/* The row itself opens the document, so these have to stop
+                      the click before it gets there. */}
+                  <span className="flex" style={{ gap: 2 }}>
+                    {canMove(r) && (
+                      <button type="button" className="btn btn-xs btn-ghost" data-testid="txn-move"
+                        title="Move this invoice to another party"
+                        onClick={(e) => { e.stopPropagation(); setMoving(r); }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        style={{ padding: '1px 6px' }}>⇄</button>
+                    )}
+                    {canDelete(r) && (
+                      <button type="button" className="btn btn-xs btn-ghost" data-testid="txn-delete"
+                        title={r.collectionName === 'invoices' ? 'Delete this invoice' : 'Delete this payment'}
+                        disabled={busyId === r.id}
+                        onClick={(e) => { e.stopPropagation(); removeTxn(r); }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        style={{ padding: '1px 6px', color: 'var(--red)' }}>
+                        {busyId === r.id ? '…' : '🗑'}
+                      </button>
+                    )}
+                  </span>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {moving && (
+        <TransferInvoiceModal
+          invoice={moving}
+          fromParty={party}
+          onClose={() => setMoving(null)}
+          onDone={() => { setMoving(null); if (onChanged) onChanged(); }}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * Move one invoice to a different customer.
+ *
+ * Everything hanging off the bill goes with it — its receipts and its credit
+ * and debit notes — because a payment left behind on the old party is a
+ * receipt against an invoice that is no longer there.
+ *
+ * The server refuses the move when it would change the tax (a customer in
+ * another state turns CGST+SGST into IGST), and says so; that case needs a
+ * credit note, not a re-addressing.
+ */
+function TransferInvoiceModal({ invoice, fromParty, onClose, onDone }) {
+  const [q, setQ] = useState('');
+  const [matches, setMatches] = useState([]);
+  const [to, setTo] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) { setMatches([]); return undefined; }
+    const id = setTimeout(() => {
+      ordersApi.searchClients(term)
+        .then((r) => setMatches((Array.isArray(r) ? r : []).filter((c) => c.id !== fromParty.id)))
+        .catch(() => setMatches([]));
+    }, 250);
+    return () => clearTimeout(id);
+  }, [q, fromParty.id]);
+
+  const move = async () => {
+    if (!to) return;
+    setBusy(true);
+    try {
+      const r = await accountingApi.transferInvoiceParty(invoice.id, to.id);
+      const extra = r.moved && (r.moved.payments || r.moved.creditNotes || r.moved.debitNotes)
+        ? ` (${[
+          r.moved.payments && `${r.moved.payments} payment${r.moved.payments > 1 ? 's' : ''}`,
+          r.moved.creditNotes && `${r.moved.creditNotes} credit note${r.moved.creditNotes > 1 ? 's' : ''}`,
+          r.moved.debitNotes && `${r.moved.debitNotes} debit note${r.moved.debitNotes > 1 ? 's' : ''}`,
+        ].filter(Boolean).join(', ')} moved too)`
+        : '';
+      showToast(`${r.invoiceNo} moved to ${r.to.name}${extra}`, 'success');
+      onDone();
+    } catch (e) {
+      showToast(describeError(e, 'Could not move this invoice'), 'error');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="card" style={{ width: 460, maxWidth: '100%', padding: 16 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>Move invoice</h3>
+        <div style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 12 }}>
+          {invoice.number || 'This invoice'} · {inr(invoice.amount)} — currently billed to{' '}
+          <b style={{ color: 'var(--text2)' }}>{fromParty.name}</b>
+        </div>
+
+        <div className="form-group">
+          <label>Move to</label>
+          <input className="input" autoFocus placeholder="Search customer by name or number"
+            value={to ? to.name : q} data-testid="transfer-search"
+            onChange={(e) => { setTo(null); setQ(e.target.value); }} />
+        </div>
+
+        {!to && matches.length > 0 && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, maxHeight: 180, overflowY: 'auto', marginBottom: 10 }}>
+            {matches.map((c) => (
+              <button key={c.id} type="button" className="btn btn-ghost" data-testid="transfer-match"
+                onClick={() => { setTo(c); setMatches([]); }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', borderRadius: 0, padding: '8px 10px' }}>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
+                {c.phone && <span style={{ color: 'var(--text3)', fontSize: 11.5 }}> · {c.phone}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div style={{ fontSize: 11.5, color: 'var(--text3)', marginBottom: 12 }}>
+          Its payments and any credit or debit notes move with it. If the new
+          customer is in a different state the tax would change, and the move is
+          refused — raise a credit note and bill again instead.
+        </div>
+
+        <div className="flex" style={{ gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn btn-sm btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="btn btn-sm btn-primary" onClick={move} disabled={busy || !to} data-testid="transfer-confirm">
+            {busy ? '…' : 'Move invoice'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1229,7 +1471,7 @@ function PartyPaymentModal({ t, party, isClient, outstanding, unpaidInvoices, on
           <div>
             <label style={lbl}>{t('payMode')}</label>
             <select className="input" value={form.mode} onChange={(e) => set('mode', e.target.value)}>
-              {['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Card'].map((m) => <option key={m} value={m}>{m}</option>)}
+              {PAY_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
           <div>

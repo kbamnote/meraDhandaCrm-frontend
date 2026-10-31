@@ -31,6 +31,7 @@ import BranchSelect from './BranchSelect';
 import BankAccountSelect from './BankAccountSelect';
 import NewItemDialog from './NewItemDialog';
 import { ref, onValue, db } from '../../services/realtime';
+import { PAY_MODES } from '../../config/payModes';
 
 // Null-safe .trim(). Building the request body must never throw on an absent
 // field — that failure surfaces as a bare "Failed" with no request ever sent.
@@ -47,7 +48,6 @@ const S = {
 };
 
 const GST_RATES = ['0', '5', '12', '18', '28'];
-const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Cheque'];
 
 const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', discount: '', taxRate: '18', itemId: null });
 

@@ -337,6 +337,13 @@ export const accountingApi = {
   partyPayment: (id, body) => api.post(`/accounting/party/${id}/payment`, body).then(r => r.data),
   partyItems: (id, params) => api.get(`/accounting/party/${id}/items`, { params }).then(r => r.data),
   updateParty: (id, type, body) => api.put(`/accounting/party/${id}`, body, { params: { type } }).then(r => r.data),
+  // Deletes a party that was never used; marks one with history inactive
+  // instead. The response says which happened — they are different promises.
+  deleteParty: (id, type) => api.delete(`/accounting/party/${id}`, { params: { type } }).then(r => r.data),
+  // Re-address an invoice raised against the wrong customer. Its receipts and
+  // notes move with it. Refused when the move would change the tax.
+  transferInvoiceParty: (invoiceId, toPartyId) =>
+    api.post(`/accounting/invoice/${invoiceId}/transfer-party`, { toPartyId }).then(r => r.data),
   // GSTIN -> business details. Always resolves: an unconfigured or failing
   // provider returns { ok:false, data:<what the GSTIN itself tells us> } so the
   // form can fall back to manual entry rather than blocking.
