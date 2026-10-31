@@ -860,13 +860,27 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
 
   // What kind of row this is, as far as editing goes. The server decides
   // `editable`; this is only which form to show.
-  const isTransfer = entry && entry.ref && entry.ref.collection === 'bankTransfers';
+  const kind = entry && entry.ref ? entry.ref.collection : null;
+  const isTransfer = kind === 'bankTransfers';
+  const isPayment = kind === 'payments';
 
   const startEdit = () => {
     const src = entry.source || {};
-    setForm(isTransfer
-      ? { amount: src.amount ?? '', date: src.date || entry.date, fromId: src.fromId || '', toId: src.toId || '', memo: src.memo || '' }
-      : { amount: src.amount ?? '', date: src.date || entry.date, accountId: src.accountId || '', direction: src.direction || 'add', reason: src.reason || '' });
+    const base = { amount: src.amount ?? '', date: src.date || entry.date };
+    if (isTransfer) {
+      setForm({ ...base, fromId: src.fromId || '', toId: src.toId || '', memo: src.memo || '' });
+    } else if (isPayment) {
+      // A receipt already sits in an account; the picker starts there so
+      // saving without touching it cannot move the money somewhere else.
+      setForm({
+        ...base,
+        accountId: (entry.fundingAccount && entry.fundingAccount.id) || '',
+        mode: src.mode || '',
+        reference: src.reference || '',
+      });
+    } else {
+      setForm({ ...base, accountId: src.accountId || '', direction: src.direction || 'add', reason: src.reason || '' });
+    }
     setMode('edit');
   };
 
@@ -884,8 +898,12 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
   };
 
   const remove = async () => {
-    const what = isTransfer ? 'transfer' : 'entry';
-    if (!window.confirm(`Delete this ${what}?\n\nIt is removed from the books and the balances recalculate. This cannot be undone.`)) return;
+    const what = isTransfer ? 'transfer' : (isPayment ? 'payment' : 'entry');
+    // A payment is the one whose deletion reaches beyond this screen, so say so.
+    const extra = isPayment
+      ? '\n\nThe bill it settled gets its balance back and may stop showing as paid.'
+      : '';
+    if (!window.confirm(`Delete this ${what}?${extra}\n\nIt is removed from the books and the balances recalculate. This cannot be undone.`)) return;
     setBusy(true);
     try {
       await accountingApi.bankEntryDelete(entryId);
@@ -975,7 +993,32 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
               onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
           </div>
 
-          {isTransfer ? (
+          {isPayment ? (
+            <>
+              <div className="form-group">
+                <label>Paid through</label>
+                <select className="input" value={form.accountId} data-testid="entry-account"
+                  onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))}>
+                  {accounts.filter((a) => a.type !== 'unlinked')
+                    .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Mode</label>
+                <input className="input" value={form.mode || ''} placeholder="Cash, Bank Transfer, UPI…"
+                  onChange={(e) => setForm((f) => ({ ...f, mode: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Reference</label>
+                <input className="input" value={form.reference || ''} placeholder="UTR, cheque no…"
+                  onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))} />
+              </div>
+              {/* The party and the bill are what this receipt settles. Changing
+                  either is a different payment, so they are shown, not edited. */}
+              <Detail label="Party" value={entry.party} />
+              <Detail label="Against" value={entry.source && entry.source.invoiceNo} />
+            </>
+          ) : isTransfer ? (
             <>
               <div className="form-group">
                 <label>From</label>
@@ -1028,6 +1071,7 @@ function EntryDialog({ entryId, accounts, onClose, onMoved }) {
           <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>
             Saving rewrites this entry in the books and recalculates the balances
             from it. The Balance Sheet and the Day Book follow automatically.
+            {isPayment && ' The bill this settles is re-totalled too, so its paid amount stays correct.'}
           </div>
         </>
       )}
