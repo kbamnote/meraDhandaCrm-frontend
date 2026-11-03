@@ -161,6 +161,8 @@ const SECTIONS = [
       { to: '/accounting',       label: '💰 Dashboard',        legacy: 'page-accounting' },
       { to: '/quotations',       label: '📄 Quotation / Estimate', legacy: 'page-quotations' },
       { to: '/accounting/sales', label: '🧾 Sales Invoices',   legacy: 'page-accounting-sales' },
+      { to: '/payments/in',      label: '💲 Payment In',       legacy: 'page-payment-in' },
+      { to: '/payments/out',     label: '💲 Payment Out',      legacy: 'page-payment-out' },
       { to: '/invoice-view',     label: '🧾 Invoice View',     legacy: 'page-invoice-view' },
       { to: '/accounting/items', label: '📦 Items',            legacy: 'page-accounting-items' },
       { to: '/accounting/parties', label: '🤝 Parties',        legacy: 'page-accounting-parties' },

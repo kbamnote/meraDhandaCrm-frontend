@@ -335,6 +335,16 @@ export const accountingApi = {
   applyAdvance: (invoiceId, amount) =>
     api.post(`/accounting/invoice/${invoiceId}/apply-advance`, amount != null ? { amount } : {}).then(r => r.data),
   partyPayment: (id, body) => api.post(`/accounting/party/${id}/payment`, body).then(r => r.data),
+  // Payment In / Payment Out vouchers.
+  payments:      (params)   => api.get('/accounting/payments', { params }).then(r => r.data),
+  // The number the form displays. Peeks at the counter without taking one, so
+  // opening the screen and changing your mind does not burn a voucher number.
+  paymentNumber: (direction) => api.get('/accounting/payment-number', { params: { direction } }).then(r => r.data),
+  // What this party still owes, oldest first — the rows to allocate against.
+  openBills:     (id, type) => api.get(`/accounting/party/${id}/open-bills`, { params: { type } }).then(r => r.data),
+  // Search either side. Suppliers had no search at all before this; only
+  // clients were indexed, via ordersApi.searchClients.
+  searchParties: (q, type)  => api.get('/accounting/party-search', { params: { q, type } }).then(r => r.data),
   partyItems: (id, params) => api.get(`/accounting/party/${id}/items`, { params }).then(r => r.data),
   updateParty: (id, type, body) => api.put(`/accounting/party/${id}`, body, { params: { type } }).then(r => r.data),
   // Deletes a party that was never used; marks one with history inactive

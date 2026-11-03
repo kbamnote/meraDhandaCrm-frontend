@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { LanguageProvider } from './i18n/LanguageContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
@@ -84,6 +84,8 @@ import ProdStepsPage from './pages/ProdStepsPage';
 import ManageProductionTypesPage from './pages/ManageProductionTypesPage';
 import SalesAdminPage from './pages/SalesAdminPage';
 import QuotationsPage from './pages/accounting/QuotationsPage';
+import RecordPaymentPage from './pages/accounting/RecordPaymentPage';
+import { PaymentInPage, PaymentOutPage } from './pages/accounting/PaymentsPage';
 import ReportsHubPage from './pages/reports/ReportsHubPage';
 import Gstr3bPage from './pages/reports/Gstr3bPage';
 import HsnSalesSummaryPage from './pages/reports/HsnSalesSummaryPage';
@@ -163,6 +165,8 @@ const CUSTOM_PAGES = {
   'prod-steps': ProdStepsPage,
   'production-types': ManageProductionTypesPage,
   quotations: QuotationsPage,
+  'payments/in': PaymentInPage,
+  'payments/out': PaymentOutPage,
   // The Reports hub and the registers that hang off it.
   'reports': ReportsHubPage,
   'reports/gstr1': Gstr1Page,
@@ -236,6 +240,8 @@ const STUB_ROUTES = [
   ['accounting/parties', '🤝 Parties',        'page-accounting-parties', 'mpw/clients'],
   ['accounting/reports', '📊 Reports',        'page-accounting-reports', null],
   ['accounting/gst',  '🧮 GST',               'page-accounting-gst',  null],
+  ['payments/in',     '💲 Payment In',        'page-payment-in',      null],
+  ['payments/out',    '💲 Payment Out',       'page-payment-out',     null],
   ['reports',         '📑 Reports',           'page-reports',         null],
   ['reports/gstr1',   '🧾 GSTR-1 (Sales)',    'page-reports-gstr1',   null],
   ['reports/gstr2',   '🧾 GSTR-2 (Purchase)', 'page-reports-gstr2',   null],
@@ -319,6 +325,22 @@ function SectionGuard({ path, children }) {
   return isSectionHidden(path, profile) ? <AccessDenied /> : children;
 }
 
+/**
+ * Record Payment carries its side in the URL, so it cannot come from the
+ * literal route table above. Guarded against its OWN list's permission —
+ * being allowed to see receipts is not being allowed to see what you pay
+ * suppliers.
+ */
+function RecordPaymentRoute() {
+  const { direction } = useParams();
+  const side = direction === 'out' ? 'out' : 'in';
+  return (
+    <SectionGuard path={`/payments/${side}`}>
+      <RecordPaymentPage />
+    </SectionGuard>
+  );
+}
+
 export default function App() {
   return (
     <LanguageProvider>
@@ -340,6 +362,7 @@ export default function App() {
             <Route path="/platform" element={<PlatformConsolePage />} />
             <Route path="/company/:id" element={<CompanyDetailPage />} />
             <Route path="/platform-broadcast" element={<PlatformBroadcastPage />} />
+            <Route path="/payments/:direction/new" element={<RecordPaymentRoute />} />
 
             {STUB_ROUTES.map(([path, title, legacyId, dbPath]) => {
               const Comp = CUSTOM_PAGES[path];

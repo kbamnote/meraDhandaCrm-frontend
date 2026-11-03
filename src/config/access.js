@@ -22,6 +22,10 @@ export const PERM_OF = {
   // A quotation is a priced sales document, so it sits with invoices rather
   // than with leads — whoever may see what was billed may see what was quoted.
   '/quotations': 'invoices',
+  // A receipt is money against a bill, so it follows the same grant as
+  // the bills themselves rather than needing one of its own.
+  '/payments/in': 'invoices',
+  '/payments/out': 'purchases',
   '/leads-crm': 'leads', '/sales-panel': 'leads',
   // The company's own sales figures — every colleague's revenue, the totals,
   // and the box that sets anybody's target. A different question from "let
