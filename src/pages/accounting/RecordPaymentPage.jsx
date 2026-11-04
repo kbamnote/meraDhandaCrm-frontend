@@ -44,23 +44,32 @@ export default function RecordPaymentPage() {
   }, [direction]);
 
   // ── party search ────────────────────────────────────────────────────────
-  // Suppliers are not in the client index, so Payment Out searches the vendor
-  // list the purchase screens use.
+  // EVERY party, both customers and suppliers, on both screens. They live in
+  // separate collections here, so searching only one hid every party filed on
+  // the other — and a printing shop buys from and sells to the same people.
+  // An empty query browses rather than returning nothing.
   useEffect(() => {
-    const term = q.trim();
-    if (party || term.length < 2) { setMatches([]); return undefined; }
+    if (party) { setMatches([]); return undefined; }
     const id = setTimeout(() => {
-      accountingApi.searchParties(term, out ? 'vendor' : 'client')
-        .then((r) => setMatches(Array.isArray(r) ? r.slice(0, 8) : []))
+      accountingApi.searchParties(q.trim(), null)
+        .then((r) => setMatches(Array.isArray(r) ? r : []))
         .catch(() => setMatches([]));
-    }, 250);
+    }, q.trim() ? 250 : 0);
     return () => clearTimeout(id);
-  }, [q, party, out]);
+  }, [q, party]);
+
+  // A payment settles bills only when the money flows the way bills are paid:
+  // a customer paying in, or a supplier being paid out. The other two
+  // combinations are refunds — real, but they move the party's balance and
+  // settle nothing, so there is no bill list to show.
+  const settlesBills = party && (out ? party.type === 'vendor' : party.type === 'client');
 
   const pickParty = async (p) => {
     setParty(p); setMatches([]); setBills(null); setAlloc({}); setTouched(false);
+    const settles = out ? p.type === 'vendor' : p.type === 'client';
+    if (!settles) { setBills([]); return; }
     try {
-      const r = await accountingApi.openBills(p.id, out ? 'vendor' : 'client');
+      const r = await accountingApi.openBills(p.id, p.type);
       setBills(r.rows || []);
     } catch (e) {
       setBills([]);
@@ -109,7 +118,11 @@ export default function RecordPaymentPage() {
         .map(([invoiceId, applied]) => ({ invoiceId, applied: R2(applied) }))
         .filter((a) => a.applied > 0);
       const r = await accountingApi.partyPayment(party.id, {
-        partyType: out ? 'vendor' : 'client',
+        // The party's own side decides which head the money posts against;
+        // the SCREEN decides which way it went. Sending the screen's side as
+        // the party type would file a supplier's refund as money paid out.
+        partyType: party.type,
+        direction,
         amount: R2(form.amount),
         discount: R2(form.discount),
         date: form.date,
@@ -157,7 +170,12 @@ export default function RecordPaymentPage() {
             <label>Party Name</label>
             {party ? (
               <div className="flex items-center justify-between" style={{ gap: 8 }}>
-                <span style={{ fontWeight: 600 }}>{party.name}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ fontWeight: 600 }}>{party.name}</span>
+                  <span style={{ color: 'var(--text3)', fontSize: 11.5 }}>
+                    {' · '}{party.type === 'vendor' ? 'Supplier' : 'Customer'}
+                  </span>
+                </span>
                 <button className="btn btn-xs btn-ghost" data-testid="payment-change-party"
                   onClick={() => { setParty(null); setQ(''); setBills(null); setAlloc({}); setTouched(false); }}>
                   Change
@@ -165,19 +183,30 @@ export default function RecordPaymentPage() {
               </div>
             ) : (
               <input className="input" autoFocus data-testid="payment-party"
-                placeholder={`Search ${out ? 'supplier' : 'party'} by name or number`}
+                placeholder="Search any party by name or number — or just pick one below"
                 value={q} onChange={(e) => setQ(e.target.value)} />
             )}
           </div>
 
-          {!party && matches.length > 0 && (
-            <div style={{ border: '1px solid var(--border)', borderRadius: 8, maxHeight: 190, overflowY: 'auto', marginBottom: 10 }}>
-              {matches.map((c) => (
-                <button key={c.id} type="button" className="btn btn-ghost" data-testid="payment-party-match"
+          {!party && (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, maxHeight: 220, overflowY: 'auto', marginBottom: 10 }}>
+              {!matches.length ? (
+                <div style={{ padding: 14, textAlign: 'center', color: 'var(--text3)', fontSize: 12.5 }}>
+                  {q.trim() ? 'No party matches that.' : 'Loading parties…'}
+                </div>
+              ) : matches.map((c) => (
+                <button key={`${c.type}-${c.id}`} type="button" className="btn btn-ghost" data-testid="payment-party-match"
                   onClick={() => pickParty(c)}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', borderRadius: 0, padding: '8px 10px' }}>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
-                  {c.phone && <span style={{ color: 'var(--text3)', fontSize: 11.5 }}> · {c.phone}</span>}
+                  style={{ display: 'flex', width: '100%', textAlign: 'left', borderRadius: 0, padding: '8px 10px', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
+                    {c.phone && <span style={{ color: 'var(--text3)', fontSize: 11.5 }}> · {c.phone}</span>}
+                  </span>
+                  {/* Which side they are filed on, because it decides whether
+                      this payment can settle bills or is a refund. */}
+                  <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 20, whiteSpace: 'nowrap', background: 'var(--surface2)', color: 'var(--text3)' }}>
+                    {c.type === 'vendor' ? 'Supplier' : 'Customer'}
+                  </span>
                 </button>
               ))}
             </div>
@@ -250,6 +279,17 @@ export default function RecordPaymentPage() {
           <div style={{ padding: 50, textAlign: 'center', color: 'var(--text3)' }}>
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>No party selected</div>
             <div style={{ fontSize: 13 }}>Choose a party above to see what they owe.</div>
+          </div>
+        ) : !settlesBills ? (
+          // Money flowing against the party's usual side is a refund. Real,
+          // and worth recording — it just settles nothing.
+          <div style={{ padding: 36, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
+            <div style={{ fontWeight: 600, color: 'var(--text2)', marginBottom: 4 }}>
+              {out ? 'Refund to a customer' : 'Refund from a supplier'}
+            </div>
+            {party.name} is a {party.type === 'vendor' ? 'supplier' : 'customer'}, so money
+            {out ? ' going out to them' : ' coming in from them'} is a refund rather than a
+            settlement. It moves their balance and is not applied to any bill.
           </div>
         ) : bills === null ? (
           <div style={{ padding: 40, textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>Loading bills…</div>
