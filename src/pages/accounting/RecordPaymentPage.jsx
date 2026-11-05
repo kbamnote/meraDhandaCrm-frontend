@@ -32,8 +32,13 @@ export default function RecordPaymentPage() {
   const [q, setQ] = useState('');
   const [matches, setMatches] = useState([]);
   const [bills, setBills] = useState(null);
-  const [alloc, setAlloc] = useState({});        // billId -> typed amount
+  const [alloc, setAlloc] = useState({});        // billId -> money typed on that row
   const [touched, setTouched] = useState(false); // has the user overridden?
+  // Per-bill TDS and write-off: relief that is not money. billId -> amount.
+  const [rowTds, setRowTds] = useState({});
+  const [rowDisc, setRowDisc] = useState({});
+  const [applying, setApplying] = useState(null); // { bill, kind: 'tds' | 'discount' }
+  const [sections, setSections] = useState([]);
   const [form, setForm] = useState({
     amount: '', discount: '', date: todayStr(), mode: 'Cash', bankAccountId: '', reference: '', notes: '',
   });
@@ -42,6 +47,14 @@ export default function RecordPaymentPage() {
   useEffect(() => {
     accountingApi.paymentNumber(direction).then(setVoucher).catch(() => setVoucher(null));
   }, [direction]);
+
+  // The statutory rate table, for the Apply TDS picker. Only a receipt can
+  // carry TDS withheld BY someone: on a payment out we are the one deducting,
+  // which is the TDS voucher screen's job, not this one.
+  useEffect(() => {
+    if (out) return;
+    accountingApi.tdsSections().then((r) => setSections(Array.isArray(r) ? r : [])).catch(() => setSections([]));
+  }, [out]);
 
   // ── party search ────────────────────────────────────────────────────────
   // EVERY party, both customers and suppliers, on both screens. They live in
@@ -65,7 +78,8 @@ export default function RecordPaymentPage() {
   const settlesBills = party && (out ? party.type === 'vendor' : party.type === 'client');
 
   const pickParty = async (p) => {
-    setParty(p); setMatches([]); setBills(null); setAlloc({}); setTouched(false);
+    setParty(p); setMatches([]); setBills(null);
+    setAlloc({}); setTouched(false); setRowTds({}); setRowDisc({});
     const settles = out ? p.type === 'vendor' : p.type === 'client';
     if (!settles) { setBills([]); return; }
     try {
@@ -79,27 +93,45 @@ export default function RecordPaymentPage() {
 
   // ── allocation ──────────────────────────────────────────────────────────
   const settleable = R2(Number(form.amount) + Number(form.discount));
+  // TDS and write-offs settle a bill without being money, so they add to what
+  // this payment can clear.
+  const nonCash = R2((bills || []).reduce(
+    (a, b) => a + Number(rowTds[b.id] || 0) + Number(rowDisc[b.id] || 0), 0,
+  ));
+  const capacity = R2(settleable + nonCash);
 
-  /** Oldest-first spread of whatever is available — the default behaviour. */
+  /**
+   * Oldest-first spread of whatever is available — the default behaviour.
+   *
+   * The map holds the MONEY on each row; the row's total relief is that plus
+   * its own TDS and write-off, which is what the bill's Due is measured
+   * against.
+   */
   const autoAlloc = useMemo(() => {
     const outp = {};
-    let left = settleable;
+    let left = capacity;
     for (const b of (bills || [])) {
       if (left <= 0) break;
-      const applied = R2(Math.min(b.due, left));
-      if (applied <= 0) continue;
-      outp[b.id] = applied;
-      left = R2(left - applied);
+      const relief = R2(Math.min(b.due, left));
+      if (relief <= 0) continue;
+      const nc = R2(Number(rowTds[b.id] || 0) + Number(rowDisc[b.id] || 0));
+      outp[b.id] = R2(Math.max(0, relief - nc));
+      left = R2(left - relief);
     }
     return outp;
-  }, [bills, settleable]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bills, capacity, JSON.stringify(rowTds), JSON.stringify(rowDisc)]);
 
   // Until the user edits a row, the allocation follows the amount as it is
   // typed. After that it is theirs and must not be rewritten underneath them.
   const effective = touched ? alloc : autoAlloc;
+  // The money on the rows, which is what the Amount Received has to cover.
   const allocated = R2(Object.values(effective).reduce((a, n) => a + (Number(n) || 0), 0));
   const unapplied = R2(settleable - allocated);
   const over = allocated > settleable + 0.001;
+  // Column totals, as the screenshot's footer shows them.
+  const tdsTotal = R2((bills || []).reduce((a, b) => a + Number(rowTds[b.id] || 0), 0));
+  const discTotal = R2((bills || []).reduce((a, b) => a + Number(rowDisc[b.id] || 0), 0));
 
   const setRow = (billId, value) => {
     setAlloc({ ...effective, [billId]: value });
@@ -114,9 +146,16 @@ export default function RecordPaymentPage() {
     if (over) { showToast('You have allocated more than the payment', 'error'); return; }
     setSaving(true);
     try {
+      // `applied` is the MONEY on the row; the server adds the row's TDS and
+      // write-off to get the relief the bill actually receives.
       const allocations = Object.entries(effective)
-        .map(([invoiceId, applied]) => ({ invoiceId, applied: R2(applied) }))
-        .filter((a) => a.applied > 0);
+        .map(([invoiceId, applied]) => ({
+          invoiceId,
+          applied: R2(applied),
+          tds: R2(rowTds[invoiceId]),
+          discount: R2(rowDisc[invoiceId]),
+        }))
+        .filter((a) => a.applied > 0 || a.tds > 0 || a.discount > 0);
       const r = await accountingApi.partyPayment(party.id, {
         // The party's own side decides which head the money posts against;
         // the SCREEN decides which way it went. Sending the screen's side as
@@ -130,10 +169,12 @@ export default function RecordPaymentPage() {
         bankAccountId: cashSelected ? null : (form.bankAccountId || null),
         reference: form.reference || null,
         notes: form.notes || null,
-        // Only sent when the user actually chose; otherwise the server does
-        // its own oldest-first, which is the same thing minus a round trip of
-        // numbers that could disagree.
-        ...(touched ? { allocations } : {}),
+        // Sent when the user chose the split, or when any row carries TDS or
+        // a write-off — those live nowhere else, so leaving them out would
+        // silently drop them. Otherwise the server does its own oldest-first,
+        // which is the same thing minus a round trip of numbers that could
+        // disagree.
+        ...(touched || tdsTotal > 0 || discTotal > 0 ? { allocations } : {}),
       });
       showToast(`${(r && r.payment && r.payment.paymentNo) || 'Payment'} saved`, 'success');
       navigate(`/payments/${direction}`);
@@ -177,7 +218,10 @@ export default function RecordPaymentPage() {
                   </span>
                 </span>
                 <button className="btn btn-xs btn-ghost" data-testid="payment-change-party"
-                  onClick={() => { setParty(null); setQ(''); setBills(null); setAlloc({}); setTouched(false); }}>
+                  onClick={() => {
+                    setParty(null); setQ(''); setBills(null);
+                    setAlloc({}); setTouched(false); setRowTds({}); setRowDisc({});
+                  }}>
                   Change
                 </button>
               </div>
@@ -316,7 +360,11 @@ export default function RecordPaymentPage() {
                     <th>Bill No</th><th>Date</th>
                     <th style={{ textAlign: 'right' }}>Total</th>
                     <th style={{ textAlign: 'right' }}>Due</th>
-                    <th style={{ textAlign: 'right', width: 150 }}>Settle now</th>
+                    {!out && <th style={{ textAlign: 'right' }}>TDS</th>}
+                    <th style={{ textAlign: 'right' }}>Discount</th>
+                    <th style={{ textAlign: 'right', width: 150 }}>
+                      {out ? 'Amount Paid' : 'Amount Received'}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -326,6 +374,33 @@ export default function RecordPaymentPage() {
                       <td style={{ whiteSpace: 'nowrap' }}>{pretty(b.date)}</td>
                       <td style={{ textAlign: 'right' }}>{inr(b.total)}</td>
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>{inr(b.due)}</td>
+                      {/* TDS is tax the CUSTOMER withheld, so it belongs on a
+                          receipt only. On a payment out we are the deductor,
+                          which is the TDS voucher screen's job. */}
+                      {!out && (
+                        <td style={{ textAlign: 'right' }}>
+                          {Number(rowTds[b.id]) > 0 ? (
+                            <button type="button" className="btn btn-ghost btn-xs" data-testid="bill-tds-set"
+                              onClick={() => setApplying({ bill: b, kind: 'tds' })}
+                              style={{ padding: 0, fontWeight: 600 }}>{inr(Number(rowTds[b.id]))}</button>
+                          ) : (
+                            <button type="button" className="btn btn-ghost btn-xs" data-testid="bill-tds"
+                              onClick={() => setApplying({ bill: b, kind: 'tds' })}
+                              style={{ padding: 0, color: 'var(--primary, #2563EB)' }}>Apply TDS</button>
+                          )}
+                        </td>
+                      )}
+                      <td style={{ textAlign: 'right' }}>
+                        {Number(rowDisc[b.id]) > 0 ? (
+                          <button type="button" className="btn btn-ghost btn-xs" data-testid="bill-discount-set"
+                            onClick={() => setApplying({ bill: b, kind: 'discount' })}
+                            style={{ padding: 0, fontWeight: 600 }}>{inr(Number(rowDisc[b.id]))}</button>
+                        ) : (
+                          <button type="button" className="btn btn-ghost btn-xs" data-testid="bill-discount"
+                            onClick={() => setApplying({ bill: b, kind: 'discount' })}
+                            style={{ padding: 0, color: 'var(--primary, #2563EB)' }}>Apply Discount</button>
+                        )}
+                      </td>
                       <td style={{ textAlign: 'right' }}>
                         <input className="input" type="number" min="0" max={b.due} step="0.01"
                           data-testid="bill-allocation"
@@ -335,6 +410,12 @@ export default function RecordPaymentPage() {
                       </td>
                     </tr>
                   ))}
+                  <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border)' }}>
+                    <td colSpan={4}>Total</td>
+                    {!out && <td style={{ textAlign: 'right' }} data-testid="tds-total">{inr(tdsTotal)}</td>}
+                    <td style={{ textAlign: 'right' }}>{inr(discTotal)}</td>
+                    <td style={{ textAlign: 'right' }}>{inr(allocated)}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -360,6 +441,107 @@ export default function RecordPaymentPage() {
             )}
           </div>
         )}
+      </div>
+
+      {applying && (
+        <ApplyToBillModal
+          bill={applying.bill}
+          kind={applying.kind}
+          sections={sections}
+          current={applying.kind === 'tds' ? rowTds[applying.bill.id] : rowDisc[applying.bill.id]}
+          onClose={() => setApplying(null)}
+          onApply={(value) => {
+            const set = applying.kind === 'tds' ? setRowTds : setRowDisc;
+            set((m) => ({ ...m, [applying.bill.id]: value }));
+            setApplying(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Apply TDS, or a discount, to one bill.
+ *
+ * TDS is picked as a RATE and shown as an amount, because that is how it is
+ * agreed and how the customer's certificate will read — but what is stored is
+ * the rupees, since a rate on a part-paid bill is ambiguous about which figure
+ * it applies to.
+ */
+function ApplyToBillModal({ bill, kind, sections, current, onClose, onApply }) {
+  const isTds = kind === 'tds';
+  const [rate, setRate] = useState('');
+  const [amount, setAmount] = useState(current ? String(current) : '');
+
+  // Rates on the bill's OUTSTANDING figure, which is what this payment is
+  // settling — not the original total, which may be part paid already.
+  const pick = (r) => {
+    setRate(r);
+    if (r === '') return;
+    setAmount(String(R2((bill.due * Number(r)) / 100)));
+  };
+
+  const value = R2(amount);
+  const tooMuch = value > bill.due + 0.001;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="card" style={{ width: 430, maxWidth: '100%', padding: 16 }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+            {isTds ? 'Apply TDS' : 'Apply Discount'}
+          </h3>
+          <button className="btn btn-xs btn-ghost" onClick={onClose}>✕</button>
+        </div>
+
+        <div style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 12 }}>
+          {bill.no || 'This bill'} · {inr(bill.due)} outstanding
+        </div>
+
+        {isTds && (
+          <div className="form-group">
+            <label>TDS Rate</label>
+            <select className="input" value={rate} onChange={(e) => pick(e.target.value)} data-testid="tds-rate">
+              <option value="">Select TDS rate</option>
+              {sections.map((s) => (
+                <option key={s.code} value={s.defaultRate}>
+                  {s.code} · {s.name} · {s.defaultRate}%
+                </option>
+              ))}
+              {/* The common flat rates, for anything the three sections above
+                  do not cover. */}
+              {[0.1, 1, 2, 5, 10].map((r) => (
+                <option key={`flat-${r}`} value={r}>{r}%</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="form-group">
+          <label>{isTds ? 'TDS applicable on bill' : 'Discount on bill'}</label>
+          <input className="input" type="number" min="0" step="0.01" autoFocus={!isTds}
+            data-testid="apply-amount" value={amount}
+            onChange={(e) => { setAmount(e.target.value); setRate(''); }} />
+          {tooMuch && (
+            <div style={{ fontSize: 11.5, color: 'var(--red)', marginTop: 3 }}>
+              More than the {inr(bill.due)} still owed on this bill.
+            </div>
+          )}
+        </div>
+
+        <div style={{ fontSize: 11.5, color: 'var(--text3)', marginBottom: 12 }}>
+          {isTds
+            ? 'Tax the customer keeps back and pays to the government. It settles the bill without reaching your account, and is held as TDS Receivable until you claim it.'
+            : 'Written off. It settles the bill alongside the money received.'}
+        </div>
+
+        <div className="flex" style={{ gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn btn-sm btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-sm btn-primary" data-testid="apply-save"
+            disabled={tooMuch} onClick={() => onApply(value)}>Save</button>
+        </div>
       </div>
     </div>
   );
