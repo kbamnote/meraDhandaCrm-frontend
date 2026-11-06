@@ -120,13 +120,25 @@ export default function PaymentsPage({ direction = 'in' }) {
 
             {rows.map((r) => (
               <div key={r.id} data-testid="payment-row"
-                style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '11px 12px', borderBottom: '1px solid var(--border)', fontSize: 12.5, alignItems: 'center', position: 'relative' }}>
+                role="button" tabIndex={0}
+                title={`Open ${r.paymentNo || 'this payment'}`}
+                onClick={() => navigate(`/payment-view?id=${encodeURIComponent(r.id)}`)}
+                // Reachable without a mouse: the row is the control.
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/payment-view?id=${encodeURIComponent(r.id)}`);
+                  }
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '11px 12px', borderBottom: '1px solid var(--border)', fontSize: 12.5, alignItems: 'center', position: 'relative', cursor: 'pointer' }}>
                 <div style={{ color: 'var(--text2)', whiteSpace: 'nowrap' }}>{pretty(r.date)}</div>
-                <div style={{ fontFamily: 'monospace', fontSize: 11.5 }}>{r.paymentNo || '—'}</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 11.5, color: 'var(--primary, #2563EB)', fontWeight: 600 }}>{r.paymentNo || '—'}</div>
                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {r.partyId ? (
                     <button type="button" className="btn btn-ghost"
-                      onClick={() => navigate('/accounting/parties')}
+                      onClick={(e) => { e.stopPropagation(); navigate('/accounting/parties'); }}
                       style={{ padding: 0, color: 'var(--primary, #2563EB)', fontWeight: 600, fontSize: 12.5 }}>
                       {r.partyName}
                     </button>
@@ -153,19 +165,27 @@ export default function PaymentsPage({ direction = 'in' }) {
                 <div style={{ color: 'var(--text2)' }}>{r.mode || '—'}</div>
                 <div style={{ position: 'relative' }}>
                   <button type="button" className="btn btn-xs btn-ghost" data-testid="payment-menu"
-                    onClick={() => setMenuFor(menuFor === r.id ? null : r.id)}
+                    onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === r.id ? null : r.id); }}
                     style={{ padding: '1px 6px' }}>⋮</button>
                   {menuFor === r.id && (
                     <>
                       {/* Click-away, so the menu does not strand itself open. */}
-                      <div style={{ position: 'fixed', inset: 0, zIndex: 20 }} onClick={() => setMenuFor(null)} />
+                      <div style={{ position: 'fixed', inset: 0, zIndex: 20 }} onClick={(e) => { e.stopPropagation(); setMenuFor(null); }} />
                       <div className="card" style={{ position: 'absolute', right: 0, top: 24, zIndex: 21, padding: 4, minWidth: 150 }}>
                         <button className="btn btn-xs btn-ghost" style={{ display: 'block', width: '100%', textAlign: 'left' }}
-                          onClick={() => { setMenuFor(null); navigate('/accounting/cash'); }}>
+                          data-testid="payment-open"
+                          onClick={(e) => {
+                            e.stopPropagation(); setMenuFor(null);
+                            navigate(`/payment-view?id=${encodeURIComponent(r.id)}`);
+                          }}>
+                          View payment
+                        </button>
+                        <button className="btn btn-xs btn-ghost" style={{ display: 'block', width: '100%', textAlign: 'left' }}
+                          onClick={(e) => { e.stopPropagation(); setMenuFor(null); navigate('/accounting/cash'); }}>
                           View in Cash &amp; Bank
                         </button>
                         <button className="btn btn-xs btn-ghost" style={{ display: 'block', width: '100%', textAlign: 'left', color: 'var(--red)' }}
-                          data-testid="payment-delete" onClick={() => remove(r)}>
+                          data-testid="payment-delete" onClick={(e) => { e.stopPropagation(); remove(r); }}>
                           Delete
                         </button>
                       </div>

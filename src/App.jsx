@@ -86,6 +86,7 @@ import SalesAdminPage from './pages/SalesAdminPage';
 import QuotationsPage from './pages/accounting/QuotationsPage';
 import RecordPaymentPage from './pages/accounting/RecordPaymentPage';
 import { PaymentInPage, PaymentOutPage } from './pages/accounting/PaymentsPage';
+import PaymentViewPage from './pages/accounting/PaymentViewPage';
 import ReportsHubPage from './pages/reports/ReportsHubPage';
 import Gstr3bPage from './pages/reports/Gstr3bPage';
 import HsnSalesSummaryPage from './pages/reports/HsnSalesSummaryPage';
@@ -166,6 +167,7 @@ const CUSTOM_PAGES = {
   'production-types': ManageProductionTypesPage,
   quotations: QuotationsPage,
   'payments/in': PaymentInPage,
+  'payment-view': PaymentViewPage,
   'payments/out': PaymentOutPage,
   // The Reports hub and the registers that hang off it.
   'reports': ReportsHubPage,
@@ -241,6 +243,7 @@ const STUB_ROUTES = [
   ['accounting/reports', '📊 Reports',        'page-accounting-reports', null],
   ['accounting/gst',  '🧮 GST',               'page-accounting-gst',  null],
   ['payments/in',     '💲 Payment In',        'page-payment-in',      null],
+  ['payment-view',    '💲 Payment',           'page-payment-view',    null],
   ['payments/out',    '💲 Payment Out',       'page-payment-out',     null],
   ['reports',         '📑 Reports',           'page-reports',         null],
   ['reports/gstr1',   '🧾 GSTR-1 (Sales)',    'page-reports-gstr1',   null],

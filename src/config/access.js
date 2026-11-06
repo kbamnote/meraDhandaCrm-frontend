@@ -25,6 +25,9 @@ export const PERM_OF = {
   // A receipt is money against a bill, so it follows the same grant as
   // the bills themselves rather than needing one of its own.
   '/payments/in': 'invoices',
+  // The voucher itself can be either side, so it follows whichever
+  // grant already lets you see payments at all.
+  '/payment-view': ['invoices', 'purchases'],
   '/payments/out': 'purchases',
   '/leads-crm': 'leads', '/sales-panel': 'leads',
   // The company's own sales figures — every colleague's revenue, the totals,

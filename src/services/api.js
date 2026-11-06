@@ -337,6 +337,8 @@ export const accountingApi = {
   partyPayment: (id, body) => api.post(`/accounting/party/${id}/payment`, body).then(r => r.data),
   // Payment In / Payment Out vouchers.
   payments:      (params)   => api.get('/accounting/payments', { params }).then(r => r.data),
+  // One voucher, with the bills it settled and what they owe now.
+  payment:       (id)       => api.get(`/accounting/payment/${id}`).then(r => r.data),
   // The number the form displays. Peeks at the counter without taking one, so
   // opening the screen and changing your mind does not burn a voucher number.
   paymentNumber: (direction) => api.get('/accounting/payment-number', { params: { direction } }).then(r => r.data),
