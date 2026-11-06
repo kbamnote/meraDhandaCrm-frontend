@@ -49,6 +49,11 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
   const [rowTds, setRowTds] = useState({});
   const [rowDisc, setRowDisc] = useState({});
   const [applying, setApplying] = useState(null); // { bill, kind: 'tds' | 'discount' }
+  // Which bills this payment is settling. Everything open starts ticked,
+  // because that is what the money does if you say nothing; untick to keep
+  // a bill out of it.
+  const [picked, setPicked] = useState(() => new Set());
+  const [billQ, setBillQ] = useState('');
   const [sections, setSections] = useState([]);
   const [form, setForm] = useState({
     amount: '', discount: '', date: todayStr(), mode: 'Cash', bankAccountId: '', reference: '', notes: '',
@@ -66,7 +71,7 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
     const settles = out ? lockedParty.type === 'vendor' : lockedParty.type === 'client';
     if (!settles) { setBills([]); return; }
     accountingApi.openBills(lockedParty.id, lockedParty.type)
-      .then((r) => setBills(r.rows || []))
+      .then((r) => { setBills(r.rows || []); setPicked(new Set((r.rows || []).map((b) => b.id))); })
       .catch((e) => {
         setBills([]);
         showToast(describeError(e, 'Could not load this party\u2019s bills'), 'error');
@@ -105,12 +110,13 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
 
   const pickParty = async (p) => {
     setParty(p); setMatches([]); setBills(null);
-    setAlloc({}); setTouched(false); setRowTds({}); setRowDisc({});
+    setAlloc({}); setTouched(false); setRowTds({}); setRowDisc({}); setPicked(new Set());
     const settles = out ? p.type === 'vendor' : p.type === 'client';
     if (!settles) { setBills([]); return; }
     try {
       const r = await accountingApi.openBills(p.id, p.type);
       setBills(r.rows || []);
+      setPicked(new Set((r.rows || []).map((b) => b.id)));
     } catch (e) {
       setBills([]);
       showToast(describeError(e, 'Could not load this party’s bills'), 'error');
@@ -118,10 +124,24 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
   };
 
   // ── allocation ──────────────────────────────────────────────────────────
+  // The bills on screen, after the filter box; and of those, the ticked ones,
+  // which are the only ones the money touches. Filtering hides a row but
+  // does not untick it — searching should not quietly change the payment.
+  const shownBills = useMemo(() => {
+    const all = bills || [];
+    const needle = billQ.trim().toLowerCase();
+    if (!needle) return all;
+    return all.filter((b) => String(b.no || '').toLowerCase().includes(needle));
+  }, [bills, billQ]);
+  const chosenBills = useMemo(
+    () => (bills || []).filter((b) => picked.has(b.id)),
+    [bills, picked],
+  );
+
   const settleable = R2(Number(form.amount) + Number(form.discount));
   // TDS and write-offs settle a bill without being money, so they add to what
   // this payment can clear.
-  const nonCash = R2((bills || []).reduce(
+  const nonCash = R2(chosenBills.reduce(
     (a, b) => a + Number(rowTds[b.id] || 0) + Number(rowDisc[b.id] || 0), 0,
   ));
   const capacity = R2(settleable + nonCash);
@@ -136,7 +156,7 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
   const autoAlloc = useMemo(() => {
     const outp = {};
     let left = capacity;
-    for (const b of (bills || [])) {
+    for (const b of chosenBills) {
       if (left <= 0) break;
       const relief = R2(Math.min(b.due, left));
       if (relief <= 0) continue;
@@ -146,7 +166,7 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
     }
     return outp;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bills, capacity, JSON.stringify(rowTds), JSON.stringify(rowDisc)]);
+  }, [chosenBills, capacity, JSON.stringify(rowTds), JSON.stringify(rowDisc)]);
 
   // Until the user edits a row, the allocation follows the amount as it is
   // typed. After that it is theirs and must not be rewritten underneath them.
@@ -156,8 +176,37 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
   const unapplied = R2(settleable - allocated);
   const over = allocated > settleable + 0.001;
   // Column totals, as the screenshot's footer shows them.
-  const tdsTotal = R2((bills || []).reduce((a, b) => a + Number(rowTds[b.id] || 0), 0));
-  const discTotal = R2((bills || []).reduce((a, b) => a + Number(rowDisc[b.id] || 0), 0));
+  const tdsTotal = R2(chosenBills.reduce((a, b) => a + Number(rowTds[b.id] || 0), 0));
+  const discTotal = R2(chosenBills.reduce((a, b) => a + Number(rowDisc[b.id] || 0), 0));
+  const dueTotal = R2(chosenBills.reduce((a, b) => a + b.due, 0));
+
+  /**
+   * Tick or untick one bill.
+   *
+   * Unticking clears whatever was keyed against it: leaving a stale TDS
+   * figure on a bill this payment no longer settles would re-apply it the
+   * moment the box was ticked again.
+   */
+  const togglePick = (id) => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        setAlloc((m) => { const c = { ...m }; delete c[id]; return c; });
+        setRowTds((m) => { const c = { ...m }; delete c[id]; return c; });
+        setRowDisc((m) => { const c = { ...m }; delete c[id]; return c; });
+      } else next.add(id);
+      return next;
+    });
+  };
+
+  // The header box acts on what is VISIBLE, which is what a filtered list
+  // makes you expect: tick these, not the forty you cannot see.
+  const allShownPicked = shownBills.length > 0 && shownBills.every((b) => picked.has(b.id));
+  const toggleAllShown = () => {
+    if (allShownPicked) shownBills.forEach((b) => picked.has(b.id) && togglePick(b.id));
+    else setPicked((prev) => new Set([...prev, ...shownBills.map((b) => b.id)]));
+  };
 
   const setRow = (billId, value) => {
     setAlloc({ ...effective, [billId]: value });
@@ -175,6 +224,7 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
       // `applied` is the MONEY on the row; the server adds the row's TDS and
       // write-off to get the relief the bill actually receives.
       const allocations = Object.entries(effective)
+        .filter(([invoiceId]) => picked.has(invoiceId))
         .map(([invoiceId, applied]) => ({
           invoiceId,
           applied: R2(applied),
@@ -253,7 +303,7 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
                   <button className="btn btn-xs btn-ghost" data-testid="payment-change-party"
                     onClick={() => {
                       setParty(null); setQ(''); setBills(null);
-                      setAlloc({}); setTouched(false); setRowTds({}); setRowDisc({});
+                      setAlloc({}); setTouched(false); setRowTds({}); setRowDisc({}); setPicked(new Set());
                     }}>
                     Change
                   </button>
@@ -379,19 +429,41 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
           <>
             <div className="flex items-center justify-between" style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 8 }}>
               <span style={{ fontWeight: 600, fontSize: 13.5 }}>
-                Outstanding bills · {inr(totalDue)}
+                Settle invoices with this payment
+                <span style={{ fontWeight: 400, color: 'var(--text3)' }}>
+                  {' · '}{inr(dueTotal)} selected of {inr(totalDue)}
+                </span>
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text3)' }}>
-                {touched
-                  ? 'You are choosing the split.'
-                  : 'Applied oldest first — edit any row to take over.'}
-              </span>
+              <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
+                {picked.size > 0 && (
+                  <span data-testid="picked-chip"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: 'var(--surface2)' }}>
+                    {picked.size} Invoice{picked.size > 1 ? 's' : ''} Selected
+                    <button type="button" className="btn btn-ghost btn-xs" title="Clear the selection"
+                      data-testid="picked-clear"
+                      onClick={() => { setPicked(new Set()); setAlloc({}); setRowTds({}); setRowDisc({}); }}
+                      style={{ padding: 0, lineHeight: 1 }}>✕</button>
+                  </span>
+                )}
+                <input className="input" style={{ width: 160 }} placeholder="🔍  Invoice #"
+                  data-testid="bill-search" value={billQ} onChange={(e) => setBillQ(e.target.value)} />
+              </div>
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="crm-table" style={{ fontSize: 12.5, minWidth: 620 }}>
-                <thead>
+
+            {/* The list scrolls in its own right, so a party with forty open
+                bills keeps the running totals below in view instead of pushing
+                them off the bottom of the page. The header sticks to the top of
+                that scroller so the columns stay labelled. */}
+            <div style={{ overflow: 'auto', maxHeight: 340 }} data-testid="bill-scroller">
+              <table className="crm-table" style={{ fontSize: 12.5, minWidth: 700 }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--surface, #fff)', boxShadow: 'inset 0 -1px 0 var(--border)' }}>
                   <tr>
-                    <th>Bill No</th><th>Date</th>
+                    <th style={{ width: 34 }}>
+                      <input type="checkbox" data-testid="bill-select-all"
+                        title={allShownPicked ? 'Clear these' : 'Select these'}
+                        checked={allShownPicked} onChange={toggleAllShown} />
+                    </th>
+                    <th>Invoice #</th><th>Date</th>
                     <th style={{ textAlign: 'right' }}>Total</th>
                     <th style={{ textAlign: 'right' }}>Due</th>
                     {!out && <th style={{ textAlign: 'right' }}>TDS</th>}
@@ -402,8 +474,20 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
                   </tr>
                 </thead>
                 <tbody>
-                  {bills.map((b) => (
-                    <tr key={b.id} data-testid="open-bill-row">
+                  {!shownBills.length && (
+                    <tr><td colSpan={out ? 6 : 7} style={{ padding: 24, textAlign: 'center', color: 'var(--text3)' }}>
+                      No invoice matches that.
+                    </td></tr>
+                  )}
+                  {shownBills.map((b) => {
+                    const on = picked.has(b.id);
+                    return (
+                    <tr key={b.id} data-testid="open-bill-row"
+                      style={{ opacity: on ? 1 : 0.5 }}>
+                      <td>
+                        <input type="checkbox" checked={on} data-testid="bill-pick"
+                          onChange={() => togglePick(b.id)} />
+                      </td>
                       <td style={{ fontFamily: 'monospace', fontSize: 11.5 }}>{b.no || '—'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{pretty(b.date)}</td>
                       <td style={{ textAlign: 'right' }}>{inr(b.total)}</td>
@@ -443,14 +527,46 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
                           onChange={(e) => setRow(b.id, e.target.value)} />
                       </td>
                     </tr>
-                  ))}
-                  <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border)' }}>
-                    <td colSpan={4}>Total</td>
-                    {!out && <td style={{ textAlign: 'right' }} data-testid="tds-total">{inr(tdsTotal)}</td>}
-                    <td style={{ textAlign: 'right' }}>{inr(discTotal)}</td>
-                    <td style={{ textAlign: 'right' }}>{inr(allocated)}</td>
-                  </tr>
+                    );
+                  })}
                 </tbody>
+
+                {/* Pinned to the bottom of the scroller, and inside the same
+                    table so the columns line up by construction rather than by
+                    me guessing widths twice. Sticky goes on the cells: a
+                    sticky <tfoot> element is not something browsers agree on. */}
+                <tfoot data-testid="bill-totals">
+                  <tr>
+                    {[
+                      // Column order: checkbox, Invoice #, Date, Total, Due,
+                      // [TDS], Discount, Amount. The label sits under Invoice #
+                      // rather than in the 34px checkbox column.
+                      null,
+                      <>Total <span style={{ fontWeight: 400, color: 'var(--text3)' }}>
+                        · {picked.size} of {bills.length} selected
+                      </span></>,
+                      null,
+                      inr(chosenBills.reduce((a, b) => a + b.total, 0)),
+                      inr(dueTotal),
+                      ...(out ? [] : [inr(tdsTotal)]),
+                      inr(discTotal),
+                      inr(allocated),
+                    ].map((cell, i) => (
+                      <td key={i}
+                        data-testid={!out && i === 5 ? 'tds-total' : undefined}
+                        style={{
+                          position: 'sticky', bottom: 0, zIndex: 2,
+                          background: 'var(--surface, #fff)',
+                          boxShadow: 'inset 0 2px 0 var(--border)',
+                          fontWeight: 700,
+                          textAlign: i >= 3 ? 'right' : 'left',
+                          whiteSpace: 'nowrap',
+                        }}>
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </>
