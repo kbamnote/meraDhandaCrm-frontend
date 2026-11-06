@@ -656,6 +656,9 @@ export const txnTarget = (r) => {
   if (!r || !r.id) return null;
   if (r.collectionName === 'invoices') return `/invoice-view?id=${encodeURIComponent(r.id)}`;
   if (r.collectionName === 'purchaseOrders') return `/purchase-view?id=${encodeURIComponent(r.id)}`;
+  // A receipt has its own voucher now — the bills it settled, what was
+  // written off, and what each one still owes.
+  if (r.collectionName === 'payments') return `/payment-view?id=${encodeURIComponent(r.id)}`;
   return null;
 };
 

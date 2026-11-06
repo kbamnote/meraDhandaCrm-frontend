@@ -10,7 +10,7 @@
  * ₹10,000 bill. Anything the bills do not absorb stays on account.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { accountingApi, describeError } from '../../services/api';
 import { showToast } from '../../components/common/toast';
 import { inr } from '../../components/common/DashboardCharts';
@@ -38,7 +38,9 @@ const pretty = (iso) => (iso ? iso.split('-').reverse().join('-') : '—');
  * @param embedded     drop the page header; the host supplies its own.
  * @param onSaved      passed the server's reply.
  */
-export function PaymentForm({ direction, lockedParty = null, embedded = false, onCancel, onSaved }) {
+export function PaymentForm({
+  direction, lockedParty = null, embedded = false, editId = null, onCancel, onSaved,
+}) {
   const out = direction === 'out';
 
   const [voucher, setVoucher] = useState(null);
@@ -62,15 +64,73 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
     amount: '', discount: '', date: todayStr(), mode: 'Cash', bankAccountId: '', reference: '', notes: '',
   });
   const [saving, setSaving] = useState(false);
+  // The voucher being corrected, once it has loaded. Everything waits on
+  // it: prefilling half a form and then overwriting it is worse than a
+  // moment of 'Loading'.
+  const [editing, setEditing] = useState(null);
 
   useEffect(() => {
+    // An edit keeps the number it was issued under, so nothing is peeked.
+    if (editId) return;
     accountingApi.paymentNumber(direction).then(setVoucher).catch(() => setVoucher(null));
-  }, [direction]);
+  }, [direction, editId]);
+
+  /**
+   * Open an existing voucher.
+   *
+   * Its bills are fetched with `forPayment`, so the ones it already settled
+   * come back even though they now owe nothing — they owe nothing BECAUSE of
+   * this payment, and leaving them out would hide the rows being edited.
+   */
+  useEffect(() => {
+    if (!editId) return;
+    let dead = false;
+    (async () => {
+      try {
+        const p = await accountingApi.payment(editId);
+        if (dead) return;
+        setEditing(p);
+        setParty({ id: p.partyId, name: p.partyName, type: p.partyType });
+        setForm({
+          amount: String(p.amount ?? ''),
+          discount: String(p.discount ?? ''),
+          date: p.date || todayStr(),
+          mode: p.mode || 'Cash',
+          bankAccountId: p.bankAccountId || '',
+          reference: p.reference || '',
+          notes: p.notes || '',
+        });
+
+        const r = await accountingApi.openBills(p.partyId, p.partyType, editId);
+        if (dead) return;
+        const rows = r.rows || [];
+        setBills(rows);
+
+        // Restore the split exactly as it was recorded, and tick only the
+        // bills it touched — not every open bill, which is the default for a
+        // NEW payment but would silently re-spread an edited one.
+        const money = {}; const tds = {}; const disc = {};
+        for (const a of p.settled) {
+          if (!a.invoiceId) continue;
+          money[a.invoiceId] = a.received;
+          if (a.tds) tds[a.invoiceId] = a.tds;
+          if (a.discount) disc[a.invoiceId] = a.discount;
+        }
+        setAlloc(money); setRowTds(tds); setRowDisc(disc);
+        setTouched(true);
+        setPicked(new Set(p.settled.map((a) => a.invoiceId).filter(Boolean)));
+      } catch (e) {
+        if (!dead) showToast(describeError(e, 'Could not open this payment'), 'error');
+      }
+    })();
+    return () => { dead = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
 
   // Opened against a party, its bills are fetched straight away — nobody is
   // going to pick it from a list it is already the answer to.
   useEffect(() => {
-    if (!lockedParty) return;
+    if (!lockedParty || editId) return;
     const settles = out ? lockedParty.type === 'vendor' : lockedParty.type === 'client';
     if (!settles) { setBills([]); return; }
     accountingApi.openBills(lockedParty.id, lockedParty.type)
@@ -235,7 +295,7 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
           discount: R2(rowDisc[invoiceId]),
         }))
         .filter((a) => a.applied > 0 || a.tds > 0 || a.discount > 0);
-      const r = await accountingApi.partyPayment(party.id, {
+      const body = {
         // The party's own side decides which head the money posts against;
         // the SCREEN decides which way it went. Sending the screen's side as
         // the party type would file a supplier's refund as money paid out.
@@ -254,8 +314,13 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
         // which is the same thing minus a round trip of numbers that could
         // disagree.
         ...(touched || tdsTotal > 0 || discTotal > 0 ? { allocations } : {}),
-      });
-      showToast(`${(r && r.payment && r.payment.paymentNo) || 'Payment'} saved`, 'success');
+      };
+      const r = editId
+        // The party can be changed on an edit, so it travels in the body:
+        // the URL names the payment, not who it was against.
+        ? await accountingApi.updatePayment(editId, { ...body, partyId: party.id })
+        : await accountingApi.partyPayment(party.id, body);
+      showToast(`${(r && r.payment && r.payment.paymentNo) || 'Payment'} ${editId ? 'updated' : 'saved'}`, 'success');
       if (onSaved) onSaved(r);
     } catch (e) {
       showToast(describeError(e, 'Could not save this payment'), 'error');
@@ -269,7 +334,7 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
     <div className="flex" style={{ gap: 8 }}>
       <button className="btn btn-ghost btn-sm" onClick={onCancel} disabled={saving}>Cancel</button>
       <button className="btn btn-primary btn-sm" onClick={save} disabled={saving || !party} data-testid="payment-save">
-        {saving ? '…' : 'Save'}
+        {saving ? '…' : (editId ? 'Save Changes' : 'Save')}
       </button>
     </div>
   );
@@ -281,8 +346,12 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
           <div className="flex items-center" style={{ gap: 10 }}>
             <button className="btn btn-ghost btn-sm" onClick={onCancel}>←</button>
             <h2 style={{ fontSize: 19, fontWeight: 600, margin: 0 }}>
-              Record {out ? 'Payment Out' : 'Payment In'}
-              {voucher && <span style={{ color: 'var(--text3)', fontWeight: 400 }}> #{voucher.number}</span>}
+              {editId ? 'Edit' : 'Record'} {out ? 'Payment Out' : 'Payment In'}
+              {(editing || voucher) && (
+                <span style={{ color: 'var(--text3)', fontWeight: 400 }}>
+                  {' '}#{editing ? editing.paymentNo : voucher.number}
+                </span>
+              )}
             </h2>
           </div>
           {actions}
@@ -302,7 +371,7 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
                     {' · '}{party.type === 'vendor' ? 'Supplier' : 'Customer'}
                   </span>
                 </span>
-                {!lockedParty && (
+                {!lockedParty && !editId && (
                   <button className="btn btn-xs btn-ghost" data-testid="payment-change-party"
                     onClick={() => {
                       setParty(null); setQ(''); setBills(null);
@@ -379,7 +448,7 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label>{out ? 'Payment Out' : 'Payment In'} Number</label>
-              <input className="input" readOnly value={voucher ? voucher.paymentNo : '…'}
+              <input className="input" readOnly value={(editing && editing.paymentNo) || (voucher ? voucher.paymentNo : '…')}
                 data-testid="payment-number"
                 title="Taken when you save, so an abandoned form does not burn a number" />
             </div>
@@ -624,8 +693,12 @@ export default function RecordPaymentPage() {
   const { direction: dirParam } = useParams();
   const direction = dirParam === 'out' ? 'out' : 'in';
   const navigate = useNavigate();
-  const back = () => navigate(`/payments/${direction}`);
-  return <PaymentForm direction={direction} onCancel={back} onSaved={back} />;
+  const [params] = useSearchParams();
+  const editId = params.get('id');
+  // After editing, back to the voucher it came from rather than the list:
+  // you came here to check a figure, so you should land on it.
+  const back = () => navigate(editId ? `/payment-view?id=${encodeURIComponent(editId)}` : `/payments/${direction}`);
+  return <PaymentForm direction={direction} editId={editId} onCancel={back} onSaved={back} />;
 }
 
 /**

@@ -104,6 +104,10 @@ export default function PaymentViewPage() {
           </button>
           <button className="btn btn-ghost btn-sm" data-testid="payment-print"
             disabled={!grid.rows.length} onClick={() => printReport(title, grid)}>Print</button>
+          <button className="btn btn-primary btn-sm" data-testid="payment-edit"
+            onClick={() => navigate(`/payments/${out ? 'out' : 'in'}/new?id=${encodeURIComponent(id)}`)}>
+            ✎ Edit
+          </button>
           <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }}
             data-testid="payment-view-delete" disabled={busy} onClick={remove}>
             {busy ? '…' : '🗑 Delete'}

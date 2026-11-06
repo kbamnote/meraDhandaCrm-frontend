@@ -21,6 +21,7 @@ import { showToast } from '../../components/common/toast';
 import { inr } from '../../components/common/DashboardCharts';
 import { invalidateFundingAccounts } from '../../components/common/BankAccountSelect';
 import { isCashMode, modeOptions } from '../../config/payModes';
+import { useNavigate } from 'react-router-dom';
 
 const round2 = (n) => Math.round(((Number(n) || 0) * 100) + 1e-8) / 100;
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -126,6 +127,23 @@ export default function CashBankPage() {
   const [dialog, setDialog] = useState(null); // 'account' | 'transfer' | 'adjust' | 'moveAll'
   const [editing, setEditing] = useState(null);
   const [openEntryId, setOpenEntryId] = useState(null);   // clicked statement row
+  const navigate = useNavigate();
+
+  /**
+   * Where a statement row goes when clicked.
+   *
+   * A receipt has a voucher of its own — the bills it settled, the TDS,
+   * the write-offs — so it opens that rather than the generic ledger
+   * dialog, which could only ever show the two journal lines. Everything
+   * else still opens the dialog, which is the only view it has.
+   */
+  const openRow = (r) => {
+    if (r.source === 'payments' && r.sourceId) {
+      navigate(`/payment-view?id=${encodeURIComponent(r.sourceId)}`);
+      return;
+    }
+    setOpenEntryId(r.id);
+  };
   // Banks offer both; the running balance on each row is unaffected either
   // way, because it is the balance AFTER that transaction, not a re-total of
   // whatever happens to be above it on screen.
@@ -380,8 +398,8 @@ export default function CashBankPage() {
                   tabIndex={0}
                   title="Open this transaction"
                   data-testid="statement-row"
-                  onClick={() => setOpenEntryId(r.id)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenEntryId(r.id); } }}
+                  onClick={() => openRow(r)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(r); } }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface2)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   style={{ ...ROW, cursor: 'pointer' }}

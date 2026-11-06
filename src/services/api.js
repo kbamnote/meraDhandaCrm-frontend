@@ -339,11 +339,14 @@ export const accountingApi = {
   payments:      (params)   => api.get('/accounting/payments', { params }).then(r => r.data),
   // One voucher, with the bills it settled and what they owe now.
   payment:       (id)       => api.get(`/accounting/payment/${id}`).then(r => r.data),
+  // Correct one already recorded. The server reverses it and re-records
+  // through the same path that created it, keeping its voucher number.
+  updatePayment: (id, body) => api.put(`/accounting/payment/${id}`, body).then(r => r.data),
   // The number the form displays. Peeks at the counter without taking one, so
   // opening the screen and changing your mind does not burn a voucher number.
   paymentNumber: (direction) => api.get('/accounting/payment-number', { params: { direction } }).then(r => r.data),
   // What this party still owes, oldest first — the rows to allocate against.
-  openBills:     (id, type) => api.get(`/accounting/party/${id}/open-bills`, { params: { type } }).then(r => r.data),
+  openBills:     (id, type, forPayment) => api.get(`/accounting/party/${id}/open-bills`, { params: { type, forPayment } }).then(r => r.data),
   // Search either side. Suppliers had no search at all before this; only
   // clients were indexed, via ordersApi.searchClients.
   searchParties: (q, type)  => api.get('/accounting/party-search', { params: { q, type } }).then(r => r.data),
