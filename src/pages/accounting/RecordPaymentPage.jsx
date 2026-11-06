@@ -18,6 +18,9 @@ import BankAccountSelect from '../../components/common/BankAccountSelect';
 import { PAY_MODES, isCashMode, modeOptions } from '../../config/payModes';
 
 const R2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+// A <select> value that is not a rate but an action. Distinctive enough that
+// it can never collide with a list index.
+const ADD_NEW = '__add_tds_rate__';
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const pretty = (iso) => (iso ? iso.split('-').reverse().join('-') : '—');
 
@@ -602,6 +605,7 @@ export function PaymentForm({ direction, lockedParty = null, embedded = false, o
           bill={applying.bill}
           kind={applying.kind}
           sections={sections}
+          onSectionsChanged={setSections}
           current={applying.kind === 'tds' ? rowTds[applying.bill.id] : rowDisc[applying.bill.id]}
           onClose={() => setApplying(null)}
           onApply={(value) => {
@@ -632,17 +636,46 @@ export default function RecordPaymentPage() {
  * the rupees, since a rate on a part-paid bill is ambiguous about which figure
  * it applies to.
  */
-function ApplyToBillModal({ bill, kind, sections, current, onClose, onApply }) {
+function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, onClose, onApply }) {
   const isTds = kind === 'tds';
   const [rate, setRate] = useState('');
   const [amount, setAmount] = useState(current ? String(current) : '');
+  const [adding, setAdding] = useState(null);   // { code, name, rate }
+  const [savingRate, setSavingRate] = useState(false);
 
-  // Rates on the bill's OUTSTANDING figure, which is what this payment is
-  // settling — not the original total, which may be part paid already.
-  const pick = (r) => {
-    setRate(r);
-    if (r === '') return;
-    setAmount(String(R2((bill.due * Number(r)) / 100)));
+  // A rate is picked by its position in the list, not by its percentage: two
+  // sections share 10%, and keying on the number alone would make picking one
+  // silently select the other.
+  const pick = (idx) => {
+    if (idx === ADD_NEW) { setAdding({ code: '', name: '', rate: '' }); return; }
+    setRate(idx);
+    if (idx === '') return;
+    const s = sections[Number(idx)];
+    if (!s) return;
+    // Rates apply to the bill's OUTSTANDING figure, which is what this payment
+    // is settling — not the original total, which may be part paid already.
+    setAmount(String(R2((bill.due * Number(s.defaultRate)) / 100)));
+  };
+
+  const saveRate = async () => {
+    const code = String(adding.code || '').trim();
+    if (!code) { showToast('Enter the section, e.g. 194J', 'error'); return; }
+    if (!(Number(adding.rate) >= 0)) { showToast('Enter the rate', 'error'); return; }
+    setSavingRate(true);
+    try {
+      const added = await accountingApi.addTdsRate({
+        code, name: adding.name, rate: R2(adding.rate),
+      });
+      const fresh = await accountingApi.tdsSections();
+      onSectionsChanged(fresh);
+      // Select what was just added, so adding it IS choosing it.
+      const idx = fresh.findIndex((s) => String(s.code) === String(added.code)
+        && Number(s.defaultRate) === Number(added.rate));
+      setAdding(null);
+      if (idx >= 0) { setRate(String(idx)); setAmount(String(R2((bill.due * Number(added.rate)) / 100))); }
+    } catch (e) {
+      showToast(describeError(e, 'Could not add that rate'), 'error');
+    } finally { setSavingRate(false); }
   };
 
   const value = R2(amount);
@@ -663,22 +696,54 @@ function ApplyToBillModal({ bill, kind, sections, current, onClose, onApply }) {
           {bill.no || 'This bill'} · {inr(bill.due)} outstanding
         </div>
 
-        {isTds && (
+        {isTds && !adding && (
           <div className="form-group">
-            <label>TDS Rate</label>
+            <label>TDS</label>
             <select className="input" value={rate} onChange={(e) => pick(e.target.value)} data-testid="tds-rate">
-              <option value="">Select TDS rate</option>
-              {sections.map((s) => (
-                <option key={s.code} value={s.defaultRate}>
-                  {s.code} · {s.name} · {s.defaultRate}%
+              <option value="">Select Tds Rate</option>
+              {sections.map((s, i) => (
+                // Rate first, then section, then what it covers — the order
+                // the rate is quoted in and the thing you scan the list for.
+                <option key={`${s.code}-${s.defaultRate}-${i}`} value={String(i)}>
+                  {Number(s.defaultRate).toFixed(1)}% - {s.code}  {s.name}
                 </option>
               ))}
-              {/* The common flat rates, for anything the three sections above
-                  do not cover. */}
-              {[0.1, 1, 2, 5, 10].map((r) => (
-                <option key={`flat-${r}`} value={r}>{r}%</option>
-              ))}
+              <option value={ADD_NEW}>+ Add New Tds Rate</option>
             </select>
+          </div>
+        )}
+
+        {isTds && adding && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>New TDS rate</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Section</label>
+                <input className="input" autoFocus placeholder="194J" data-testid="new-tds-code"
+                  value={adding.code}
+                  onChange={(e) => setAdding((a) => ({ ...a, code: e.target.value }))} />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Rate %</label>
+                <input className="input" type="number" min="0" max="100" step="0.01" placeholder="2"
+                  data-testid="new-tds-rate" value={adding.rate}
+                  onChange={(e) => setAdding((a) => ({ ...a, rate: e.target.value }))} />
+              </div>
+              <div className="form-group" style={{ margin: 0, gridColumn: '1 / -1' }}>
+                <label>Description</label>
+                <input className="input" placeholder="What this rate is for"
+                  data-testid="new-tds-name" value={adding.name}
+                  onChange={(e) => setAdding((a) => ({ ...a, name: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex" style={{ gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+              <button className="btn btn-xs btn-ghost" onClick={() => setAdding(null)} disabled={savingRate}>Cancel</button>
+              <button className="btn btn-xs btn-primary" onClick={saveRate} disabled={savingRate}
+                data-testid="new-tds-save">{savingRate ? '…' : 'Add rate'}</button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+              Saved for this company and offered here from now on.
+            </div>
           </div>
         )}
 
@@ -687,6 +752,9 @@ function ApplyToBillModal({ bill, kind, sections, current, onClose, onApply }) {
           <input className="input" type="number" min="0" step="0.01" autoFocus={!isTds}
             data-testid="apply-amount" value={amount}
             onChange={(e) => { setAmount(e.target.value); setRate(''); }} />
+          {/* Typing an amount clears the rate: once a bill is part-paid a rate
+              is ambiguous about which figure it was taken on, so the rupees are
+              what gets stored either way. */}
           {tooMuch && (
             <div style={{ fontSize: 11.5, color: 'var(--red)', marginTop: 3 }}>
               More than the {inr(bill.due)} still owed on this bill.
