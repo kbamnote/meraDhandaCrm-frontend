@@ -23,11 +23,10 @@ import { inr } from '../../components/common/DashboardCharts';
 import CreateInvoiceFlow from '../../components/common/CreateInvoiceFlow';
 import PartyBulkUpload from '../../components/common/PartyBulkUpload';
 import CreatePurchaseFlow from '../../components/common/CreatePurchaseFlow';
-import BankAccountSelect from '../../components/common/BankAccountSelect';
 // Reuse the report exporters so a party statement downloads in the same shapes
 // as every other report, instead of a second CSV/PDF implementation.
 import ExportButtons from '../../components/common/reportExport';
-import { PAY_MODES } from '../../config/payModes';
+import { PaymentForm } from './RecordPaymentPage';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -595,9 +594,8 @@ function PartyDetail({ party, t, onBack }) {
       )}
       {paying && (
         <PartyPaymentModal
-          t={t} party={party} isClient={isClient}
-          outstanding={sum ? sum.outstanding : 0}
-          unpaidInvoices={(data.transactions || []).filter((r) => r.unpaid > 0)}
+          party={{ id: party.id, name: (p && p.name) || party.name, type: party.type }}
+          isClient={isClient}
           onClose={() => setPaying(false)}
           onDone={() => { setPaying(false); load(); }}
         />
@@ -1372,171 +1370,43 @@ const gridCols = (min = 200) => ({ display: 'grid', gridTemplateColumns: `repeat
 // Money arriving against a PARTY rather than one invoice — which is how it
 // actually arrives. Shows exactly which bills the amount will clear before it
 // is saved, because an allocation the user cannot see is one they cannot check.
-function PartyPaymentModal({ t, party, isClient, outstanding, unpaidInvoices, onClose, onDone }) {
-  const [form, setForm] = useState({
-    amount: '',
-    date: new Date().toISOString().slice(0, 10),
-    mode: 'Cash',
-    // WHICH account the money moved through. Left blank the server files it
-    // under Unlinked Transactions rather than guessing a real account.
-    bankAccountId: '',
-    reference: '',
-    invoiceId: '',      // '' = allocate oldest-first
-    notes: '',
-  });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
-  const openInvoices = useMemo(
-    () => (unpaidInvoices || []).filter((r) => ['invoice', 'cash'].includes(r.docType)),
-    [unpaidInvoices]
-  );
-
-  // Oldest first, matching what the server will do — so this preview is a
-  // prediction of the real allocation rather than a different guess.
-  const candidates = useMemo(() => {
-    const list = [...openInvoices].sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
-    return form.invoiceId ? list.filter((r) => r.id === form.invoiceId) : list;
-  }, [openInvoices, form.invoiceId]);
-
-  const preview = useMemo(() => {
-    let left = round2(Number(form.amount) || 0);
-    const hits = [];
-    for (const inv of candidates) {
-      if (left <= 0) break;
-      const applied = round2(Math.min(inv.unpaid, left));
-      if (applied <= 0) continue;
-      left = round2(left - applied);
-      hits.push({ ...inv, applied, clears: applied >= inv.unpaid });
-    }
-    return { hits, onAccount: left };
-  }, [candidates, form.amount]);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    const amount = round2(Number(form.amount) || 0);
-    if (!(amount > 0)) { setError(t('amountGt0')); return; }
-    setBusy(true); setError('');
-    try {
-      const r = await accountingApi.partyPayment(party.id, {
-        partyType: party.type === 'vendor' ? 'vendor' : 'client',
-        amount, date: form.date, mode: form.mode,
-        bankAccountId: form.bankAccountId || undefined,
-        reference: form.reference.trim() || undefined,
-        notes: form.notes.trim() || undefined,
-        invoiceId: form.invoiceId || undefined,
-      });
-      const settled = r.allocations.map((a) => a.invoiceNo).filter(Boolean).join(', ');
-      showToast(
-        `${inr(amount)} recorded`
-        + (settled ? ` — ${settled}` : '')
-        + (r.onAccount > 0 ? ` · ${inr(r.onAccount)} ${t('onAccount')}` : ''),
-        'success'
-      );
-      onDone();
-    } catch (err) {
-      setError(describeError(err, t('failed')));
-    } finally { setBusy(false); }
-  };
-
-  const lbl = { fontSize: 11.5, color: 'var(--text3)', fontWeight: 600, display: 'block', marginBottom: 4 };
-
+/**
+ * Payment In / Payment Out from a party's own page.
+ *
+ * This used to carry its own, smaller form: an amount, a mode and a single
+ * invoice picker. It now shows the SAME form as the Payment In screen — the
+ * voucher number, the settlement discount, the bill-by-bill split and the
+ * per-bill TDS — because two forms for one job drift apart, and the one that
+ * gets the attention is never the one you happen to be looking at.
+ *
+ * The party is fixed here, so its picker is hidden and its bills load
+ * straight away.
+ */
+function PartyPaymentModal({ party, isClient, onClose, onDone }) {
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 250, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <form className="card" onSubmit={submit} style={{ width: '100%', maxWidth: 520, padding: 20, maxHeight: '92vh', overflow: 'auto' }}>
-        <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isClient ? t('paymentIn') : t('paymentOut')}
+      <div className="card" style={{ width: 980, maxWidth: '100%', margin: '24px 0', padding: 18 }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 14, gap: 10 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>
+            {isClient ? 'Payment In' : 'Payment Out'}
+            <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: 13 }}>
+              {' \u00b7 '}{party.name}
+            </span>
           </h3>
-          <button type="button" className="btn btn-xs btn-ghost" onClick={onClose}>✕</button>
-        </div>
-        <div style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 14 }}>
-          {party.name} · {t('currentDue')}: <b style={{ color: 'var(--text)' }}>{inr(Math.abs(outstanding))}</b>
+          <button type="button" className="btn btn-xs btn-ghost" onClick={onClose}>\u2715</button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <div>
-            <label style={lbl}>{isClient ? t('amountRecv') : t('amountPaid')} *</label>
-            <input className="input" type="number" step="0.01" autoFocus value={form.amount}
-              onChange={(e) => set('amount', e.target.value)} placeholder="0" />
-          </div>
-          <div>
-            <label style={lbl}>{t('date')}</label>
-            <input className="input" type="date" value={form.date} onChange={(e) => set('date', e.target.value)} />
-          </div>
-          <div>
-            <label style={lbl}>{t('payMode')}</label>
-            <select className="input" value={form.mode} onChange={(e) => set('mode', e.target.value)}>
-              {PAY_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={lbl}>{t('reference')}</label>
-            <input className="input" value={form.reference} onChange={(e) => set('reference', e.target.value)} placeholder="UTR / cheque no" />
-          </div>
-        </div>
-
-        {/* The mode says HOW the money moved; this says WHERE it landed. Both
-            are needed before a bank statement can be reconciled. */}
-        <BankAccountSelect
-          style={{ marginTop: 12, marginBottom: 0 }}
-          label={isClient ? 'Received in' : 'Paid from'}
-          mode={form.mode}
-          value={form.bankAccountId}
-          onChange={(v) => set('bankAccountId', v)}
+        <PaymentForm
+          direction={isClient ? 'in' : 'out'}
+          lockedParty={party}
+          embedded
+          onCancel={onClose}
+          onSaved={onDone}
         />
-
-        {isClient && openInvoices.length > 0 && (
-          <div className="form-group" style={{ marginTop: 12 }}>
-            <label style={lbl}>{t('againstInv')}</label>
-            <select className="input" value={form.invoiceId} onChange={(e) => set('invoiceId', e.target.value)}>
-              <option value="">{t('oldestFirst')}</option>
-              {openInvoices.map((r) => (
-                <option key={r.id} value={r.id}>{r.number} — {inr(r.unpaid)} due</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* What the money will actually do, shown before it is saved. */}
-        {Number(form.amount) > 0 && (
-          <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'var(--surface2)', fontSize: 12.5 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>{t('willSettle')}</div>
-            {preview.hits.length === 0 && (
-              <div style={{ color: 'var(--text2)' }}>{inr(preview.onAccount)} {t('onAccount')}</div>
-            )}
-            {preview.hits.map((h) => (
-              <div key={h.id} className="flex items-center justify-between" style={{ padding: '2px 0' }}>
-                <span>{h.number}</span>
-                <span>
-                  {inr(h.applied)}
-                  <span style={{ color: h.clears ? 'var(--green, #059669)' : 'var(--amber, #B45309)', marginLeft: 6 }}>
-                    {h.clears ? '· cleared' : '· part'}
-                  </span>
-                </span>
-              </div>
-            ))}
-            {preview.hits.length > 0 && preview.onAccount > 0 && (
-              <div style={{ marginTop: 4, color: 'var(--amber, #B45309)' }}>
-                + {inr(preview.onAccount)} {t('onAccount')}
-              </div>
-            )}
-          </div>
-        )}
-
-        {error && <div style={{ color: 'var(--red)', fontSize: 12.5, marginTop: 10 }}>{error}</div>}
-
-        <div className="flex" style={{ gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? t('adding') : t('saveReceipt')}
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 }

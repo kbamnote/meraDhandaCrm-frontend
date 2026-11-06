@@ -21,14 +21,25 @@ const R2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const pretty = (iso) => (iso ? iso.split('-').reverse().join('-') : '—');
 
-export default function RecordPaymentPage() {
-  const { direction: dirParam } = useParams();
-  const direction = dirParam === 'out' ? 'out' : 'in';
+/**
+ * The payment form itself.
+ *
+ * Separated from the page so the Parties screen can show exactly these
+ * fields rather than a smaller copy of them — the copy it had carried no
+ * voucher number, no discount and no per-bill TDS, and the two would have
+ * gone on diverging.
+ *
+ * @param lockedParty  when given, the party is fixed and the picker hidden:
+ *                     opened from a party's own page there is nothing to
+ *                     search for. { id, name, type }
+ * @param embedded     drop the page header; the host supplies its own.
+ * @param onSaved      passed the server's reply.
+ */
+export function PaymentForm({ direction, lockedParty = null, embedded = false, onCancel, onSaved }) {
   const out = direction === 'out';
-  const navigate = useNavigate();
 
   const [voucher, setVoucher] = useState(null);
-  const [party, setParty] = useState(null);
+  const [party, setParty] = useState(lockedParty);
   const [q, setQ] = useState('');
   const [matches, setMatches] = useState([]);
   const [bills, setBills] = useState(null);
@@ -48,6 +59,21 @@ export default function RecordPaymentPage() {
     accountingApi.paymentNumber(direction).then(setVoucher).catch(() => setVoucher(null));
   }, [direction]);
 
+  // Opened against a party, its bills are fetched straight away — nobody is
+  // going to pick it from a list it is already the answer to.
+  useEffect(() => {
+    if (!lockedParty) return;
+    const settles = out ? lockedParty.type === 'vendor' : lockedParty.type === 'client';
+    if (!settles) { setBills([]); return; }
+    accountingApi.openBills(lockedParty.id, lockedParty.type)
+      .then((r) => setBills(r.rows || []))
+      .catch((e) => {
+        setBills([]);
+        showToast(describeError(e, 'Could not load this party\u2019s bills'), 'error');
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedParty && lockedParty.id, out]);
+
   // The statutory rate table, for the Apply TDS picker. Only a receipt can
   // carry TDS withheld BY someone: on a payment out we are the one deducting,
   // which is the TDS voucher screen's job, not this one.
@@ -62,14 +88,14 @@ export default function RecordPaymentPage() {
   // the other — and a printing shop buys from and sells to the same people.
   // An empty query browses rather than returning nothing.
   useEffect(() => {
-    if (party) { setMatches([]); return undefined; }
+    if (party || lockedParty) { setMatches([]); return undefined; }
     const id = setTimeout(() => {
       accountingApi.searchParties(q.trim(), null)
         .then((r) => setMatches(Array.isArray(r) ? r : []))
         .catch(() => setMatches([]));
     }, q.trim() ? 250 : 0);
     return () => clearTimeout(id);
-  }, [q, party]);
+  }, [q, party, lockedParty]);
 
   // A payment settles bills only when the money flows the way bills are paid:
   // a customer paying in, or a supplier being paid out. The other two
@@ -177,7 +203,7 @@ export default function RecordPaymentPage() {
         ...(touched || tdsTotal > 0 || discTotal > 0 ? { allocations } : {}),
       });
       showToast(`${(r && r.payment && r.payment.paymentNo) || 'Payment'} saved`, 'success');
-      navigate(`/payments/${direction}`);
+      if (onSaved) onSaved(r);
     } catch (e) {
       showToast(describeError(e, 'Could not save this payment'), 'error');
       setSaving(false);
@@ -186,23 +212,29 @@ export default function RecordPaymentPage() {
 
   const totalDue = R2((bills || []).reduce((a, b) => a + b.due, 0));
 
+  const actions = (
+    <div className="flex" style={{ gap: 8 }}>
+      <button className="btn btn-ghost btn-sm" onClick={onCancel} disabled={saving}>Cancel</button>
+      <button className="btn btn-primary btn-sm" onClick={save} disabled={saving || !party} data-testid="payment-save">
+        {saving ? '…' : 'Save'}
+      </button>
+    </div>
+  );
+
   return (
     <div data-legacy-id={`page-record-payment-${direction}`}>
-      <div className="flex items-center justify-between" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-        <div className="flex items-center" style={{ gap: 10 }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/payments/${direction}`)}>←</button>
-          <h2 style={{ fontSize: 19, fontWeight: 600, margin: 0 }}>
-            Record {out ? 'Payment Out' : 'Payment In'}
-            {voucher && <span style={{ color: 'var(--text3)', fontWeight: 400 }}> #{voucher.number}</span>}
-          </h2>
+      {!embedded && (
+        <div className="flex items-center justify-between" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div className="flex items-center" style={{ gap: 10 }}>
+            <button className="btn btn-ghost btn-sm" onClick={onCancel}>←</button>
+            <h2 style={{ fontSize: 19, fontWeight: 600, margin: 0 }}>
+              Record {out ? 'Payment Out' : 'Payment In'}
+              {voucher && <span style={{ color: 'var(--text3)', fontWeight: 400 }}> #{voucher.number}</span>}
+            </h2>
+          </div>
+          {actions}
         </div>
-        <div className="flex" style={{ gap: 8 }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/payments/${direction}`)} disabled={saving}>Cancel</button>
-          <button className="btn btn-primary btn-sm" onClick={save} disabled={saving || !party} data-testid="payment-save">
-            {saving ? '…' : 'Save'}
-          </button>
-        </div>
-      </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1fr)', gap: 14, marginBottom: 14 }}>
         {/* ── who, and how much ── */}
@@ -217,13 +249,15 @@ export default function RecordPaymentPage() {
                     {' · '}{party.type === 'vendor' ? 'Supplier' : 'Customer'}
                   </span>
                 </span>
-                <button className="btn btn-xs btn-ghost" data-testid="payment-change-party"
-                  onClick={() => {
-                    setParty(null); setQ(''); setBills(null);
-                    setAlloc({}); setTouched(false); setRowTds({}); setRowDisc({});
-                  }}>
-                  Change
-                </button>
+                {!lockedParty && (
+                  <button className="btn btn-xs btn-ghost" data-testid="payment-change-party"
+                    onClick={() => {
+                      setParty(null); setQ(''); setBills(null);
+                      setAlloc({}); setTouched(false); setRowTds({}); setRowDisc({});
+                    }}>
+                    Change
+                  </button>
+                )}
               </div>
             ) : (
               <input className="input" autoFocus data-testid="payment-party"
@@ -443,6 +477,10 @@ export default function RecordPaymentPage() {
         )}
       </div>
 
+      {embedded && (
+        <div className="flex" style={{ justifyContent: 'flex-end', marginTop: 14 }}>{actions}</div>
+      )}
+
       {applying && (
         <ApplyToBillModal
           bill={applying.bill}
@@ -459,6 +497,15 @@ export default function RecordPaymentPage() {
       )}
     </div>
   );
+}
+
+/** The standalone screen: the same form, with the router wired to it. */
+export default function RecordPaymentPage() {
+  const { direction: dirParam } = useParams();
+  const direction = dirParam === 'out' ? 'out' : 'in';
+  const navigate = useNavigate();
+  const back = () => navigate(`/payments/${direction}`);
+  return <PaymentForm direction={direction} onCancel={back} onSaved={back} />;
 }
 
 /**
