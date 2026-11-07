@@ -5,6 +5,9 @@
  * double-entry ledger server-side.
  */
 import { useEffect, useMemo, useState } from 'react';
+// The same period presets the Reports screens use, so 'This Financial
+// Year' means one thing across the app.
+import { PERIODS } from '../../components/common/ReportShell';
 import { useNavigate } from 'react-router-dom';
 import { ref, onValue, db } from '../../services/realtime';
 import { accountingApi } from '../../services/api';
@@ -90,6 +93,13 @@ export default function SalesInvoicesPage() {
   const [creditNotes, setCreditNotes] = useState([]);
   const [crnLoading, setCrnLoading] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  // Period, amount band and overdue-only. Separate from the status chips
+  // above them: a chip answers 'which state', these answer 'which ones'.
+  const [period, setPeriod] = useState('all');
+  const [custom, setCustom] = useState({ from: '', to: '' });
+  const [minAmt, setMinAmt] = useState('');
+  const [maxAmt, setMaxAmt] = useState('');
+  const [overdueOnly, setOverdueOnly] = useState(false);
 
   useEffect(() => { const u = onValue(ref(db, 'mpw/invoices'), (s) => setInvoices(s.val() || {})); return () => u(); }, []);
 
@@ -106,20 +116,59 @@ export default function SalesInvoicesPage() {
   const invList = useMemo(() => Object.entries(invoices).map(([id, v]) => ({ ...v, id }))
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [invoices]);
 
-  const filtered = useMemo(() => invList.filter((i) => {
-    if (filter !== 'all' && i.type !== filter && (i.status || 'unpaid') !== filter) return false;
+  const today = new Date().toISOString().slice(0, 10);
+
+  // The dates the chosen period covers. 'all' means no bounds at all, which
+  // is the only sensible default for a list you came here to browse.
+  const range = useMemo(() => {
+    if (period === 'custom') return custom;
+    if (period === 'all') return {};
+    const p = PERIODS.find((x) => x.key === period);
+    return p && p.range ? p.range() : {};
+  }, [period, custom]);
+
+  /**
+   * Everything except the status chips.
+   *
+   * Kept apart so the four cards above can summarise the period you picked
+   * while still breaking it down by status — clicking 'Paid' should not
+   * collapse the Paid card to match itself.
+   */
+  const inScope = useMemo(() => invList.filter((i) => {
+    const d = i.date || '';
+    if (range.from && d < range.from) return false;
+    if (range.to && d > range.to) return false;
+    const total = Number(i.total) || 0;
+    if (minAmt !== '' && total < Number(minAmt)) return false;
+    if (maxAmt !== '' && total > Number(maxAmt)) return false;
+    // Overdue means money still owed past its due date — a paid bill that
+    // went past its date is not overdue, it is history.
+    if (overdueOnly && !(i.status !== 'paid' && i.dueDate && i.dueDate < today)) return false;
     if (q) {
       const s = q.toLowerCase();
-      if (!String(i.invoiceNo || '').toLowerCase().includes(s) && !String(i.clientName || '').toLowerCase().includes(s)) return false;
+      if (!String(i.invoiceNo || '').toLowerCase().includes(s)
+        && !String(i.clientName || '').toLowerCase().includes(s)) return false;
     }
     return true;
-  }), [invList, filter, q]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [invList, range.from, range.to, minAmt, maxAmt, overdueOnly, q, today]);
 
-  const salesInvoices = invList.filter((i) => i.type !== 'proforma' && i.status !== 'void');
+  const filtered = useMemo(() => inScope.filter((i) => (
+    filter === 'all' || i.type === filter || (i.status || 'unpaid') === filter
+  )), [inScope, filter]);
+
+  const anyFilter = period !== 'all' || minAmt !== '' || maxAmt !== '' || overdueOnly || !!q;
+  const clearFilters = () => {
+    setPeriod('all'); setCustom({ from: '', to: '' });
+    setMinAmt(''); setMaxAmt(''); setOverdueOnly(false); setQ('');
+  };
+
+  // The cards follow the filters: picking October and still being shown the
+  // year's total is the kind of number someone reads out in a meeting.
+  const salesInvoices = inScope.filter((i) => i.type !== 'proforma' && i.status !== 'void');
   const sales = round2(salesInvoices.reduce((s2, i) => s2 + (i.total || 0), 0));
   const outstanding = round2(salesInvoices.reduce((s2, i) => s2 + ((i.total || 0) - (i.paidAmount || 0)), 0));
   const totalCredits = round2(creditNotes.reduce((s, c) => s + (c.total || 0), 0));
-  const today = new Date().toISOString().slice(0, 10);
   const overdues = salesInvoices.filter((i) => i.status !== 'paid' && i.dueDate && i.dueDate < today).length;
 
   return (
@@ -182,6 +231,50 @@ export default function SalesInvoicesPage() {
               </button>
             ))}
             <input className="input" style={{ marginLeft: 'auto', maxWidth: 240 }} placeholder={t('search')} value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+
+          <div className="card" style={{ padding: '10px 12px', marginBottom: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select className="input" style={{ width: 'auto', minWidth: 160 }} value={period}
+              data-testid="invoice-period" onChange={(e) => setPeriod(e.target.value)}>
+              <option value="all">📅 All Time</option>
+              {PERIODS.filter((p) => p.key !== 'custom').map((p) => (
+                <option key={p.key} value={p.key}>📅 {p.label}</option>
+              ))}
+              <option value="custom">📅 Custom…</option>
+            </select>
+
+            {period === 'custom' && (
+              <>
+                <input className="input" type="date" style={{ width: 150 }} value={custom.from}
+                  data-testid="invoice-from" max={custom.to || undefined}
+                  onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
+                <span style={{ color: 'var(--text3)' }}>→</span>
+                <input className="input" type="date" style={{ width: 150 }} value={custom.to}
+                  data-testid="invoice-to" min={custom.from || undefined}
+                  onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+              </>
+            )}
+
+            <input className="input" type="number" min="0" style={{ width: 120 }} placeholder="Min ₹"
+              data-testid="invoice-min" value={minAmt} onChange={(e) => setMinAmt(e.target.value)} />
+            <input className="input" type="number" min="0" style={{ width: 120 }} placeholder="Max ₹"
+              data-testid="invoice-max" value={maxAmt} onChange={(e) => setMaxAmt(e.target.value)} />
+
+            <button type="button" className="btn btn-xs" data-testid="invoice-overdue"
+              onClick={() => setOverdueOnly((v) => !v)}
+              style={{ background: overdueOnly ? 'var(--red, #DC2626)' : 'var(--surface2)', color: overdueOnly ? '#fff' : 'var(--text2)', border: 'none', borderRadius: 14 }}>
+              ⏰ Overdue only
+            </button>
+
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text3)' }}>
+              {filtered.length === invList.length
+                ? `${invList.length} invoices`
+                : `${filtered.length} of ${invList.length}`}
+            </span>
+            {anyFilter && (
+              <button type="button" className="btn btn-xs btn-ghost" data-testid="invoice-clear"
+                onClick={clearFilters}>Clear</button>
+            )}
           </div>
 
           {!filtered.length && <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>{t('none')}</div>}
