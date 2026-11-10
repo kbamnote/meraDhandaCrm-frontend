@@ -52,7 +52,7 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
   const BLANK = {
     clientName: '', clientMobile: '', clientEmail: '', address: '', gstNo: '', pan: '', creditLimit: '',
     work: '', notes: '', salesPerson: '', deliveryDate: '', priority: 'normal', designNeeded: 'yes',
-    eventType: '', billNumber: '', amount: '', advance: '',
+    designerId: '', eventType: '', billNumber: '', amount: '', advance: '',
   };
   const [form, setForm] = useState(() => (job ? {
     ...BLANK,
@@ -64,7 +64,8 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
     deliveryDate: job.deliveryDate || '', priority: job.priority || 'normal',
     // A job already past the designer must not be flung back into the pool by
     // an edit, so this is only meaningful while it is still at enquiry.
-    designNeeded: job.designNeeded ? 'yes' : 'no',
+    designNeeded: (job.designNeeded || job.designerId) ? 'yes' : 'no',
+    designerId: job.designerId || '',
     eventType: job.eventType || '', billNumber: job.billNumber || '',
     amount: job.amount != null ? String(job.amount) : '',
     advance: job.advance != null ? String(job.advance) : '',
@@ -85,6 +86,7 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
   const [uploading, setUploading] = useState(false);
   const [products, setProducts] = useState([]);
   const [salespeople, setSalespeople] = useState([]);
+  const [designers, setDesigners] = useState([]);
   const [clientQ, setClientQ] = useState('');
   const [clientMatches, setClientMatches] = useState([]);
   const [existingClient, setExistingClient] = useState(null);
@@ -103,7 +105,11 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
     if (isEdit) { setPreview(job.jobNo || ''); } else {
       ordersApi.nextNumber().then((r) => setPreview(r.jobNo)).catch(() => {});
     }
-    ordersApi.lookups().then((d) => { setProducts(d.products || []); setSalespeople(d.salespeople || []); }).catch(() => {});
+    ordersApi.lookups().then((d) => {
+      setProducts(d.products || []);
+      setSalespeople(d.salespeople || []);
+      setDesigners(d.designers || []);
+    }).catch(() => {});
   }, []);
 
   // Debounced, server-backed client autocomplete — searches after 2+ chars and
@@ -202,10 +208,16 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
     if (form.clientMobile && !/^\d{10}$/.test(form.clientMobile.trim())) return showToast('Enter a valid 10-digit mobile', 'error');
     setBusy(true);
     try {
+      const hasDesigner = !!form.designerId;
+      const isDesignNeeded = form.designNeeded === 'yes' || hasDesigner;
+      const chosenDesigner = hasDesigner ? designers.find((d) => String(d.id) === String(form.designerId)) : null;
+
       const payload = {
         ...form,
         ...(extra || {}),
-        designNeeded: form.designNeeded === 'yes',
+        designNeeded: isDesignNeeded,
+        designerId: hasDesigner ? form.designerId : null,
+        designerName: chosenDesigner ? chosenDesigner.name : null,
         creditLimit: form.creditLimit ? Number(form.creditLimit) : null,
         amount: form.amount === '' ? null : Number(form.amount),
         advance: form.advance === '' ? null : Number(form.advance),
@@ -468,12 +480,27 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
             </div>
             <div className="form-group" style={{ flex: 1 }}>
               <label style={lbl}>Design Required?</label>
-              <select className="input" value={form.designNeeded} onChange={(e) => set('designNeeded', e.target.value)}>
+              <select className="input" value={form.designNeeded} onChange={(e) => {
+                const v = e.target.value;
+                set('designNeeded', v);
+                if (v === 'no') set('designerId', '');
+              }}>
                 <option value="yes">Yes — Design banana hai</option>
-                <option value="no">No — Ready design</option>
+                <option value="no">No — Ready design (→ Job Setter)</option>
               </select>
             </div>
           </div>
+          {form.designNeeded === 'yes' && (
+            <div className="form-group">
+              <label style={lbl}>Assign Designer (optional)</label>
+              <select className="input" value={form.designerId || ''} onChange={(e) => set('designerId', e.target.value)}>
+                <option value="">Broadcast to All Designers (Open Pool)</option>
+                {designers.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex gap-2">
             <div className="form-group" style={{ flex: 1 }}>
               <label style={lbl}>Event Type</label>
