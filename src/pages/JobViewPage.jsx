@@ -6,16 +6,12 @@
  * reliably on the app). Opened by the "👁 View" action in the Completed / Hold
  * resource lists, which navigates here with the job id in the URL (?id=…).
  *
- * Same realtime pattern as JobDetailPage: onValue(ref(db, 'mpw/jobs')). The
- * page reads the id from the query string, picks jobs[id] from the LIVE jobs
- * collection, and renders inside normal document flow so it scrolls naturally.
- *
- * The stage panel on top shows the current stage and, for a cancelled / held
- * job, who did it and why. Opened from Job Cards (?manage=1) it also has the
- * "Move to" control. Teammates' names come from the live users list.
+ * Realtime optimization:
+ *   - Instantly renders from `location.state.job` if passed from JobCardsPage (0ms load).
+ *   - Subscribes ONLY to `mpw/jobs/${id}` instead of downloading the entire jobs collection.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { ref, onValue, db } from '../services/realtime';
 import { useT } from '../i18n/LanguageContext';
 import JobFullDetail from '../components/common/JobFullDetail';
@@ -39,18 +35,31 @@ const S = {
 export default function JobViewPage() {
   const t = useT(S);
   const [params] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const id = params.get('id');
   const canMove = params.get('manage') === '1';
 
-  const [jobs, setJobs] = useState(null); // null until first snapshot arrives
+  // Instant render from navigation state if available (0ms perceived latency)
+  const navJob = location.state?.job && String(location.state.job.id) === String(id) ? location.state.job : null;
+  const [job, setJob] = useState(navJob);
+  const [loaded, setLoaded] = useState(!!navJob);
   const [users, setUsers] = useState({});
 
   useEffect(() => {
-    const r = ref(db, 'mpw/jobs');
-    const u = onValue(r, (snap) => setJobs(snap.val() || {}));
+    if (!id) {
+      setLoaded(true);
+      return;
+    }
+    // Listen ONLY to this single job's path — avoiding full collection download
+    const r = ref(db, `mpw/jobs/${id}`);
+    const u = onValue(r, (snap) => {
+      const val = snap.val();
+      if (val) setJob(val);
+      setLoaded(true);
+    });
     return u;
-  }, []);
+  }, [id]);
 
   // uid → name, for "Cancelled by …" and the Timeline's "by …".
   useEffect(() => onValue(ref(db, 'mpw/users'), (snap) => setUsers(snap.val() || {})), []);
@@ -60,8 +69,7 @@ export default function JobViewPage() {
     return out;
   }, [users]);
 
-  const job = jobs && id ? jobs[id] : null;
-  const loading = jobs === null;
+  const loading = !loaded && !job;
 
   return (
     <div data-legacy-id="page-job-view">

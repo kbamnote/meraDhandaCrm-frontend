@@ -44,6 +44,13 @@ const lbl = { fontSize: 12, color: 'var(--text2)', marginBottom: 3, display: 'bl
 const asArr = (d) => (Array.isArray(d) ? d : d ? Object.values(d) : []);
 const idOf = (x) => x.id || x._id;
 
+let lookupCache = null;
+export function prefetchJobLookups() {
+  if (!lookupCache) {
+    ordersApi.lookups().then((d) => { lookupCache = d; }).catch(() => {});
+  }
+}
+
 export default function NewJobModal({ onClose, onCreated, job, prefill, extra, createdBy }) {
   const t = useT(S);
   // `job` = correcting an existing card. Same form, because a second one would
@@ -84,9 +91,9 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
   const [preview, setPreview] = useState('');
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [products, setProducts] = useState([]);
-  const [salespeople, setSalespeople] = useState([]);
-  const [designers, setDesigners] = useState([]);
+  const [products, setProducts] = useState(() => lookupCache?.products || []);
+  const [salespeople, setSalespeople] = useState(() => lookupCache?.salespeople || []);
+  const [designers, setDesigners] = useState(() => lookupCache?.designers || []);
   const [clientQ, setClientQ] = useState('');
   const [clientMatches, setClientMatches] = useState([]);
   const [existingClient, setExistingClient] = useState(null);
@@ -105,11 +112,14 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
     if (isEdit) { setPreview(job.jobNo || ''); } else {
       ordersApi.nextNumber().then((r) => setPreview(r.jobNo)).catch(() => {});
     }
-    ordersApi.lookups().then((d) => {
-      setProducts(d.products || []);
-      setSalespeople(d.salespeople || []);
-      setDesigners(d.designers || []);
-    }).catch(() => {});
+    if (!lookupCache) {
+      ordersApi.lookups().then((d) => {
+        lookupCache = d;
+        setProducts(d.products || []);
+        setSalespeople(d.salespeople || []);
+        setDesigners(d.designers || []);
+      }).catch(() => {});
+    }
   }, []);
 
   // Debounced, server-backed client autocomplete — searches after 2+ chars and
