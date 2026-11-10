@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
 import { PERM_OF, canViewModule } from '../../config/access';
 import useStageCounts from '../../hooks/useStageCounts';
+import { prefetchRoute } from '../../utils/prefetch';
 
 const SECTION_S = {
   Workspace: { en: 'Workspace', hi: 'वर्कस्पेस', hinglish: 'Workspace', gu: 'વર્કસ્પેસ', mr: 'वर्कस्पेस', mwr: 'वर्कस्पेस' },
@@ -297,7 +298,7 @@ const MODULE_OF = {
 // "📋 Job Cards" — the raw label starts with a symbol, not the word itself.
 const stripIcon = (s) => String(s || '').replace(/^[^\w]+/, '').trim();
 
-export default function Sidebar({ open, onClose }) {
+function Sidebar({ open, onClose }) {
   const { profile, tenant, isPlatformAdmin, signOut } = useAuth();
   const t = useT(SECTION_S);
   const navigate = useNavigate();
@@ -310,7 +311,7 @@ export default function Sidebar({ open, onClose }) {
   const perms = profile?.permissions || {};
   const isAdmin = ['admin', 'superadmin', 'owner'].includes(role);
 
-  const canSee = (item) => {
+  const canSee = useCallback((item) => {
     if (item.platform) return isPlatformAdmin;
     // Hide a link only if its module was explicitly disabled in onboarding.
     const mod = MODULE_OF[item.to];
@@ -326,19 +327,19 @@ export default function Sidebar({ open, onClose }) {
     if (pmod && item.roles) return permGranted || roleOk;
     if (pmod) return permGranted;
     return roleOk;
-  };
+  }, [isPlatformAdmin, modules, isAdmin, role, perms, custom]);
 
   const onTrial = tenant && tenant.plan === 'trial';
 
   // Jobs per stage, counted server-side. Zero is not shown: an empty queue
   // needs no badge, and every row carrying a grey 0 buries the ones that matter.
   const stageCounts = useStageCounts();
-  const badgeFor = (to) => {
+  const badgeFor = useCallback((to) => {
     const key = STAGE_BADGE[to];
     if (!key) return 0;
     const n = key === 'active' ? stageCounts.active : (stageCounts.byStage[key] || 0);
     return Number(n) || 0;
-  };
+  }, [stageCounts]);
 
   // Search matches against the TRANSLATED label (what's actually on screen),
   // so typing in Hindi/Gujarati/etc. finds the same items a user is reading.
@@ -355,13 +356,15 @@ export default function Sidebar({ open, onClose }) {
   }, [location.pathname, sections]);
 
   const query = q.trim().toLowerCase();
-  const visibleSections = sections
-    .map((sec) => ({ ...sec, items: sec.items.filter(canSee) }))
-    .map((sec) => ({
-      ...sec,
-      items: query ? sec.items.filter((item) => stripIcon(t(item.label)).toLowerCase().includes(query)) : sec.items,
-    }))
-    .filter((sec) => sec.items.length > 0);
+  const visibleSections = useMemo(() => {
+    return sections
+      .map((sec) => ({ ...sec, items: sec.items.filter(canSee) }))
+      .map((sec) => ({
+        ...sec,
+        items: query ? sec.items.filter((item) => stripIcon(t(item.label)).toLowerCase().includes(query)) : sec.items,
+      }))
+      .filter((sec) => sec.items.length > 0);
+  }, [sections, canSee, query, t]);
 
   const goToFirstMatch = (e) => {
     if (e.key !== 'Enter') return;
@@ -436,6 +439,7 @@ export default function Sidebar({ open, onClose }) {
                   key={item.to}
                   to={item.to}
                   onClick={onClose}
+                  onMouseEnter={() => prefetchRoute(item.to)}
                   data-legacy={item.legacy}
                   className={({ isActive }) => isActive ? 'active' : ''}
                   style={{ justifyContent: 'space-between' }}
@@ -479,3 +483,5 @@ export default function Sidebar({ open, onClose }) {
     </>
   );
 }
+
+export default memo(Sidebar);

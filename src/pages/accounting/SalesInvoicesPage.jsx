@@ -165,11 +165,23 @@ export default function SalesInvoicesPage() {
 
   // The cards follow the filters: picking October and still being shown the
   // year's total is the kind of number someone reads out in a meeting.
-  const salesInvoices = inScope.filter((i) => i.type !== 'proforma' && i.status !== 'void');
-  const sales = round2(salesInvoices.reduce((s2, i) => s2 + (i.total || 0), 0));
-  const outstanding = round2(salesInvoices.reduce((s2, i) => s2 + ((i.total || 0) - (i.paidAmount || 0)), 0));
-  const totalCredits = round2(creditNotes.reduce((s, c) => s + (c.total || 0), 0));
-  const overdues = salesInvoices.filter((i) => i.status !== 'paid' && i.dueDate && i.dueDate < today).length;
+  const { sales, outstanding, overdues, paidCount } = useMemo(() => {
+    let s = 0;
+    let out = 0;
+    let od = 0;
+    let paid = 0;
+    for (let idx = 0; idx < inScope.length; idx++) {
+      const i = inScope[idx];
+      if (i.type === 'proforma' || i.status === 'void') continue;
+      s += (i.total || 0);
+      out += ((i.total || 0) - (i.paidAmount || 0));
+      if (i.status === 'paid') paid += 1;
+      else if (i.dueDate && i.dueDate < today) od += 1;
+    }
+    return { sales: round2(s), outstanding: round2(out), overdues: od, paidCount: paid };
+  }, [inScope, today]);
+
+  const totalCredits = useMemo(() => round2(creditNotes.reduce((s, c) => s + (c.total || 0), 0)), [creditNotes]);
 
   return (
     <div>
@@ -220,7 +232,7 @@ export default function SalesInvoicesPage() {
             <Kpi label={t('sales')} value={inr(sales)} icon="📈" color="var(--green)" />
             <Kpi label={t('outstanding')} value={inr(outstanding)} icon="🤝" color="var(--amber)" />
             <Kpi label={t('overdues')} value={overdues} icon="⏰" color="var(--red)" />
-            <Kpi label={t('paid')} value={salesInvoices.filter((i) => i.status === 'paid').length} icon="✅" color="var(--text)" />
+            <Kpi label={t('paid')} value={paidCount} icon="✅" color="var(--text)" />
           </KpiGrid>
 
           <div className="flex" style={{ gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import JobAlertPopup from '../common/JobAlertPopup';
 import { useAuth } from '../../context/AuthContext';
+import { prefetchCoreRoutes } from '../../utils/prefetch';
 
 // Apply the tenant's saved branding (theme class + accent colour + font size) to
 // the whole app. Lives here so it covers every authenticated page.
@@ -22,11 +23,20 @@ function useBranding() {
 export default function AppLayout() {
   const [open, setOpen] = useState(false);
   useBranding();
+
+  // Idle-prefetch most-used pages in the background after initial render.
+  useEffect(() => {
+    prefetchCoreRoutes();
+  }, []);
+
+  // Stable callback so Sidebar doesn't re-render every time AppLayout renders.
+  const handleClose = useCallback(() => setOpen(false), []);
+  const handleMenu  = useCallback(() => setOpen(true),  []);
   return (
     <div className="crm-layout">
-      <Sidebar open={open} onClose={() => setOpen(false)} />
+      <Sidebar open={open} onClose={handleClose} />
       <div className="main-area">
-        <Topbar onMenu={() => setOpen(true)} />
+        <Topbar onMenu={handleMenu} />
         <main className="page-content">
           <Outlet />
         </main>

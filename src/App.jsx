@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { LanguageProvider } from './i18n/LanguageContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -7,100 +8,134 @@ import PageStub from './components/common/PageStub';
 import ResourcePage from './components/common/ResourcePage';
 import { RESOURCES } from './config/resources';
 import { isSectionHidden } from './config/access';
-import RoleDashboard from './pages/RoleDashboard';
-import CompanyDetailPage from './pages/CompanyDetailPage';
-import PlatformBroadcastPage from './pages/PlatformBroadcastPage';
 
+// ── Eagerly-loaded pages ───────────────────────────────────────────────────
+// These are either part of the initial render path (Login, Signup, the
+// top-level shell components) or small enough that splitting them adds
+// more round-trips than it saves.
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import OnboardingPage from './pages/OnboardingPage';
-import AdminPage from './pages/AdminPage';
-import TasksPage from './pages/TasksPage';
-import ChatPage from './pages/ChatPage';
-import JobCardsPage from './pages/JobCardsPage';
-import BillingPage from './pages/BillingPage';
-import PlatformConsolePage from './pages/PlatformConsolePage';
-
-import MySalaryPage from './pages/MySalaryPage';
-import MyLeavesPage from './pages/MyLeavesPage';
-import MyAttendancePage from './pages/MyAttendancePage';
-import ProfilePage from './pages/ProfilePage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import HrDashboardPage from './pages/HrDashboardPage';
-import HrLeavesPage from './pages/HrLeavesPage';
-import HrPayrollPage from './pages/HrPayrollPage';
-import HrAttendancePage from './pages/HrAttendancePage';
-import ProductivityPage from './pages/ProductivityPage';
-import CustDashboardPage from './pages/CustDashboardPage';
-import PermissionsPage from './pages/PermissionsPage';
-import HierarchyPage from './pages/HierarchyPage';
-import InvoiceViewPage from './pages/InvoiceViewPage';
-import PurchaseViewPage from './pages/PurchaseViewPage';
 import PublicPayPage from './pages/PublicPayPage';
-import JobDetailPage from './pages/JobDetailPage';
-import JobViewPage from './pages/JobViewPage';
-import ReviewPage from './pages/ReviewPage';
-import CompanySettingsPage from './pages/CompanySettingsPage';
-import SuperAdminPage from './pages/SuperAdminPage';
-import DesignersViewPage from './pages/DesignersViewPage';
-import DesignerPanelPage from './pages/DesignerPanelPage';
-import DesignersPage from './pages/DesignersPage';
-import ProductionPage from './pages/ProductionPage';
-import QCPage from './pages/QCPage';
-import DispatchPage from './pages/DispatchPage';
-import AccountingDashboardPage from './pages/accounting/AccountingDashboardPage';
-import SalesInvoicesPage from './pages/accounting/SalesInvoicesPage';
-import PartiesPage from './pages/accounting/PartiesPage';
-import ReportsPage from './pages/accounting/ReportsPage';
-import GstPage from './pages/accounting/GstPage';
-import PurchasesPage from './pages/accounting/PurchasesPage';
-import AccountingItemsPage from './pages/accounting/ItemsPage';
-import TeamMapPage from './pages/TeamMapPage';
-import ShopVisitsPage from './pages/ShopVisitsPage';
-import RouteHistoryPage from './pages/RouteHistoryPage';
-import EntriesPage from './pages/accounting/EntriesPage';
-import DayBookPage from './pages/accounting/DayBookPage';
-import ProfitPage from './pages/accounting/ProfitPage';
-import YearEndPage from './pages/accounting/YearEndPage';
-import JobProfitPage from './pages/accounting/JobProfitPage';
-import CashBankPage from './pages/accounting/CashBankPage';
-import ReconPage from './pages/accounting/ReconPage';
-import TdsPage from './pages/accounting/TdsPage';
-import InventoryPage from './pages/accounting/InventoryPage';
-import ExpensesPage from './pages/accounting/ExpensesPage';
-import PurchaseOrdersPage from './pages/accounting/PurchaseOrdersPage';
-import ClientLedgerPage from './pages/accounting/ClientLedgerPage';
-import CreditNotesPage from './pages/accounting/CreditNotesPage';
-import DebitNotesPage from './pages/accounting/DebitNotesPage';
-import DeliveryChallansPage from './pages/accounting/DeliveryChallansPage';
-import RecurringInvoicesPage from './pages/accounting/RecurringInvoicesPage';
-import BranchesPage from './pages/accounting/BranchesPage';
-import SearchPage from './pages/accounting/SearchPage';
-import StockPage from './pages/StockPage';
-import BroadcastPage from './pages/BroadcastPage';
-import AssignProdPage from './pages/AssignProdPage';
-import JobSetterPage from './pages/JobSetterPage';
-import ProdStepsPage from './pages/ProdStepsPage';
-import ManageProductionTypesPage from './pages/ManageProductionTypesPage';
-import SalesAdminPage from './pages/SalesAdminPage';
-import QuotationsPage from './pages/accounting/QuotationsPage';
-import RecordPaymentPage from './pages/accounting/RecordPaymentPage';
-import { PaymentInPage, PaymentOutPage } from './pages/accounting/PaymentsPage';
-import PaymentViewPage from './pages/accounting/PaymentViewPage';
-import ReportsHubPage from './pages/reports/ReportsHubPage';
-import Gstr3bPage from './pages/reports/Gstr3bPage';
-import HsnSalesSummaryPage from './pages/reports/HsnSalesSummaryPage';
-import { Gstr1Page, Gstr2Page } from './pages/reports/GstRegisterPage';
-import { GstSalesHsnPage, GstPurchaseHsnPage } from './pages/reports/GstHsnPage';
-import SalesPage from './pages/SalesPage';
-import AuditLogPage from './pages/AuditLogPage';
-import ApiKeysPage from './pages/ApiKeysPage';
-import WebhooksPage from './pages/WebhooksPage';
-import CustomDomainPage from './pages/CustomDomainPage';
-import ReferralsPage from './pages/ReferralsPage';
-import CustomerOutboxPage from './pages/CustomerOutboxPage';
-import SendNotificationPage from './pages/SendNotificationPage';
-import ProductsPage from './pages/ProductsPage';
+
+// ── Lazily-loaded pages ────────────────────────────────────────────────────
+// Everything behind authentication is code-split.  The browser downloads
+// only the chunk(s) for the page the user actually navigates to, so the
+// initial JS payload is a fraction of the full app.
+//
+// Vite groups these by the manualChunks in vite.config.js; pages in the same
+// functional area end up in the same chunk and are prefetched on idle.
+const RoleDashboard          = lazy(() => import('./pages/RoleDashboard'));
+const AdminPage              = lazy(() => import('./pages/AdminPage'));
+const CompanyDetailPage      = lazy(() => import('./pages/CompanyDetailPage'));
+const PlatformBroadcastPage  = lazy(() => import('./pages/PlatformBroadcastPage'));
+const TasksPage              = lazy(() => import('./pages/TasksPage'));
+const ChatPage               = lazy(() => import('./pages/ChatPage'));
+const JobCardsPage           = lazy(() => import('./pages/JobCardsPage'));
+const BillingPage            = lazy(() => import('./pages/BillingPage'));
+const PlatformConsolePage    = lazy(() => import('./pages/PlatformConsolePage'));
+
+const MySalaryPage           = lazy(() => import('./pages/MySalaryPage'));
+const MyLeavesPage           = lazy(() => import('./pages/MyLeavesPage'));
+const MyAttendancePage       = lazy(() => import('./pages/MyAttendancePage'));
+const ProfilePage            = lazy(() => import('./pages/ProfilePage'));
+const AnalyticsPage          = lazy(() => import('./pages/AnalyticsPage'));
+const HrDashboardPage        = lazy(() => import('./pages/HrDashboardPage'));
+const HrLeavesPage           = lazy(() => import('./pages/HrLeavesPage'));
+const HrPayrollPage          = lazy(() => import('./pages/HrPayrollPage'));
+const HrAttendancePage       = lazy(() => import('./pages/HrAttendancePage'));
+const ProductivityPage       = lazy(() => import('./pages/ProductivityPage'));
+const CustDashboardPage      = lazy(() => import('./pages/CustDashboardPage'));
+const PermissionsPage        = lazy(() => import('./pages/PermissionsPage'));
+const HierarchyPage          = lazy(() => import('./pages/HierarchyPage'));
+const InvoiceViewPage        = lazy(() => import('./pages/InvoiceViewPage'));
+const PurchaseViewPage       = lazy(() => import('./pages/PurchaseViewPage'));
+const JobDetailPage          = lazy(() => import('./pages/JobDetailPage'));
+const JobViewPage            = lazy(() => import('./pages/JobViewPage'));
+const ReviewPage             = lazy(() => import('./pages/ReviewPage'));
+const CompanySettingsPage    = lazy(() => import('./pages/CompanySettingsPage'));
+const SuperAdminPage         = lazy(() => import('./pages/SuperAdminPage'));
+const DesignersViewPage      = lazy(() => import('./pages/DesignersViewPage'));
+const DesignerPanelPage      = lazy(() => import('./pages/DesignerPanelPage'));
+const DesignersPage          = lazy(() => import('./pages/DesignersPage'));
+const ProductionPage         = lazy(() => import('./pages/ProductionPage'));
+const QCPage                 = lazy(() => import('./pages/QCPage'));
+const DispatchPage           = lazy(() => import('./pages/DispatchPage'));
+const StockPage              = lazy(() => import('./pages/StockPage'));
+const BroadcastPage          = lazy(() => import('./pages/BroadcastPage'));
+const AssignProdPage         = lazy(() => import('./pages/AssignProdPage'));
+const JobSetterPage          = lazy(() => import('./pages/JobSetterPage'));
+const ProdStepsPage          = lazy(() => import('./pages/ProdStepsPage'));
+const ManageProductionTypesPage = lazy(() => import('./pages/ManageProductionTypesPage'));
+const SalesAdminPage         = lazy(() => import('./pages/SalesAdminPage'));
+const SalesPage              = lazy(() => import('./pages/SalesPage'));
+const AuditLogPage           = lazy(() => import('./pages/AuditLogPage'));
+const ApiKeysPage            = lazy(() => import('./pages/ApiKeysPage'));
+const WebhooksPage           = lazy(() => import('./pages/WebhooksPage'));
+const CustomDomainPage       = lazy(() => import('./pages/CustomDomainPage'));
+const ReferralsPage          = lazy(() => import('./pages/ReferralsPage'));
+const CustomerOutboxPage     = lazy(() => import('./pages/CustomerOutboxPage'));
+const SendNotificationPage   = lazy(() => import('./pages/SendNotificationPage'));
+const ProductsPage           = lazy(() => import('./pages/ProductsPage'));
+const TeamMapPage            = lazy(() => import('./pages/TeamMapPage'));
+const ShopVisitsPage         = lazy(() => import('./pages/ShopVisitsPage'));
+const RouteHistoryPage       = lazy(() => import('./pages/RouteHistoryPage'));
+
+// Accounting — grouped so they share one HTTP request on first access.
+const AccountingDashboardPage = lazy(() => import('./pages/accounting/AccountingDashboardPage'));
+const SalesInvoicesPage      = lazy(() => import('./pages/accounting/SalesInvoicesPage'));
+const PartiesPage            = lazy(() => import('./pages/accounting/PartiesPage'));
+const ReportsPage            = lazy(() => import('./pages/accounting/ReportsPage'));
+const GstPage                = lazy(() => import('./pages/accounting/GstPage'));
+const PurchasesPage          = lazy(() => import('./pages/accounting/PurchasesPage'));
+const AccountingItemsPage    = lazy(() => import('./pages/accounting/ItemsPage'));
+const EntriesPage            = lazy(() => import('./pages/accounting/EntriesPage'));
+const DayBookPage            = lazy(() => import('./pages/accounting/DayBookPage'));
+const ProfitPage             = lazy(() => import('./pages/accounting/ProfitPage'));
+const YearEndPage            = lazy(() => import('./pages/accounting/YearEndPage'));
+const JobProfitPage          = lazy(() => import('./pages/accounting/JobProfitPage'));
+const CashBankPage           = lazy(() => import('./pages/accounting/CashBankPage'));
+const ReconPage              = lazy(() => import('./pages/accounting/ReconPage'));
+const TdsPage                = lazy(() => import('./pages/accounting/TdsPage'));
+const InventoryPage          = lazy(() => import('./pages/accounting/InventoryPage'));
+const ExpensesPage           = lazy(() => import('./pages/accounting/ExpensesPage'));
+const PurchaseOrdersPage     = lazy(() => import('./pages/accounting/PurchaseOrdersPage'));
+const ClientLedgerPage       = lazy(() => import('./pages/accounting/ClientLedgerPage'));
+const CreditNotesPage        = lazy(() => import('./pages/accounting/CreditNotesPage'));
+const DebitNotesPage         = lazy(() => import('./pages/accounting/DebitNotesPage'));
+const DeliveryChallansPage   = lazy(() => import('./pages/accounting/DeliveryChallansPage'));
+const RecurringInvoicesPage  = lazy(() => import('./pages/accounting/RecurringInvoicesPage'));
+const BranchesPage           = lazy(() => import('./pages/accounting/BranchesPage'));
+const SearchPage             = lazy(() => import('./pages/accounting/SearchPage'));
+const QuotationsPage         = lazy(() => import('./pages/accounting/QuotationsPage'));
+const RecordPaymentPage      = lazy(() => import('./pages/accounting/RecordPaymentPage'));
+const PaymentViewPage        = lazy(() => import('./pages/accounting/PaymentViewPage'));
+// Named exports from a shared module — wrap them in a default-exporting thunk.
+const PaymentInPage  = lazy(() => import('./pages/accounting/PaymentsPage').then(m => ({ default: m.PaymentInPage })));
+const PaymentOutPage = lazy(() => import('./pages/accounting/PaymentsPage').then(m => ({ default: m.PaymentOutPage })));
+
+// Reports / GST
+const ReportsHubPage         = lazy(() => import('./pages/reports/ReportsHubPage'));
+const Gstr3bPage             = lazy(() => import('./pages/reports/Gstr3bPage'));
+const HsnSalesSummaryPage    = lazy(() => import('./pages/reports/HsnSalesSummaryPage'));
+const Gstr1Page  = lazy(() => import('./pages/reports/GstRegisterPage').then(m => ({ default: m.Gstr1Page })));
+const Gstr2Page  = lazy(() => import('./pages/reports/GstRegisterPage').then(m => ({ default: m.Gstr2Page })));
+const GstSalesHsnPage    = lazy(() => import('./pages/reports/GstHsnPage').then(m => ({ default: m.GstSalesHsnPage })));
+const GstPurchaseHsnPage = lazy(() => import('./pages/reports/GstHsnPage').then(m => ({ default: m.GstPurchaseHsnPage })));
+
+// ── Page-load fallback ─────────────────────────────────────────────────────
+// Shown while a lazy chunk is downloading. Matches the app's spinner class so
+// the transition is seamless. Intentionally stateless — it must render without
+// any context provider data.
+function PageLoader() {
+  return (
+    <div className="center-screen">
+      <div>
+        <div className="spinner" />
+      </div>
+    </div>
+  );
+}
 
 // Explicit page components for routes that have a finished React component.
 // Preferred over the ResourcePage/PageStub fallback in the route table below.
@@ -347,51 +382,53 @@ function RecordPaymentRoute() {
 export default function App() {
   return (
     <LanguageProvider>
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/pay/:token" element={<PublicPayPage />} />
-          <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
+      <AuthProvider>
+        <BrowserRouter>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+              <Route path="/pay/:token" element={<PublicPayPage />} />
+              <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
 
-          <Route element={<ProtectedRoute><RequireOnboarded><AppLayout /></RequireOnboarded></ProtectedRoute>}>
-            <Route index element={<Navigate to="/admin" replace />} />
-            <Route path="/admin" element={<RoleDashboard />} />
-            <Route path="/tasks" element={<SectionGuard path="/tasks"><TasksPage /></SectionGuard>} />
-            <Route path="/job-cards" element={<SectionGuard path="/job-cards"><JobCardsPage /></SectionGuard>} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/billing" element={<BillingPage />} />
-            <Route path="/platform" element={<PlatformConsolePage />} />
-            <Route path="/company/:id" element={<CompanyDetailPage />} />
-            <Route path="/platform-broadcast" element={<PlatformBroadcastPage />} />
-            <Route path="/payments/:direction/new" element={<RecordPaymentRoute />} />
+              <Route element={<ProtectedRoute><RequireOnboarded><AppLayout /></RequireOnboarded></ProtectedRoute>}>
+                <Route index element={<Navigate to="/admin" replace />} />
+                <Route path="/admin" element={<RoleDashboard />} />
+                <Route path="/tasks" element={<SectionGuard path="/tasks"><TasksPage /></SectionGuard>} />
+                <Route path="/job-cards" element={<SectionGuard path="/job-cards"><JobCardsPage /></SectionGuard>} />
+                <Route path="/chat" element={<ChatPage />} />
+                <Route path="/billing" element={<BillingPage />} />
+                <Route path="/platform" element={<PlatformConsolePage />} />
+                <Route path="/company/:id" element={<CompanyDetailPage />} />
+                <Route path="/platform-broadcast" element={<PlatformBroadcastPage />} />
+                <Route path="/payments/:direction/new" element={<RecordPaymentRoute />} />
 
-            {STUB_ROUTES.map(([path, title, legacyId, dbPath]) => {
-              const Comp = CUSTOM_PAGES[path];
-              const cfg = RESOURCES[path] || RESOURCES[RESOURCE_ALIASES[path]];
-              return (
-                <Route
-                  key={path}
-                  path={`/${path}`}
-                  element={(
-                    <SectionGuard path={`/${path}`}>
-                      {Comp
-                        ? <Comp />
-                        : cfg
-                          ? <ResourcePage config={cfg} />
-                          : <PageStub title={title} legacyId={legacyId} dbPath={dbPath} />}
-                    </SectionGuard>
-                  )}
-                />
-              );
-            })}
-          </Route>
+                {STUB_ROUTES.map(([path, title, legacyId, dbPath]) => {
+                  const Comp = CUSTOM_PAGES[path];
+                  const cfg = RESOURCES[path] || RESOURCES[RESOURCE_ALIASES[path]];
+                  return (
+                    <Route
+                      key={path}
+                      path={`/${path}`}
+                      element={(
+                        <SectionGuard path={`/${path}`}>
+                          {Comp
+                            ? <Comp />
+                            : cfg
+                              ? <ResourcePage config={cfg} />
+                              : <PageStub title={title} legacyId={legacyId} dbPath={dbPath} />}
+                        </SectionGuard>
+                      )}
+                    />
+                  );
+                })}
+              </Route>
 
-          <Route path="*" element={<Navigate to="/admin" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+              <Route path="*" element={<Navigate to="/admin" replace />} />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </AuthProvider>
     </LanguageProvider>
   );
 }

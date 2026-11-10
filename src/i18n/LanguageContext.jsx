@@ -4,7 +4,7 @@
  * `const t = useT(STRINGS)` then `t('key')`. The chosen language persists in
  * localStorage and is shared with the website ('md_lang').
  */
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
 export const LANGUAGES = [
   { code: 'en', label: 'English', native: 'English' },
@@ -49,11 +49,13 @@ export function useLang() {
 
 // Component-local translator. Missing keys fall back to English, then the key.
 // An intentionally empty string is respected (?? not ||).
+// Wrapped in useCallback so components with `t` in useEffect/useCallback deps
+// don't trigger cascading re-renders on every render pass.
 export function useT(localDict) {
   const { lang } = useLang();
-  return (key) => {
-    const entry = localDict[key];
+  return useCallback((key) => {
+    const entry = localDict && localDict[key];
     if (!entry) return key;
     return entry[lang] ?? entry.en ?? key;
-  };
+  }, [lang, localDict]);
 }

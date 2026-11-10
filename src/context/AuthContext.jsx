@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { authApi, tenantApi, getToken, setToken, clearToken } from '../services/api';
 import { authSocket } from '../services/realtime';
 
@@ -32,34 +32,36 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Called by LoginPage / SignupPage after success.
-  const login = (token, prof, tnt) => {
+  const login = useCallback((token, prof, tnt) => {
     setToken(token);
     setProfile(prof);
     setUser({ uid: prof?.id, email: prof?.email });
     setTenant(tnt || null);
     authSocket(token);
     if (!tnt) tenantApi.get().then((t) => setTenant(t.tenant)).catch(() => {});
-  };
+  }, []);
 
-  const signOut = () => {
+  const signOut = useCallback(() => {
     clearToken();
     setUser(null);
     setProfile(null);
     setTenant(null);
-  };
+  }, []);
 
-  const refreshTenant = () => tenantApi.get().then((t) => setTenant(t.tenant)).catch(() => {});
+  const refreshTenant = useCallback(() => tenantApi.get().then((t) => setTenant(t.tenant)).catch(() => {}), []);
 
-  const hasRole = (...roles) =>
-    !!profile && (roles.includes(profile.role) || roles.includes(profile.customRole));
+  const hasRole = useCallback((...roles) =>
+    !!profile && (roles.includes(profile.role) || roles.includes(profile.customRole)), [profile]);
 
-  const isPlatformAdmin = !!(profile && profile.platformAdmin);
+  const isPlatformAdmin = Boolean(profile && profile.platformAdmin);
+
+  const value = useMemo(() => ({
+    user, profile, tenant, loading, login, signOut, hasRole, isPlatformAdmin,
+    refreshTenant, setProfile, setTenant,
+  }), [user, profile, tenant, loading, login, signOut, hasRole, isPlatformAdmin, refreshTenant]);
 
   return (
-    <AuthContext.Provider value={{
-      user, profile, tenant, loading, login, signOut, hasRole, isPlatformAdmin,
-      refreshTenant, setProfile, setTenant,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

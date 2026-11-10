@@ -24,7 +24,9 @@ import api from './api';
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || undefined;
 
 export const socket = io(SOCKET_URL, {
-  autoConnect: true,
+  // Don't connect immediately on import — authSocket() connects after login so
+  // unauthenticated pages (Login, Signup, Pay link) don't open a socket at all.
+  autoConnect: false,
   transports: ['websocket', 'polling'],
 });
 
@@ -102,7 +104,12 @@ export function onValue(refObj, cb) {
 }
 
 // Let the socket announce the logged-in user (optional; not required to receive
-// change events). Safe to call repeatedly.
+// change events). Safe to call repeatedly. Also opens the connection if it was
+// deferred (autoConnect: false) — this is the ONLY place connect() is called so
+// unauthenticated pages (Login, Signup, /pay) never open a socket at all.
 export function authSocket(token) {
-  try { socket.emit('auth', { token }); } catch { /* ignore */ }
+  try {
+    if (!socket.connected) socket.connect();
+    socket.emit('auth', { token });
+  } catch { /* ignore */ }
 }

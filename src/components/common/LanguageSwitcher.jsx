@@ -2,9 +2,10 @@
  * Language dropdown — shows the native language names. Drops into auth pages
  * and the topbar. Persists via LanguageContext.
  */
+import { memo } from 'react';
 import { LANGUAGES, useLang } from '../../i18n/LanguageContext';
 
-export default function LanguageSwitcher({ style }) {
+function LanguageSwitcher({ style }) {
   const { lang, setLang } = useLang();
   return (
     <select
@@ -20,3 +21,5 @@ export default function LanguageSwitcher({ style }) {
     </select>
   );
 }
+
+export default memo(LanguageSwitcher);

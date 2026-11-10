@@ -9,10 +9,27 @@
     <meta name="application-name" content="MeraDhanda CRM" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+
+    <!-- DNS prefetch so the font origin is resolved before the stylesheet fires -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <!-- Load fonts asynchronously (media trick) so they never block first paint.
+         The onload handler switches media back to 'all' once the sheet arrives. -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <!-- Noscript fallback so fonts still load if JS is off -->
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" />
+    </noscript>
+
+    <!-- Razorpay checkout — deferred so it never delays first contentful paint.
+         It is only needed when a user actually opens the payment modal, so the
+         extra ~200ms of lazy load is unnoticeable vs blocking every page load. -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
   </head>
   <body>
     <div id="root"></div>

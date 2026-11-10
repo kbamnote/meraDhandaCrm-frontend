@@ -1,8 +1,11 @@
+import { memo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import NotificationBell from './NotificationBell';
 
-export default function Topbar({ onMenu, title }) {
+// memo: Topbar has no per-page props that change — it re-renders only when the
+// auth profile actually updates (login / role change), not on every navigation.
+function Topbar({ onMenu, title }) {
   const { profile } = useAuth();
   return (
     <header className="topbar">
@@ -18,3 +21,5 @@ export default function Topbar({ onMenu, title }) {
     </header>
   );
 }
+
+export default memo(Topbar);

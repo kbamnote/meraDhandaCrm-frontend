@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { meApi } from '../../services/api';
 import { socket } from '../../services/realtime';
@@ -30,7 +30,7 @@ function relativeTime(ts) {
   }
 }
 
-export default function NotificationBell() {
+function NotificationBell() {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
@@ -89,7 +89,7 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
 
-  const unread = items.filter((n) => !n.read).length;
+  const unread = useMemo(() => items.filter((n) => !n.read).length, [items]);
 
   const handleClickItem = async (n) => {
     // Optimistically mark read so the UI updates immediately.
@@ -283,3 +283,5 @@ export default function NotificationBell() {
     </div>
   );
 }
+
+export default memo(NotificationBell);
