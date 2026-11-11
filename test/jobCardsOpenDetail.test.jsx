@@ -27,7 +27,14 @@ const transitions = [];
 vi.mock('../src/services/realtime.js', () => ({
   db: { __backend: 'test' }, socket: { on() {}, off() {}, emit() {} },
   ref: (_db, path) => ({ path }),
-  onValue: (r, cb) => { cb({ val: () => (r.path === 'mpw/jobs' ? JOBS : r.path === 'mpw/users' ? USERS : {}) }); return () => {}; },
+  // Job View watches just its own job (mpw/jobs/<id>); Job Cards the list.
+  onValue: (r, cb) => {
+    const one = /^mpw\/jobs\/(.+)$/.exec(r.path);
+    const val = one ? (JOBS[one[1]] ? { ...JOBS[one[1]], id: one[1] } : null)
+      : r.path === 'mpw/jobs' ? JOBS : r.path === 'mpw/users' ? USERS : {};
+    cb({ val: () => val, exists: () => val != null });
+    return () => {};
+  },
   authSocket: () => {},
 }));
 vi.mock('../src/services/api.js', async () => {
