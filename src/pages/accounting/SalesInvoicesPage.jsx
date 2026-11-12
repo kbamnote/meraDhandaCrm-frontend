@@ -18,6 +18,8 @@ import TransactionBulkUpload from '../../components/common/TransactionBulkUpload
 import CreditNoteModal from '../../components/common/CreditNoteModal';
 import DebitNoteModal from '../../components/common/DebitNoteModal';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
+import { downloadExcel } from '../../components/common/reportExport';
+import { salesInvoiceGrid, exportFileName } from '../../utils/invoiceExport';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -188,6 +190,15 @@ export default function SalesInvoicesPage() {
       <div className="flex items-center justify-between mb-4" style={{ flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
         <div className="flex" style={{ gap: 6 }}>
+          {/* Exports what the list below shows — the chip, period, amount and
+              search filters all apply. */}
+          {pageView === 'invoices' && (
+            <button className="btn btn-ghost btn-sm" data-testid="export-excel" disabled={!filtered.length}
+              title={`Download these ${filtered.length} invoices as an Excel file`}
+              onClick={() => downloadExcel(exportFileName('sales-invoices'), salesInvoiceGrid(filtered))}>
+              ⬇️ Export Excel
+            </button>
+          )}
           <button className="btn btn-ghost btn-sm" onClick={() => setShowImport((v) => !v)}>⬆️ Import history</button>
           <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>{t('newInv')}</button>
         </div>
