@@ -23,6 +23,8 @@ import CreatePurchaseFlow from '../../components/common/CreatePurchaseFlow';
 import PurchaseBulkUpload from '../../components/common/PurchaseBulkUpload';
 import BankAccountSelect from '../../components/common/BankAccountSelect';
 import { PAY_MODES } from '../../config/payModes';
+import { downloadExcel } from '../../components/common/reportExport';
+import { purchaseGrid, exportFileName } from '../../utils/invoiceExport';
 
 const round2 = (n) => Math.round(((Number(n) || 0) * 100) + 1e-8) / 100;
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -168,6 +170,12 @@ export default function PurchasesPage() {
       <div className="flex items-center justify-between mb-4" style={{ flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('title')}</h2>
         <div className="flex" style={{ gap: 6 }}>
+          {/* Exports what the list below shows — the chip and search apply. */}
+          <button className="btn btn-ghost btn-sm" data-testid="export-excel" disabled={!filtered.length}
+            title={`Download these ${filtered.length} bills as an Excel file`}
+            onClick={() => downloadExcel(exportFileName('purchase-invoices'), purchaseGrid(filtered, purchaseStanding))}>
+            ⬇️ Export Excel
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowImport((v) => !v)}>
             {showImport ? '✕ Close import' : '📥 Import Excel'}
           </button>

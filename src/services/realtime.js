@@ -12,6 +12,10 @@
  *
  * onValue() loads the current value over the authenticated REST API, then
  * re-loads whenever the server emits a `data:change` for an overlapping path.
+ * When a whole collection is being watched and the change names the record
+ * (`data:change` carries { id }, or the path ends in it), only that record is
+ * fetched and patched in: one small request instead of re-downloading the
+ * collection (for jobs, every job ever created).
  * The callback receives a Firebase-like snapshot: { val(), exists() }.
  *
  * NOTE: this shim only serves the generic /api/db/<collection> collections.
@@ -45,6 +49,9 @@ function parsePath(path) {
   return { collection: parts[0], id: parts[1] || null, clean };
 }
 
+// More changed records than this in one burst → reload the collection instead.
+const MAX_PATCH = 15;
+
 export function onValue(refObj, cb) {
   const path = refObj && refObj.path ? refObj.path : String(refObj);
   const { collection, id, clean } = parsePath(path);
@@ -53,8 +60,11 @@ export function onValue(refObj, cb) {
   let seq = 0;          // guards against out-of-order responses
   let pendingTimer = null;
 
+  let fullInFlight = false;  // a full load has been sent and not yet applied
+
   async function doLoad() {
     const mySeq = ++seq;
+    fullInFlight = true;
     let data = null;
     try {
       const url = id ? `/db/${collection}/${id}` : `/db/${collection}`;
@@ -65,14 +75,56 @@ export function onValue(refObj, cb) {
     }
     // Ignore a stale response if a newer load was issued meanwhile.
     if (!active || mySeq !== seq) return;
+    fullInFlight = false;
     current = data;
     cb({ val: () => current, exists: () => current != null });
   }
 
-  // Coalesce bursts of change events into a single fetch.
-  function scheduleLoad() {
+  // Coalesce bursts of change events into a single fetch. Changes that name a
+  // record collect their ids; any change that doesn't forces a full reload.
+  let pendingIds = new Set();
+  let needFull = false;
+  function scheduleLoad(changedId) {
+    if (changedId && !id) pendingIds.add(changedId);
+    else needFull = true;
     if (pendingTimer) return;
-    pendingTimer = setTimeout(() => { pendingTimer = null; doLoad(); }, 60);
+    pendingTimer = setTimeout(flush, 60);
+  }
+
+  async function flush() {
+    pendingTimer = null;
+    const ids = [...pendingIds];
+    const full = needFull;
+    pendingIds = new Set();
+    needFull = false;
+    // A full reload is cheaper than many single fetches, and needed when we
+    // have nothing yet to patch.
+    // A full load already on its way was sent before these changes and may not
+    // include them; one sent now will.
+    if (full || fullInFlight || !ids.length || ids.length > MAX_PATCH || !current || typeof current !== 'object') {
+      doLoad();
+      return;
+    }
+    // Not a new seq: a full load issued while this patch is in flight was sent
+    // after the change, so it already has it and this patch is dropped.
+    const mySeq = seq;
+    const results = await Promise.all(ids.map(async (rid) => {
+      try {
+        const res = await api.get(`/db/${collection}/${encodeURIComponent(rid)}`);
+        return [rid, res.data];
+      } catch (e) {
+        // 404 = deleted; anything else = unknown, so fall back to a reload.
+        return [rid, e && e.response && e.response.status === 404 ? null : undefined];
+      }
+    }));
+    if (!active || mySeq !== seq) return;
+    if (results.some(([, d]) => d === undefined)) { doLoad(); return; }
+    const next = { ...current };
+    for (const [rid, d] of results) {
+      if (d == null) delete next[rid]; else next[rid] = d;
+    }
+    current = next;
+    cb({ val: () => current, exists: () => current != null });
   }
 
   doLoad(); // initial value, immediately
@@ -85,7 +137,10 @@ export function onValue(refObj, cb) {
       cp.startsWith(clean + '/') ||
       clean.startsWith(cp + '/')
     ) {
-      scheduleLoad();
+      // The changed record: sent as `id`, or the path's second segment.
+      const parts = cp.split('/');
+      const changedId = (msg && msg.id) || (parts[0] === collection && parts.length === 2 ? parts[1] : null);
+      scheduleLoad(changedId ? String(changedId) : null);
     }
   };
   socket.on('data:change', onChange);

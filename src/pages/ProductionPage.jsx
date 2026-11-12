@@ -4,7 +4,7 @@
  * department (→ next dept or → QC), and hold all go through the order-workflow
  * engine (ordersApi → routes/orders.js). Jobs are read live from `mpw/jobs`.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ref, onValue, db } from '../services/realtime';
 import { ordersApi } from '../services/api';
 import { useT } from '../i18n/LanguageContext';
@@ -66,6 +66,13 @@ export default function ProductionPage() {
 
   const selJob = useMemo(() => prodJobs.find((j) => j.id === selJobId) || null, [prodJobs, selJobId]);
 
+  // Apply a change to one job locally, without waiting for the live reload:
+  // used to tick a step the moment it's clicked, and to put in the server's
+  // saved copy (or roll back) when the request returns.
+  const patchJob = useCallback((id, patch) => {
+    setJobs((m) => (m && m[id] ? { ...m, [id]: { ...m[id], ...patch } } : m));
+  }, []);
+
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>{t('title')}</h2>
@@ -118,12 +125,12 @@ export default function ProductionPage() {
         </>
       )}
 
-      {selJob && <StepModal job={selJob} dept={byKey[curDept(selJob)?.dept]} t={t} onClose={() => setSelJobId(null)} />}
+      {selJob && <StepModal job={selJob} dept={byKey[curDept(selJob)?.dept]} t={t} patchJob={patchJob} onClose={() => setSelJobId(null)} />}
     </div>
   );
 }
 
-function StepModal({ job, dept, t, onClose }) {
+function StepModal({ job, dept, t, patchJob, onClose }) {
   const idx = job.currentDeptIndex || 0;
   const plan = Array.isArray(job.plan) ? job.plan : [];
   const planStep = plan[idx];
@@ -135,9 +142,30 @@ function StepModal({ job, dept, t, onClose }) {
   const required = (planStep?.steps || []).filter((s) => !s.optional);
   const allRequiredDone = required.every((s) => stepState(s.id)?.done);
 
+  // Which step is being saved — its buttons are disabled meanwhile, so a
+  // double click can't send it twice.
+  const [saving, setSaving] = useState(null);
+
+  // Optimistic: the tick shows the moment Done is clicked. The request then
+  // returns the saved job, which replaces the guess; on failure the step goes
+  // back to how it was. (Before, nothing changed until the server's change
+  // event had made the page re-download every job.)
   const act = async (stepId, action) => {
-    try { await ordersApi.markStep(job.id, { stepId, action }); }
-    catch (e) { showToast(e.response?.data?.error || t('failed'), 'error'); }
+    if (saving) return;
+    const key = `${idx}:${stepId}`;
+    const before = job.stepProgress || {};
+    const next = { ...before };
+    if (action === 'undo') delete next[key];
+    else next[key] = { done: action === 'done', skipped: action === 'skip', at: Date.now() };
+    setSaving(stepId);
+    patchJob(job.id, { stepProgress: next });
+    try {
+      const saved = await ordersApi.markStep(job.id, { stepId, action });
+      if (saved && saved.stepProgress) patchJob(job.id, { stepProgress: saved.stepProgress });
+    } catch (e) {
+      patchJob(job.id, { stepProgress: before });
+      showToast(e.response?.data?.error || t('failed'), 'error');
+    } finally { setSaving(null); }
   };
 
   const hold = async () => {
@@ -167,11 +195,11 @@ function StepModal({ job, dept, t, onClose }) {
                 {s.name}{s.optional ? <span style={{ fontSize: 11, color: 'var(--text3)' }}> ({t('optional')})</span> : null}
               </span>
               {st?.done || st?.skipped ? (
-                <button className="btn btn-ghost btn-xs" onClick={() => act(s.id, 'undo')}>{t('undo')}</button>
+                <button className="btn btn-ghost btn-xs" disabled={!!saving} onClick={() => act(s.id, 'undo')}>{t('undo')}</button>
               ) : (
                 <>
-                  <button className="btn btn-success btn-xs" onClick={() => act(s.id, 'done')}>{t('done')}</button>
-                  {s.optional && <button className="btn btn-ghost btn-xs" onClick={() => act(s.id, 'skip')}>{t('skip')}</button>}
+                  <button className="btn btn-success btn-xs" data-testid="step-done" disabled={!!saving} onClick={() => act(s.id, 'done')}>{t('done')}</button>
+                  {s.optional && <button className="btn btn-ghost btn-xs" disabled={!!saving} onClick={() => act(s.id, 'skip')}>{t('skip')}</button>}
                 </>
               )}
             </div>
@@ -179,7 +207,7 @@ function StepModal({ job, dept, t, onClose }) {
         })}
 
         <div className="flex gap-2 mt-2" style={{ marginTop: 12 }}>
-          <button className="btn btn-primary flex-1" onClick={() => setSending(true)} disabled={!allRequiredDone}>
+          <button className="btn btn-primary flex-1" onClick={() => setSending(true)} disabled={!allRequiredDone || !!saving}>
             {isLast ? t('sendQc') : t('nextDept')}
           </button>
           <button className="btn btn-sm" onClick={hold} style={{ background: 'var(--amber)', color: '#fff' }}>{t('hold')}</button>
