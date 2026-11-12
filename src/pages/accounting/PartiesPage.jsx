@@ -206,10 +206,44 @@ const S = {
   remove:       { en: 'Remove', hi: 'हटाएं', hinglish: 'Remove' },
   stateFromGst: { en: 'State', hi: 'राज्य', hinglish: 'State' },
   savedNew:     { en: 'Saved — add the next one', hi: 'सेव हुआ — अगला जोड़ें', hinglish: 'Save hua — agla add karein' },
+  customRange:  { en: 'Custom date…', hi: 'कस्टम तारीख…', hinglish: 'Custom date…' },
+  rangeFrom:    { en: 'From', hi: 'से', hinglish: 'From' },
+  rangeTo:      { en: 'To', hi: 'तक', hinglish: 'To' },
 };
 
-const isoDate = (d) => d.toISOString().slice(0, 10);
+// A LOCAL calendar date as 'YYYY-MM-DD'. (toISOString() is UTC: in IST it
+// turns the 1st of a month into the last day of the previous one, so "This
+// month" started a day early and "Last month" lost its last day.)
+const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const fyStartDate = () => { const d = new Date(); const y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; return `${y}-04-01`; };
+
+// Choosing "Custom date…" starts from this month so far rather than two blank
+// boxes; a range already typed is kept.
+function pickRange(value, setRange, custom, setCustom) {
+  if (value === 'custom' && !custom.from && !custom.to) {
+    const d = new Date();
+    setCustom({ from: isoDate(new Date(d.getFullYear(), d.getMonth(), 1)), to: isoDate(d) });
+  }
+  setRange(value);
+}
+
+// From / To pickers shown when a tab's period dropdown is on "Custom date…".
+// Either end may be left empty (open-ended). `value` is { from, to }, both
+// 'YYYY-MM-DD' or ''.
+function CustomRange({ value, onChange, t }) {
+  const box = { padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12.5 };
+  return (
+    <span className="flex items-center" style={{ gap: 6 }} data-testid="custom-range">
+      <input type="date" style={box} aria-label={t('rangeFrom')} title={t('rangeFrom')} data-testid="range-from"
+        value={value.from} max={value.to || undefined}
+        onChange={(e) => onChange({ ...value, from: e.target.value })} />
+      <span style={{ color: 'var(--text3)' }}>→</span>
+      <input type="date" style={box} aria-label={t('rangeTo')} title={t('rangeTo')} data-testid="range-to"
+        value={value.to} min={value.from || undefined}
+        onChange={(e) => onChange({ ...value, to: e.target.value })} />
+    </span>
+  );
+}
 
 const partyName = (p) => p.name || p.company || p.title || '—';
 const partyPhone = (p) => p.phone || p.mobile || p.contact || p.email || '';
@@ -640,8 +674,7 @@ function monthRange(offset = 0) {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth() + offset, 1);
   const to = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
-  const iso = (d) => d.toISOString().slice(0, 10);
-  return [iso(from), iso(to)];
+  return [isoDate(from), isoDate(to)];
 }
 
 // Which feed rows lead somewhere, and where.
@@ -675,6 +708,7 @@ export const canOpenTxn = (r) => txnTarget(r) !== null;
 export function TransactionsTab({ rows, t, party, onChanged }) {
   const navigate = useNavigate();
   const [range, setRange] = useState('all');
+  const [custom, setCustom] = useState({ from: '', to: '' });
   const [docType, setDocType] = useState('all');
   const [status, setStatus] = useState('all');
   const [moving, setMoving] = useState(null);   // the invoice row being moved
@@ -747,6 +781,7 @@ export function TransactionsTab({ rows, t, party, onChanged }) {
     if (range === 'thisMonth') [from, to] = monthRange(0);
     else if (range === 'lastMonth') [from, to] = monthRange(-1);
     else if (range === 'thisFy') { from = fyStart(); to = null; }
+    else if (range === 'custom') { from = custom.from || null; to = custom.to || null; }
     return rows.filter((r) => {
       if (docType !== 'all' && r.docType !== docType) return false;
       if (status !== 'all' && r.status !== status) return false;
@@ -754,7 +789,7 @@ export function TransactionsTab({ rows, t, party, onChanged }) {
       if (to && (!r.date || r.date > to)) return false;
       return true;
     });
-  }, [rows, range, docType, status]);
+  }, [rows, range, custom.from, custom.to, docType, status]);
 
   const sel = { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12.5 };
   const COLS = '110px minmax(120px, 1fr) minmax(140px, 1.2fr) minmax(120px, 1fr) 120px';
@@ -762,12 +797,14 @@ export function TransactionsTab({ rows, t, party, onChanged }) {
   return (
     <>
       <div className="flex" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <select style={sel} value={range} onChange={(e) => setRange(e.target.value)}>
+        <select style={sel} value={range} onChange={(e) => pickRange(e.target.value, setRange, custom, setCustom)}>
           <option value="all">📅 {t('allTime')}</option>
           <option value="thisMonth">{t('thisMonth')}</option>
           <option value="lastMonth">{t('lastMonth')}</option>
           <option value="thisFy">{t('thisFy')}</option>
+          <option value="custom">{t('customRange')}</option>
         </select>
+        {range === 'custom' && <CustomRange value={custom} onChange={setCustom} t={t} />}
         <select style={sel} value={docType} onChange={(e) => setDocType(e.target.value)}>
           <option value="all">{t('txnType')}</option>
           {typeOptions.map((o) => (
@@ -1074,6 +1111,7 @@ function ProfileTab({ p, t }) {
 
 function LedgerTab({ party, t, feed, openingBalance }) {
   const [range, setRange] = useState('all');
+  const [custom, setCustom] = useState({ from: '', to: '' });
 
   // Built from the DOCUMENT feed rather than the journal, because a customer
   // statement has to show voucher numbers and payment modes — a journal line
@@ -1087,10 +1125,13 @@ function LedgerTab({ party, t, feed, openingBalance }) {
     if (range === 'thisMonth') { const d = new Date(); from = isoDate(new Date(d.getFullYear(), d.getMonth(), 1)); }
     else if (range === 'thisFy') from = fyStartDate();
     else if (range === 'last365') { const d = new Date(); d.setDate(d.getDate() - 365); from = isoDate(d); }
+    else if (range === 'custom') from = custom.from || null;
+    const to = range === 'custom' ? (custom.to || null) : null;
 
     // Oldest first — a running balance only reads correctly forwards.
     const list = [...(feed || [])]
       .filter((r) => !from || (r.date && r.date >= from))
+      .filter((r) => !to || (r.date && r.date <= to))
       .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
 
     // For a customer an invoice or debit note DEBITS them (they owe more) and a
@@ -1153,12 +1194,14 @@ function LedgerTab({ party, t, feed, openingBalance }) {
       </div>
 
       <div className="flex items-center" style={{ gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <select style={sel} value={range} onChange={(e) => setRange(e.target.value)}>
+        <select style={sel} value={range} onChange={(e) => pickRange(e.target.value, setRange, custom, setCustom)}>
           <option value="all">{t('allTime')}</option>
           <option value="last365">{t('last365')}</option>
           <option value="thisMonth">{t('thisMonth')}</option>
           <option value="thisFy">{t('thisFy')}</option>
+          <option value="custom">{t('customRange')}</option>
         </select>
+        {range === 'custom' && <CustomRange value={custom} onChange={setCustom} t={t} />}
         <div style={{ marginLeft: 'auto' }}>
           <ExportButtons title={docTitle} grid={grid} fileBase={fileBase} size="xs"
             labels={{ excel: 'Excel', print: `🖨 ${t('print')}` }} />
@@ -1228,6 +1271,7 @@ function StatementRow({ cells, cols, bold, muted }) {
 
 function ItemsTab({ party, t }) {
   const [range, setRange] = useState('last365');
+  const [custom, setCustom] = useState({ from: '', to: '' });
   const [data, setData] = useState(null);
 
   // Fetched per range rather than filtered client-side: the totals have to be
@@ -1241,11 +1285,15 @@ function ItemsTab({ party, t }) {
     if (range === 'last365') { const d = new Date(); d.setDate(d.getDate() - 365); params.from = isoDate(d); }
     else if (range === 'thisMonth') { const d = new Date(); params.from = isoDate(new Date(d.getFullYear(), d.getMonth(), 1)); }
     else if (range === 'thisFy') params.from = fyStartDate();
+    else if (range === 'custom') {
+      if (custom.from) params.from = custom.from;
+      if (custom.to) params.to = custom.to;
+    }
     accountingApi.partyItems(party.id, params)
       .then((r) => { if (!cancelled) setData(r); })
       .catch(() => { if (!cancelled) setData({ items: [], totals: {} }); });
     return () => { cancelled = true; };
-  }, [party.id, range]);
+  }, [party.id, range, custom.from, custom.to]);
 
   const qty = (n, unit) => (n ? `${n} ${unit || 'PCS'}` : '-');
   const amt = (n) => (n ? inr(n) : '-');
@@ -1274,12 +1322,14 @@ function ItemsTab({ party, t }) {
   return (
     <div>
       <div className="flex items-center" style={{ gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <select style={sel} value={range} onChange={(e) => setRange(e.target.value)}>
+        <select style={sel} value={range} onChange={(e) => pickRange(e.target.value, setRange, custom, setCustom)}>
           <option value="last365">{t('last365')}</option>
           <option value="thisMonth">{t('thisMonth')}</option>
           <option value="thisFy">{t('thisFy')}</option>
           <option value="all">{t('allTime')}</option>
+          <option value="custom">{t('customRange')}</option>
         </select>
+        {range === 'custom' && <CustomRange value={custom} onChange={setCustom} t={t} />}
         <div style={{ marginLeft: 'auto' }}>
           <ExportButtons title={docTitle} grid={grid} fileBase={fileBase} size="xs"
             labels={{ excel: 'Excel', print: `🖨 ${t('print')}` }} />
