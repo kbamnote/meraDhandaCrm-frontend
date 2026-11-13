@@ -42,6 +42,8 @@ const S = {
   dup:       { en: 'Possible duplicate (same vendor & amount recently)', hinglish: 'Duplicate ho sakta hai' },
   anomaly:   { en: 'Anomaly', hinglish: 'Anomaly' },
   branch:    { en: 'Branch', hi: 'शाखा', hinglish: 'Branch' },
+  addCat:    { en: '+ Add Category', hi: '+ श्रेणी जोड़ें', hinglish: '+ Add Category' },
+  newCatPlaceholder: { en: 'New category name…', hi: 'नई श्रेणी का नाम…', hinglish: 'New category name…' },
 };
 
 const CATEGORIES = ['Rent', 'Utilities', 'Salaries', 'Transport', 'Raw Materials', 'Office Supplies', 'Marketing', 'Maintenance', 'Miscellaneous', 'Travel', 'Internet', 'Repairs', 'Bank Charges', 'Insurance', 'Legal', 'Packaging', 'Software', 'Food', 'General'];
@@ -56,10 +58,38 @@ export default function ExpensesPage() {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [suggested, setSuggested] = useState(null); // live rule-based category preview
+  const [isAddingCat, setIsAddingCat] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [addingCat, setAddingCat] = useState(false);
 
   function emptyForm() {
     return { date: today(), category: 'General', description: '', amount: '', paymentMode: 'cash', bankAccountId: '', vendor: '', invoiceRef: '', branchId: '' };
   }
+
+  const handleAddNewCategory = async () => {
+    const name = newCatName.trim();
+    if (!name) return;
+    const existing = allCats.find((c) => c.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setForm((f) => ({ ...f, category: existing }));
+      setIsAddingCat(false);
+      setNewCatName('');
+      return;
+    }
+    setAddingCat(true);
+    try {
+      const res = await accountingApi.createExpenseCategory({ name });
+      const savedName = res?.name || name;
+      setCategories((prev) => Array.from(new Set([...prev, savedName])).sort());
+      setForm((f) => ({ ...f, category: savedName }));
+      setIsAddingCat(false);
+      setNewCatName('');
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Failed to save category');
+    } finally {
+      setAddingCat(false);
+    }
+  };
 
   // Live category suggestion — debounced call to the rule engine while typing.
   useEffect(() => {
@@ -100,8 +130,8 @@ export default function ExpensesPage() {
   }, [expenses]);
   const topCat = catTotals.length > 0 ? catTotals[0] : null;
 
-  const openNew = () => { setEditItem(null); setForm(emptyForm()); setShowForm(true); };
-  const openEdit = (e) => { setEditItem(e); setForm({ date: e.date || today(), category: e.category || '', description: e.description || '', amount: e.amount || '', paymentMode: e.paymentMode || 'cash', bankAccountId: e.bankAccountId || '', vendor: e.vendor || '', invoiceRef: e.invoiceRef || '', branchId: e.branchId || '' }); setShowForm(true); };
+  const openNew = () => { setIsAddingCat(false); setNewCatName(''); setEditItem(null); setForm(emptyForm()); setShowForm(true); };
+  const openEdit = (e) => { setIsAddingCat(false); setNewCatName(''); setEditItem(e); setForm({ date: e.date || today(), category: e.category || '', description: e.description || '', amount: e.amount || '', paymentMode: e.paymentMode || 'cash', bankAccountId: e.bankAccountId || '', vendor: e.vendor || '', invoiceRef: e.invoiceRef || '', branchId: e.branchId || '' }); setShowForm(true); };
 
   const save = async () => {
     if (!form.amount || Number(form.amount) <= 0) return;
@@ -232,11 +262,67 @@ export default function ExpensesPage() {
                 <input className="input" type="number" step="0.01" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00" />
               </div>
               <div className="form-group">
-                <label>{t('category')}</label>
-                <select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                  {allCats.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-                {suggested && suggested !== form.category && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label style={{ margin: 0 }}>{t('category')}</label>
+                  {!isAddingCat && (
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-ghost"
+                      style={{ color: 'var(--blue)', fontWeight: 600, padding: '0 4px', fontSize: 11 }}
+                      onClick={() => { setIsAddingCat(true); setNewCatName(''); }}
+                    >
+                      {t('addCat')}
+                    </button>
+                  )}
+                </div>
+                {isAddingCat ? (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      className="input"
+                      autoFocus
+                      placeholder={t('newCatPlaceholder')}
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); handleAddNewCategory(); }
+                        if (e.key === 'Escape') { setIsAddingCat(false); setNewCatName(''); }
+                      }}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      disabled={addingCat || !newCatName.trim()}
+                      onClick={handleAddNewCategory}
+                    >
+                      {addingCat ? '…' : t('save')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => { setIsAddingCat(false); setNewCatName(''); }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    className="input"
+                    value={form.category}
+                    onChange={(e) => {
+                      if (e.target.value === '__add_new__') {
+                        setIsAddingCat(true);
+                        setNewCatName('');
+                      } else {
+                        setForm({ ...form, category: e.target.value });
+                      }
+                    }}
+                  >
+                    {allCats.map((c) => <option key={c} value={c}>{c}</option>)}
+                    <option value="__add_new__">+ Add new category…</option>
+                  </select>
+                )}
+                {suggested && suggested !== form.category && !isAddingCat && (
                   <div style={{ marginTop: 4, fontSize: 11, color: 'var(--blue)', display: 'flex', gap: 6, alignItems: 'center' }}>
                     <span>{t('suggest')} {suggested}</span>
                     <button type="button" className="btn btn-xs btn-ghost" onClick={() => setForm({ ...form, category: suggested })}>{t('useSugg')}</button>

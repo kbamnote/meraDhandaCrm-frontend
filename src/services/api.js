@@ -444,6 +444,7 @@ export const accountingApi = {
   updateExpense: (id, body) => api.put(`/accounting/expenses/${id}`, body).then(r => r.data),
   deleteExpense: (id)       => api.delete(`/accounting/expenses/${id}`).then(r => r.data),
   expenseCategories: ()     => api.get('/accounting/expense-categories').then(r => r.data),
+  createExpenseCategory: (body) => api.post('/accounting/expense-categories', body).then(r => r.data),
   suggestCategory:   (body) => api.post('/accounting/expenses/suggest-category', body).then(r => r.data),
   reminders:         ()     => api.get('/accounting/automation/reminders').then(r => r.data),
   markReminderRead:  (id)   => api.post(`/accounting/automation/reminders/${id}/read`).then(r => r.data),
