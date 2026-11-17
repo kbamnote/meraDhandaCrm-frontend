@@ -7,9 +7,8 @@
  * per-day rate (salary ÷ 26) is shown beside each one because that is what a
  * day's absence actually costs.
  *
- * An application is approved or refused here. Approving fixes the instalment at
- * that moment, so a later pay rise cannot quietly change what somebody is
- * repaying.
+ * An application is approved or refused here. Admins can also directly grant/record
+ * staff advances with custom repayment terms (next salary or instalments).
  */
 import { useCallback, useEffect, useState } from 'react';
 import { hrApi } from '../../services/api';
@@ -23,10 +22,10 @@ const S = {
   saved:     { en: 'Salary updated', hi: 'सैलरी अपडेट हुई', hinglish: 'Salary update ho gayi', gu: 'પગાર અપડેટ થયો', mr: 'पगार अपडेट झाला', mwr: 'सैलरी अपडेट हुई' },
   lastHike:  { en: 'last hike', hi: 'पिछली बढ़ोतरी', hinglish: 'last hike', gu: 'છેલ્લો વધારો', mr: 'मागील वाढ', mwr: 'पैली बढ़ोतरी' },
   owes:      { en: 'advance owing', hi: 'एडवांस बाकी', hinglish: 'advance baki', gu: 'એડવાન્સ બાકી', mr: 'अ‍ॅडव्हान्स बाकी', mwr: 'एडवांस बाकी' },
-  record:    { en: 'Record an advance already given', hi: 'पहले दिया गया एडवांस दर्ज करें', hinglish: 'Pehle diya gaya advance record karein', gu: 'અગાઉ આપેલ એડવાન્સ નોંધો', mr: 'आधी दिलेला अ‍ॅडव्हान्स नोंदवा', mwr: 'पैली दियो एडवांस दरज करो' },
-  recordHint:{ en: 'For cash handed over outside the app. It is recorded as already approved and comes out of their pay.', hi: 'ऐप के बाहर दिए गए कैश के लिए। यह सीधे मंज़ूर दर्ज होगा और सैलरी से कटेगा।', hinglish: 'App ke bahar diye gaye cash ke liye. Seedha approved record hoga aur salary se katega.', gu: 'એપ બહાર આપેલ રોકડ માટે. સીધું મંજૂર નોંધાશે અને પગારમાંથી કપાશે.', mr: 'अ‍ॅपबाहेर दिलेल्या रोखीसाठी. थेट मंजूर नोंदवले जाईल आणि पगारातून कापले जाईल.', mwr: 'ऐप रै बारै दियै कैश खातर। सीधो मंजूर दरज हुसी अर सैलरी सूं कटसी।' },
-  staff:     { en: 'Staff member', hi: 'स्टाफ', hinglish: 'Staff member', gu: 'સ્ટાફ', mr: 'कर्मचारी', mwr: 'स्टाफ' },
-  amount:    { en: 'Amount given', hi: 'दी गई राशि', hinglish: 'Amount given', gu: 'આપેલ રકમ', mr: 'दिलेली रक्कम', mwr: 'दी गी रकम' },
+  record:    { en: 'Give / Record staff advance', hi: 'स्टाफ एडवांस दें / दर्ज करें', hinglish: 'Staff advance dein / record karein', gu: 'સ્ટાફ એડવાન્સ આપો / નોંધો', mr: 'कर्मचारी अ‍ॅडव्हान्स द्या / नोंदवा', mwr: 'स्टाफ एडवांस देवो / दरज करो' },
+  recordHint:{ en: 'Record an advance given to staff. It is approved immediately and scheduled for payroll deduction.', hi: 'स्टाफ को दिया गया एडवांस दर्ज करें। यह तुरंत मंज़ूर होगा और आगामी पेरोल से कटेगा।', hinglish: 'Staff ko diya gaya advance record karein. Seedha approved hoga aur payroll se katega.', gu: 'સ્ટાફને આપેલ એડવાન્સ નોંધો. સીધું મંજૂર થશે અને પગારમાંથી કપાશે.', mr: 'कर्मचाऱ्याला दिलेला अ‍ॅडव्हान्स नोंदवा. थेट मंजूर होईल आणि पगारातून कापला जाईल.', mwr: 'स्टाफ नै दियो गयो एडवांस दरज करो। सीधो मंजूर हुसी अर सैलरी सूं कटसी।' },
+  staff:     { en: 'Staff member', hi: 'स्टाफ सदस्य', hinglish: 'Staff member', gu: 'સ્ટાફ સભ્ય', mr: 'कर्मचारी', mwr: 'स्टाफ' },
+  amount:    { en: 'Advance amount', hi: 'एडवांस राशि', hinglish: 'Advance amount', gu: 'એડવાન્સ રકમ', mr: 'अ‍ॅडव्हान्स रक्कम', mwr: 'एडवांस रकम' },
   repayHow:  { en: 'How will it be repaid?', hi: 'वापसी कैसे होगी?', hinglish: 'Wapsi kaise hogi?', gu: 'પરત કેવી રીતે?', mr: 'परतफेड कशी?', mwr: 'वापसी किया होसी?' },
   nextSal:   { en: 'Next salary', hi: 'अगली सैलरी', hinglish: 'Next salary', gu: 'આગલો પગાર', mr: 'पुढचा पगार', mwr: 'अगली सैलरी' },
   emi:       { en: 'Instalments', hi: 'किस्तों में', hinglish: 'Instalments', gu: 'હપ્તા', mr: 'हप्ते', mwr: 'किस्तां' },
@@ -34,21 +33,27 @@ const S = {
   months:    { en: 'Instalments', hi: 'कितनी किस्तें', hinglish: 'Kitni instalments', gu: 'કેટલા હપ્તા', mr: 'किती हप्ते', mwr: 'कितनी किस्तां' },
   terms:     { en: 'Describe the arrangement', hi: 'व्यवस्था लिखें', hinglish: 'Arrangement likhein', gu: 'વ્યવસ્થા લખો', mr: 'व्यवस्था लिहा', mwr: 'व्यवस्था लिखो' },
   why:       { en: 'Reason (optional)', hi: 'कारण (वैकल्पिक)', hinglish: 'Reason (optional)', gu: 'કારણ (વૈકલ્પિક)', mr: 'कारण (ऐच्छिक)', mwr: 'कारण (मरजी सूं)' },
-  saveRec:   { en: 'Record advance', hi: 'एडवांस दर्ज करें', hinglish: 'Advance record karein', gu: 'એડવાન્સ નોંધો', mr: 'अ‍ॅडव्हान्स नोंदवा', mwr: 'एडवांस दरज करो' },
-  recorded:  { en: 'Advance recorded', hi: 'एडवांस दर्ज हो गया', hinglish: 'Advance record ho gaya', gu: 'એડવાન્સ નોંધાયો', mr: 'अ‍ॅडव्हान्स नोंदवला', mwr: 'एडवांस दरज हो ग्यो' },
-  eachInst:  { en: 'each', hi: 'प्रति किस्त', hinglish: 'each', gu: 'દરેક', mr: 'प्रत्येकी', mwr: 'हर एक' },
-  byAdmin:   { en: 'recorded by admin', hi: 'एडमिन ने दर्ज किया', hinglish: 'admin ne record kiya', gu: 'એડમિને નોંધ્યું', mr: 'अ‍ॅडमिनने नोंदवले', mwr: 'एडमिन दरज कियो' },
+  saveRec:   { en: 'Give advance', hi: 'एडवांस दें', hinglish: 'Advance dein', gu: 'એડવાન્સ આપો', mr: 'अ‍ॅडव्हान्स द्या', mwr: 'एडवांस देवो' },
+  recorded:  { en: 'Advance recorded successfully', hi: 'एडवांस सफलतापूर्वक दर्ज हो गया', hinglish: 'Advance successfully record ho gaya', gu: 'એડવાન્સ સફળતાપૂર્વક નોંધાયો', mr: 'अ‍ॅडव्हान्स यशस्वीरीत्या नोंदवला', mwr: 'एडवांस ठीक सूं दरज हो ग्यो' },
+  eachInst:  { en: 'each month', hi: 'प्रति माह', hinglish: 'har mahine', gu: 'દર મહિને', mr: 'दरमहा', mwr: 'हर महीना' },
+  byAdmin:   { en: 'Given by admin', hi: 'एडमिन द्वारा दिया गया', hinglish: 'Admin ne diya', gu: 'એડમિન દ્વારા આપેલ', mr: 'अ‍ॅडमिनने दिलेला', mwr: 'एडमिन दियो' },
   cancel:    { en: 'Cancel', hi: 'रद्द', hinglish: 'Cancel', gu: 'રદ', mr: 'रद्द', mwr: 'रद्द' },
-  requests:  { en: 'Advance requests', hi: 'एडवांस अनुरोध', hinglish: 'Advance requests', gu: 'એડવાન્સ વિનંતીઓ', mr: 'अ‍ॅडव्हान्स विनंत्या', mwr: 'एडवांस अरजियां' },
-  noReq:     { en: 'No advance requests.', hi: 'कोई एडवांस अनुरोध नहीं।', hinglish: 'Koi advance request nahi.', gu: 'કોઈ એડવાન્સ વિનંતી નથી.', mr: 'अ‍ॅडव्हान्स विनंती नाही.', mwr: 'कोई एडवांस अरजी कोनी।' },
+  requests:  { en: 'Staff Advances', hi: 'स्टाफ एडवांस', hinglish: 'Staff Advances', gu: 'સ્ટાફ એડવાન્સ', mr: 'कर्मचारी अ‍ॅડવ્હાંસ', mwr: 'स्टाफ एडवांस' },
+  noReq:     { en: 'No advances recorded.', hi: 'कोई एडवांस दर्ज नहीं है।', hinglish: 'Koi advance record nahi hai.', gu: 'કોઈ એડવાન્સ નોંધાયેલ નથી.', mr: 'कोणताही अ‍ॅડવ્હાંસ नोंदवलेला नाही.', mwr: 'कोई एडवांस दरज कोनी।' },
+  noPendingReq: { en: 'No pending advance requests.', hi: 'कोई पेंडिंग एडवांस अनुरोध नहीं।', hinglish: 'Koi pending advance request nahi.', gu: 'કોઈ પેન્ડિંગ એડવાન્સ વિનંતી નથી.', mr: 'कोणतीही प्रलंबित अ‍ॅડવ્હાંસ विनंती नाही.', mwr: 'कोई पेंडिंग एडवांस अरजी कोनी।' },
   approve:   { en: 'Approve', hi: 'मंज़ूर', hinglish: 'Approve', gu: 'મંજૂર', mr: 'मंजूर', mwr: 'मंजूर' },
   reject:    { en: 'Reject', hi: 'अस्वीकार', hinglish: 'Reject', gu: 'નામંજૂર', mr: 'नाकारा', mwr: 'नामंजूर' },
   repaid:    { en: 'Record repayment', hi: 'वापसी दर्ज करें', hinglish: 'Repayment record karein', gu: 'ચુકવણી નોંધો', mr: 'परतफेड नोंदवा', mwr: 'वापसी दरज करो' },
   owing:     { en: 'still owing', hi: 'बाकी', hinglish: 'baki', gu: 'બાકી', mr: 'बाकी', mwr: 'बाकी' },
   all:       { en: 'All', hi: 'सभी', hinglish: 'All', gu: 'બધા', mr: 'सर्व', mwr: 'सगळा' },
   pending:   { en: 'Awaiting decision', hi: 'फैसला बाकी', hinglish: 'Faisla baki', gu: 'નિર્ણય બાકી', mr: 'निर्णय बाकी', mwr: 'फैसलो बाकी' },
-  running:   { en: 'Running', hi: 'चल रहे', hinglish: 'Running', gu: 'ચાલુ', mr: 'सुरू', mwr: 'चालू' },
+  running:   { en: 'Running / Active', hi: 'चल रहे (सक्रिय)', hinglish: 'Running (Active)', gu: 'ચાલુ (સક્રિય)', mr: 'सुरू (सक्रिय)', mwr: 'चालू' },
   failed:    { en: 'Something went wrong', hi: 'कुछ गलत हो गया', hinglish: 'Kuch galat ho gaya', gu: 'કંઈક ખોટું થયું', mr: 'काहीतरी चुकले', mwr: 'कीं गलत हो ग्यो' },
+  addAdvance: { en: '+ Give Staff Advance', hi: '+ स्टाफ एडवांस दें', hinglish: '+ Staff advance dein', gu: '+ સ્ટાફ એડવાન્સ આપો', mr: '+ कर्मचाऱ्याला अ‍ॅडव्हान्स द्या', mwr: '+ स्टाफ एडवांस देवो' },
+  advanceBtn: { en: '+ Advance', hi: '+ एडवांस', hinglish: '+ Advance', gu: '+ એડવાન્સ', mr: '+ अ‍ॅडव्हान्स', mwr: '+ एडवांस' },
+  giveAdvanceStaff: { en: 'Give advance to this staff', hi: 'इस स्टाफ को एडवांस दें', hinglish: 'Is staff ko advance dein', gu: 'આ સ્ટાફને એડવાન્સ આપો', mr: 'या कर्मचाऱ्याला अ‍ॅडव्हान्स द्या', mwr: 'इण स्टाफ नै एडवांस देवो' },
+  adminGiveAdvanceTitle: { en: '💰 Give Staff Advance', hi: '💰 स्टाफ एडवांस दें', hinglish: '💰 Staff advance dein', gu: '💰 સ્ટાફ એડવાન્સ આપો', mr: '💰 कर्मचाऱ्याला अ‍ॅडव्हान्स द्या', mwr: '💰 स्टाफ एडवांस देवो' },
+  advancesTitle: { en: 'Staff Advances', hi: 'स्टाफ एडवांस', hinglish: 'Staff Advances', gu: 'સ્ટાફ એડવાન્સ', mr: 'कर्मचारी अ‍ॅडव्हान्स', mwr: 'स्टाफ एडवांस' },
 };
 
 const inr = (v) => '₹' + Number(v || 0).toLocaleString('en-IN');
@@ -68,12 +73,24 @@ export default function SalaryAdmin() {
   const [filter, setFilter] = useState('pending');
   const [draft, setDraft] = useState({});       // userId -> typed salary
   const [busy, setBusy] = useState(null);
-  // Folded away: most days nobody is recording a cash advance, and an open
-  // form on a screen about everyone's pay is an invitation to mistype.
+
+  // Form state for giving staff advance
   const [recOpen, setRecOpen] = useState(false);
   const BLANK_REC = { userId: '', amount: '', repayMode: 'next_salary', emiMonths: '3', otherTerms: '', reason: '' };
   const [rec, setRec] = useState(BLANK_REC);
   const setRecField = (k, v) => setRec((f) => ({ ...f, [k]: v }));
+
+  const openAdvanceModal = (userId = '') => {
+    setRec({
+      userId: userId || (staff[0]?.userId || ''),
+      amount: '',
+      repayMode: 'next_salary',
+      emiMonths: '3',
+      otherTerms: '',
+      reason: '',
+    });
+    setRecOpen(true);
+  };
 
   const recordAdvance = async (e) => {
     e.preventDefault();
@@ -91,7 +108,8 @@ export default function SalaryAdmin() {
       showToast(t('recorded'), 'success');
       setRec(BLANK_REC);
       setRecOpen(false);
-      await load(filter);
+      setFilter('approved');
+      await load('approved');
     } catch (err) {
       showToast(err.response?.data?.error || t('failed'), 'error');
     } finally { setBusy(null); }
@@ -151,10 +169,23 @@ export default function SalaryAdmin() {
     } catch (e) { showToast(e?.response?.data?.error || t('failed'), 'error'); }
   };
 
+  const selectedStaffMember = staff.find((s) => s.userId === rec.userId);
+
   return (
     <>
+      {/* Staff salaries card */}
       <div className="card" style={{ marginBottom: 14 }} data-testid="salary-admin">
-        <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>👥 {t('salaries')}</h3>
+        <div className="flex items-center justify-between" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>👥 {t('salaries')}</h3>
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
+            data-testid="give-advance-top-btn"
+            onClick={() => openAdvanceModal()}
+          >
+            {t('addAdvance')}
+          </button>
+        </div>
         <div style={{ maxHeight: 320, overflowY: 'auto' }}>
           {staff.map((r) => (
             <div key={r.userId} data-testid="salary-row"
@@ -185,101 +216,214 @@ export default function SalaryAdmin() {
                 onClick={() => saveSalary(r)}>
                 {t('save')}
               </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                style={{ fontSize: 11.5, padding: '4px 8px', borderColor: 'var(--border)' }}
+                data-testid={`give-advance-${r.userId}`}
+                onClick={() => openAdvanceModal(r.userId)}
+                title={t('giveAdvanceStaff')}
+              >
+                {t('advanceBtn')}
+              </button>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 14 }} data-testid="advance-record">
-        <div className="flex items-center justify-between" style={{ gap: 10, flexWrap: 'wrap' }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>📥 {t('record')}</h3>
-          <button type="button" className="btn btn-sm btn-ghost" data-testid="advance-record-toggle"
-            onClick={() => setRecOpen((v) => !v)}>{recOpen ? t('cancel') : '+'}</button>
-        </div>
-        {recOpen ? (
-          <form onSubmit={recordAdvance} style={{ marginTop: 10 }}>
-            <div style={{ fontSize: 11.5, color: 'var(--text3)', marginBottom: 8 }}>{t('recordHint')}</div>
-            <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-              <div className="form-group" style={{ flex: 2, minWidth: 180, margin: 0 }}>
-                <label>{t('staff')}</label>
-                <select className="input" value={rec.userId} data-testid="advance-record-user"
-                  onChange={(e) => setRecField('userId', e.target.value)}>
-                  <option value="">—</option>
-                  {staff.map((r) => (
-                    <option key={r.userId} value={r.userId}>
-                      {r.name}{r.outstandingAdvance ? ` (${inr(r.outstandingAdvance)} ${t('owes')})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group" style={{ flex: 1, minWidth: 110, margin: 0 }}>
-                <label>{t('amount')}</label>
-                <input className="input" type="number" min="1" step="0.01" value={rec.amount}
-                  data-testid="advance-record-amount"
-                  onChange={(e) => setRecField('amount', e.target.value)} />
-              </div>
+      {/* Give Staff Advance Modal Dialog */}
+      {recOpen && (
+        <div
+          data-testid="advance-modal-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            backdropFilter: 'blur(2px)',
+          }}
+          onClick={() => setRecOpen(false)}
+        >
+          <div
+            className="card"
+            data-testid="advance-record"
+            style={{
+              maxWidth: 520,
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              position: 'relative',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+              padding: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between" style={{ marginBottom: 12, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{t('adminGiveAdvanceTitle')}</h3>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                data-testid="advance-record-toggle"
+                onClick={() => setRecOpen(false)}
+                style={{ fontSize: 16, padding: '2px 8px' }}
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}>
-              <label>{t('repayHow')}</label>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.4 }}>
+              {t('recordHint')}
+            </div>
+
+            <form onSubmit={recordAdvance}>
               <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-                {[['next_salary', t('nextSal')], ['emi', t('emi')], ['other', t('other')]].map(([k, label]) => (
-                  <button key={k} type="button" data-testid={`advance-record-mode-${k}`}
-                    className={'btn btn-sm ' + (rec.repayMode === k ? 'btn-primary' : 'btn-ghost')}
-                    onClick={() => setRecField('repayMode', k)}>{label}</button>
-                ))}
+                <div className="form-group" style={{ flex: 2, minWidth: 180, margin: 0 }}>
+                  <label style={{ fontWeight: 600, fontSize: 12 }}>{t('staff')}</label>
+                  <select className="input" value={rec.userId} data-testid="advance-record-user"
+                    onChange={(e) => setRecField('userId', e.target.value)}>
+                    <option value="">— Select staff member —</option>
+                    {staff.map((r) => (
+                      <option key={r.userId} value={r.userId}>
+                        {r.name}{r.role ? ` (${r.role})` : ''}{r.outstandingAdvance ? ` · ${inr(r.outstandingAdvance)} ${t('owes')}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group" style={{ flex: 1, minWidth: 110, margin: 0 }}>
+                  <label style={{ fontWeight: 600, fontSize: 12 }}>{t('amount')}</label>
+                  <input className="input" type="number" min="1" step="0.01" value={rec.amount}
+                    placeholder="₹ 5000"
+                    data-testid="advance-record-amount"
+                    onChange={(e) => setRecField('amount', e.target.value)} />
+                </div>
               </div>
-            </div>
 
-            {rec.repayMode === 'emi' ? (
+              {selectedStaffMember && (
+                <div style={{
+                  background: 'var(--bg2)',
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  marginTop: 10,
+                  display: 'flex',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  border: '1px solid var(--border)',
+                }}>
+                  <span><b>{t('salaries')}:</b> {inr(selectedStaffMember.salary)}</span>
+                  <span><b>{t('perDay')}:</b> {inr(selectedStaffMember.perDay)}</span>
+                  {selectedStaffMember.outstandingAdvance > 0 && (
+                    <span style={{ color: 'var(--amber, #d97706)', fontWeight: 600 }}>
+                      <b>{t('owes')}:</b> {inr(selectedStaffMember.outstandingAdvance)}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="form-group" style={{ marginTop: 12, marginBottom: 0 }}>
+                <label style={{ fontWeight: 600, fontSize: 12 }}>{t('repayHow')}</label>
+                <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+                  {[['next_salary', t('nextSal')], ['emi', t('emi')], ['other', t('other')]].map(([k, label]) => (
+                    <button key={k} type="button" data-testid={`advance-record-mode-${k}`}
+                      className={'btn btn-sm ' + (rec.repayMode === k ? 'btn-primary' : 'btn-ghost')}
+                      onClick={() => setRecField('repayMode', k)}>{label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {rec.repayMode === 'emi' ? (
+                <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}>
+                  <label style={{ fontWeight: 600, fontSize: 12 }}>{t('months')}</label>
+                  <input className="input" type="number" min="2" max="12" style={{ width: 110 }}
+                    value={rec.emiMonths} data-testid="advance-record-months"
+                    onChange={(e) => setRecField('emiMonths', e.target.value)} />
+                  {recAmount > 0 && recMonths >= 2 ? (
+                    <div style={{ fontSize: 11.5, color: 'var(--text2)', marginTop: 4 }}>
+                      {recMonths} × {inr(Math.round((recAmount / recMonths) * 100) / 100)} {t('eachInst')}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {rec.repayMode === 'other' ? (
+                <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}>
+                  <label style={{ fontWeight: 600, fontSize: 12 }}>{t('terms')}</label>
+                  <input className="input" value={rec.otherTerms} data-testid="advance-record-terms"
+                    placeholder="e.g. Deduct in two equal payments"
+                    onChange={(e) => setRecField('otherTerms', e.target.value)} />
+                </div>
+              ) : null}
+
               <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}>
-                <label>{t('months')}</label>
-                <input className="input" type="number" min="2" max="12" style={{ width: 110 }}
-                  value={rec.emiMonths} data-testid="advance-record-months"
-                  onChange={(e) => setRecField('emiMonths', e.target.value)} />
-                {recAmount > 0 && recMonths >= 2 ? (
-                  <div style={{ fontSize: 11.5, color: 'var(--text2)', marginTop: 4 }}>
-                    {recMonths} × {inr(Math.round((recAmount / recMonths) * 100) / 100)} {t('eachInst')}
-                  </div>
-                ) : null}
+                <label style={{ fontWeight: 600, fontSize: 12 }}>{t('why')}</label>
+                <input className="input" value={rec.reason} maxLength={500}
+                  placeholder="e.g. Festival advance, Medical emergency"
+                  onChange={(e) => setRecField('reason', e.target.value)} />
               </div>
-            ) : null}
 
-            {rec.repayMode === 'other' ? (
-              <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}>
-                <label>{t('terms')}</label>
-                <input className="input" value={rec.otherTerms} data-testid="advance-record-terms"
-                  onChange={(e) => setRecField('otherTerms', e.target.value)} />
+              <div className="flex justify-end gap-2" style={{ marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setRecOpen(false)}
+                >
+                  {t('cancel')}
+                </button>
+                <button type="submit" className="btn btn-primary btn-sm"
+                  data-testid="advance-record-save" disabled={busy === 'record' || !recValid}>
+                  {busy === 'record' ? '...' : t('saveRec')}
+                </button>
               </div>
-            ) : null}
+            </form>
+          </div>
+        </div>
+      )}
 
-            <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}>
-              <label>{t('why')}</label>
-              <input className="input" value={rec.reason} maxLength={500}
-                onChange={(e) => setRecField('reason', e.target.value)} />
-            </div>
-
-            <button type="submit" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}
-              data-testid="advance-record-save" disabled={busy === 'record' || !recValid}>
-              {t('saveRec')}
-            </button>
-          </form>
-        ) : null}
-      </div>
-
+      {/* Staff advances list and management */}
       <div className="card" style={{ marginBottom: 14 }} data-testid="advance-admin">
-        <div className="flex items-center justify-between" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>💰 {t('requests')}</h3>
-          <select className="input" style={{ width: 170 }} value={filter} data-testid="advance-filter"
-            onChange={(e) => setFilter(e.target.value)}>
-            <option value="pending">{t('pending')}</option>
-            <option value="approved">{t('running')}</option>
-            <option value="all">{t('all')}</option>
-          </select>
+        <div className="flex items-center justify-between" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          <div className="flex items-center" style={{ gap: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 15 }}>💰 {t('advancesTitle')}</h3>
+            {advances.length > 0 && (
+              <span className="badge" style={{ fontSize: 11, background: 'var(--bg2)' }}>
+                {advances.length}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+            <select className="input" style={{ width: 170 }} value={filter} data-testid="advance-filter"
+              onChange={(e) => setFilter(e.target.value)}>
+              <option value="pending">{t('pending')}</option>
+              <option value="approved">{t('running')}</option>
+              <option value="all">{t('all')}</option>
+            </select>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              data-testid="advance-add-btn"
+              onClick={() => openAdvanceModal()}
+            >
+              {t('addAdvance')}
+            </button>
+          </div>
         </div>
 
         {!advances.length ? (
-          <p style={{ fontSize: 12.5, color: 'var(--text3)' }} data-testid="advance-empty">{t('noReq')}</p>
+          <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 12.5 }} data-testid="advance-empty">
+            <div>{filter === 'pending' ? t('noPendingReq') : t('noReq')}</div>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              style={{ marginTop: 8 }}
+              onClick={() => openAdvanceModal()}
+            >
+              {t('addAdvance')}
+            </button>
+          </div>
         ) : advances.map((a) => {
           const st = STATUS[a.status] || STATUS.pending;
           return (
@@ -300,8 +444,7 @@ export default function SalaryAdmin() {
                   <span style={{ fontSize: 11.5 }}>{inr(a.outstanding)} {t('owing')}</span>
                 )}
               </div>
-              {/* What they said, and what they committed to — an approval made
-                  without reading either is not really a decision. */}
+              {/* What they said, and what they committed to */}
               {(a.reason || a.otherTerms) && (
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
                   {a.reason || ''}{a.reason && a.otherTerms ? ' · ' : ''}{a.otherTerms || ''}
