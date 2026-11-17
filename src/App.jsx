@@ -45,6 +45,7 @@ const HrLeavesPage           = lazy(() => import('./pages/HrLeavesPage'));
 const HrPayrollPage          = lazy(() => import('./pages/HrPayrollPage'));
 const HrAttendancePage       = lazy(() => import('./pages/HrAttendancePage'));
 const ProductivityPage       = lazy(() => import('./pages/ProductivityPage'));
+const DailyReportsPage       = lazy(() => import('./pages/DailyReportsPage'));
 const CustDashboardPage      = lazy(() => import('./pages/CustDashboardPage'));
 const PermissionsPage        = lazy(() => import('./pages/PermissionsPage'));
 const HierarchyPage          = lazy(() => import('./pages/HierarchyPage'));
@@ -150,6 +151,7 @@ const CUSTOM_PAGES = {
   'hr-payroll': HrPayrollPage,
   'hr-attendance': HrAttendancePage,
   'productivity': ProductivityPage,
+  'daily-reports': DailyReportsPage,
   'cust-dashboard': CustDashboardPage,
   'permissions': PermissionsPage,
   'hierarchy': HierarchyPage,
@@ -317,6 +319,7 @@ const STUB_ROUTES = [
   ['hr-attendance',   '🕒 Team Attendance',   'page-hr-attendance',   null],
   ['attendance',      '🕒 Attendance',        'page-attendance',      'mpw/attendance'],
   ['productivity',    '⚡ Productivity',      'page-productivity',    'mpw/attendance'],
+  ['daily-reports',   '📝 Daily Reports',     'page-daily-reports',   'mpw/dailyReports'],
   ['my-leaves',       '🌴 My Leaves',         'page-my-leaves',       'mpw/leaves'],
   ['my-attendance',   '⏱  My Attendance',     'page-my-attendance',   'mpw/attendance'],
   ['my-salary',       '💸 My Salary',         'page-my-salary',       'mpw/payroll'],

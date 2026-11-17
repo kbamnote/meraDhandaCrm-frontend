@@ -214,6 +214,10 @@ export const meApi = {
   // Name, phone and photo — the few things a person may change about
   // themselves. Salary and role are deliberately not among them.
   updateProfile: (body)  => api.patch('/me/profile', body).then(r => r.data),
+  // Daily EOD work reports
+  dailyReports:     ()     => api.get('/me/daily-reports').then(r => r.data),
+  todayDailyReport: ()     => api.get('/me/daily-reports/today').then(r => r.data),
+  submitDailyReport:(body) => api.post('/me/daily-reports', body).then(r => r.data),
 };
 
 // HR admin — leave decisions, payroll compute/generate, productivity, team attendance (admin/hr).
@@ -243,6 +247,9 @@ export const hrApi = {
   recordAdvance:   (body)        => api.post('/hr/advances', body).then(r => r.data),
   decideAdvance:   (id, body)    => api.post(`/hr/advances/${id}/decide`, body).then(r => r.data),
   repayAdvance:    (id, body)    => api.post(`/hr/advances/${id}/repay`, body).then(r => r.data),
+  // Team daily reports (admin/hr)
+  dailyReports:      (params)     => api.get('/hr/daily-reports', { params }).then(r => r.data),
+  reviewDailyReport: (id, body)   => api.post(`/hr/daily-reports/${id}/review`, body).then(r => r.data),
 };
 
 export const paymentApi = {
