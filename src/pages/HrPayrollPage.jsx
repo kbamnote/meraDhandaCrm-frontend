@@ -14,6 +14,8 @@ import { hrApi } from '../services/api';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
 import SalaryAdmin from '../components/common/SalaryAdmin';
+import StaffSalarySlipModal from '../components/common/StaffSalarySlipModal';
+import { useAuth } from '../context/AuthContext';
 
 // The range defaults to this month so far, which is the most common thing
 // an admin wants to look at mid-cycle.
@@ -22,35 +24,38 @@ const inr = (n) => '₹' + (Math.round((Number(n) || 0) * 100) / 100).toLocaleSt
 
 const S = {
   title:    { en: '💵 Payroll', hi: '💵 पेरोल', hinglish: '💵 Payroll', gu: '💵 પેરોલ', mr: '💵 पेरोल', mwr: '💵 पेरोल' },
-  month:    { en: 'Month', hi: 'महीना', hinglish: 'Month', gu: 'મહિનો', mr: 'महिना', mwr: 'महीनो' },
+  month:    { en: 'Month', hi: 'महीना', hinglish: 'Month', gu: 'મહિનો', mr: 'મહિના', mwr: 'મહીનો' },
   compute:  { en: 'Compute', hi: 'गणना करें', hinglish: 'Compute', gu: 'ગણતરી', mr: 'गणना', mwr: 'गणना' },
-  generate: { en: 'Generate slips', hi: 'स्लिप जनरेट करें', hinglish: 'Slips generate karein', gu: 'સ્લિપ જનરેટ કરો', mr: 'स्लिप तयार करा', mwr: 'स्लिप जनरेट करो' },
-  saveCycle: { en: 'Save', hi: 'सेव', hinglish: 'Save', gu: 'સેવ', mr: 'सेव्ह', mwr: 'सेव' },
-  cycle:     { en: 'Pay cycle', hi: 'सैलरी साइकिल', hinglish: 'Pay cycle', gu: 'પગાર ચક્ર', mr: 'पगार चक्र', mwr: 'सैलरी साइकिल' },
-  covers:    { en: 'covers', hi: 'अवधि', hinglish: 'covers', gu: 'સમયગાળો', mr: 'कालावधी', mwr: 'अवधि' },
-  startsOn:  { en: 'Starts on day', hi: 'शुरू दिन', hinglish: 'Starts on day', gu: 'શરૂ દિવસ', mr: 'सुरू दिवस', mwr: 'सरू दिन' },
-  cycleHint: { en: '1 = calendar month. 16 means the 16th of one month to the 15th of the next.', hi: '1 = पूरा महीना। 16 का मतलब 16 तारीख से अगली 15 तारीख तक।', hinglish: '1 = poora mahina. 16 matlab 16 se agli 15 tak.', gu: '1 = આખો મહિનો. 16 એટલે 16થી આગલી 15 સુધી.', mr: '1 = पूर्ण महिना. 16 म्हणजे 16 ते पुढील 15.', mwr: '1 = पूरो महीनो। 16 रो मतलब 16 सूं अगली 15 ताईं।' },
-  cycleSaved:{ en: 'Pay cycle updated', hi: 'सैलरी साइकिल अपडेट हुई', hinglish: 'Pay cycle update ho gayi', gu: 'પગાર ચક્ર અપડેટ', mr: 'पगार चक्र अपडेट', mwr: 'सैलरी साइकिल अपडेट हुई' },
-  byMonth:  { en: 'Month', hi: 'महीने से', hinglish: 'Month', gu: 'મહિનો', mr: 'महिना', mwr: 'महीनो' },
-  byRange:  { en: 'Custom dates', hi: 'कस्टम तारीख', hinglish: 'Custom dates', gu: 'કસ્ટમ તારીખ', mr: 'कस्टम तारीख', mwr: 'कस्टम तारीख' },
-  from:     { en: 'From', hi: 'से', hinglish: 'From', gu: 'થી', mr: 'पासून', mwr: 'सूं' },
-  to:       { en: 'To', hi: 'तक', hinglish: 'To', gu: 'સુધી', mr: 'पर्यंत', mwr: 'तांई' },
-  workDays: { en: 'Working days', hi: 'कार्य दिवस', hinglish: 'Working days', gu: 'કામકાજના દિવસ', mr: 'कामाचे दिवस', mwr: 'काम रा दिन' },
-  auto:     { en: 'Sundays excluded — change if a holiday falls in the range', hi: 'रविवार छोड़कर — रेंज में छुट्टी हो तो बदलें', hinglish: 'Sunday chhodkar — range me holiday ho to badlein', gu: 'રવિવાર સિવાય — રજા હોય તો બદલો', mr: 'रविवार वगळून — सुट्टी असल्यास बदला', mwr: 'इतवार छोड़र — छुट्टी हुवे तो बदलो' },
-  rangeNote:{ en: 'A custom range is a preview only. Slips and advance deductions run on a whole month.', hi: 'कस्टम रेंज सिर्फ प्रीव्यू है। स्लिप और एडवांस कटौती पूरे महीने पर होती है।', hinglish: 'Custom range sirf preview hai. Slips aur advance deduction poore mahine par hote hain.', gu: 'કસ્ટમ રેન્જ ફક્ત પ્રિવ્યૂ છે. સ્લિપ અને એડવાન્સ કપાત આખા મહિના પર થાય છે.', mr: 'कस्टम रेंज फक्त प्रिव्ह्यू आहे. स्लिप आणि अ‍ॅडव्हान्स कपात पूर्ण महिन्यावर होते.', mwr: 'कस्टम रेंज बस प्रीव्यू है। स्लिप अर एडवांस कटौती पूरा महीना पर हुवे।' },
-  advance:  { en: 'Advance', hi: 'एडवांस', hinglish: 'Advance', gu: 'એડવાન્સ', mr: 'अ‍ॅडव्हान्स', mwr: 'एडवांस' },
-  staff:    { en: 'Staff', hi: 'स्टाफ', hinglish: 'Staff', gu: 'સ્ટાફ', mr: 'कर्मचारी', mwr: 'स्टाफ' },
-  base:     { en: 'Base', hi: 'बेसिक', hinglish: 'Base', gu: 'બેઝ', mr: 'मूळ', mwr: 'बेसिक' },
-  present:  { en: 'Present', hi: 'उपस्थित', hinglish: 'Present', gu: 'હાજર', mr: 'उपस्थित', mwr: 'हाजर' },
-  deduction:{ en: 'Deduction', hi: 'कटौती', hinglish: 'Deduction', gu: 'કપાત', mr: 'कपात', mwr: 'कटौती' },
-  net:      { en: 'Net pay', hi: 'नेट पे', hinglish: 'Net pay', gu: 'નેટ પે', mr: 'निव्वळ', mwr: 'नेट पे' },
-  none:     { en: 'No staff / salaries set. Add a "salary" field to staff users.', hi: 'कोई स्टाफ/सैलरी सेट नहीं।', hinglish: 'Koi staff/salary set nahi.', gu: 'કોઈ સ્ટાફ/પગાર સેટ નથી.', mr: 'स्टाफ/पगार सेट नाही.', mwr: 'कोई स्टाफ/सैलरी सेट कोनी।' },
-  generated:{ en: 'Slips generated', hi: 'स्लिप जनरेट हो गईं', hinglish: 'Slips generate ho gayin', gu: 'સ્લિપ જનરેટ થઈ', mr: 'स्लिप तयार झाल्या', mwr: 'स्लिप जनरेट हो गी' },
-  failed:   { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua', gu: 'નિષ્ફળ', mr: 'अयशस्वी', mwr: 'कोनी हुयो' },
+  generate: { en: 'Generate slips', hi: 'स्लिप जनरेट करें', hinglish: 'Slips generate karein', gu: 'સ્લિપ જનરેટ કરો', mr: 'સ્લિપ તૈયાર करा', mwr: 'સ્લિપ जनरेट करो' },
+  saveCycle: { en: 'Save', hi: 'सेव', hinglish: 'Save', gu: 'સેવ', mr: 'સેવ્હ', mwr: 'સેવ' },
+  cycle:     { en: 'Pay cycle', hi: 'सैलरी साइकिल', hinglish: 'Pay cycle', gu: 'પગાર ચક્ર', mr: 'પગાર ચક્ર', mwr: 'સૈલરી સાઇકિલ' },
+  covers:    { en: 'covers', hi: 'अवधि', hinglish: 'covers', gu: 'સમયગાળો', mr: 'કાલાવધી', mwr: 'અવધિ' },
+  startsOn:  { en: 'Starts on day', hi: 'शुरू दिन', hinglish: 'Starts on day', gu: 'શરૂ દિવસ', mr: 'સુરુ દિવસ', mwr: 'સરૂ દિન' },
+  cycleHint: { en: '1 = calendar month. 16 means the 16th of one month to the 15th of the next.', hi: '1 = पूरा महीना। 16 का मतलब 16 तारीख से अगली 15 तारीख तक।', hinglish: '1 = poora mahina. 16 matlab 16 se agli 15 tak.', gu: '1 = આખો મહિનો. 16 એટલે 16થી આગલી 15 સુધી.', mr: '1 = પૂર્ણ મહિના. 16 મ્હણજે 16 તે પુઢીલ 15.', mwr: '1 = પૂરો મહીનો। 16 રો મતલબ 16 સૂં અગલી 15 તાંઈ।' },
+  cycleSaved:{ en: 'Pay cycle updated', hi: 'सैलरी साइकिल अपडेट हुई', hinglish: 'Pay cycle update ho gayi', gu: 'પગાર ચક્ર અપડેટ', mr: 'પગાર ચક્ર અપડેટ', mwr: 'સૈલરી સાઇકિલ અપડેટ હુઈ' },
+  byMonth:  { en: 'Month', hi: 'महीने से', hinglish: 'Month', gu: 'મહિનો', mr: 'મહિના', mwr: 'મહીનો' },
+  byRange:  { en: 'Custom dates', hi: 'कस्टम तारीख', hinglish: 'Custom dates', gu: 'કસ્ટમ તારીખ', mr: 'કસ્ટમ તારીખ', mwr: 'કસ્ટમ તારીખ' },
+  from:     { en: 'From', hi: 'से', hinglish: 'From', gu: 'થી', mr: 'પાસૂન', mwr: 'સૂં' },
+  to:       { en: 'To', hi: 'तक', hinglish: 'To', gu: 'સુધી', mr: 'પર્યંત', mwr: 'તાંઈ' },
+  workDays: { en: 'Working days', hi: 'कार्य दिवस', hinglish: 'Working days', gu: 'કામકાજના દિવસ', mr: 'કામાચે દિવસ', mwr: 'કામ રા દિન' },
+  auto:     { en: 'Sundays excluded — change if a holiday falls in the range', hi: 'रविवार छोड़कर — रेंज में छुट्टी हो तो बदलें', hinglish: 'Sunday chhodkar — range me holiday ho to badlein', gu: 'રવિવાર સિવાય — રજા હોય તો બદલો', mr: 'રવિવાર વગળૂન — સુટ્ટી અસલ્યાસ બદલા', mwr: 'ઇતવાર છોડર — છુટ્ટી હુવે તો બદલો' },
+  rangeNote:{ en: 'A custom range is a preview only. Slips and advance deductions run on a whole month.', hi: 'कस्टम रेंज सिर्फ प्रीव्यू है। स्लिप और एडवांस कटौती पूरे महीने पर होती है।', hinglish: 'Custom range sirf preview hai. Slips aur advance deduction poore mahine par hote hain.', gu: 'કસ્ટમ રેન્જ ફક્ત પ્રિવ્યૂ છે. સ્લિપ અને એડવાન્સ કપાત આખા મહિના પર થાય છે.', mr: 'કસ્ટમ રેન્જ ફક્ત પ્રિવ્હ્યૂ આહે. સ્લિપ અને અ‍ૅડવ્હાંસ કપાત પૂર્ણ મહિન્યાવર હોતે.', mwr: 'કસ્ટમ રેન્જ બસ પ્રીવ્યૂ હૈ। સ્લિપ અર એડવાંસ કટોતી પૂરા મહીના પર હુવે।' },
+  advance:  { en: 'Advance', hi: 'एडवांस', hinglish: 'Advance', gu: 'એડવાન્સ', mr: 'અ‍ૅડવ્હાંસ', mwr: 'એડવાંસ' },
+  staff:    { en: 'Staff', hi: 'स्टाफ', hinglish: 'Staff', gu: 'સ્ટાફ', mr: 'કર્મચારી', mwr: 'સ્ટાફ' },
+  base:     { en: 'Base', hi: 'बेसिक', hinglish: 'Base', gu: 'બેઝ', mr: 'મૂળ', mwr: 'બેસિક' },
+  present:  { en: 'Present', hi: 'उपस्थित', hinglish: 'Present', gu: 'હાજર', mr: 'ઉપસ્થિત', mwr: 'હાજર' },
+  deduction:{ en: 'Deduction', hi: 'कटौती', hinglish: 'Deduction', gu: 'કપાત', mr: 'કપાત', mwr: 'કટોતી' },
+  net:      { en: 'Net pay', hi: 'नेट पे', hinglish: 'Net pay', gu: 'નેટ પે', mr: 'નિવ્વળ', mwr: 'નેટ પે' },
+  none:     { en: 'No staff / salaries set. Add a "salary" field to staff users.', hi: 'कोई स्टाफ/सैलरी सेट नहीं।', hinglish: 'Koi staff/salary set nahi.', gu: 'કોઈ સ્ટાફ/પગાર સેટ નથી.', mr: 'સ્ટાફ/પગાર સેટ નાહી.', mwr: 'કોઈ સ્ટાફ/સૈલરી સેટ કોની।' },
+  generated:{ en: 'Slips generated', hi: 'स्लिप जनरेट हो गईं', hinglish: 'Slips generate ho gayin', gu: 'સ્લિપ જનરેટ થઈ', mr: 'સ્લિપ તૈયાર ઝાલ્યા', mwr: 'સ્લિપ જનરેટ હો ગી' },
+  failed:   { en: 'Failed', hi: 'नहीं हुआ', hinglish: 'Fail hua', gu: 'નિષ્ફળ', mr: 'અયશસ્વી', mwr: 'કોની હુયો' },
+  action:   { en: 'Action', hi: 'कार्रवाई', hinglish: 'Action', gu: 'ક્રિયા', mr: 'કૃતિ', mwr: 'કાર્રવાઈ' },
+  viewSlip: { en: 'View Slip', hi: 'स्लिप देखें', hinglish: 'Slip dekhein', gu: 'સ્લિપ જુઓ', mr: 'સ્લિપ પાહા', mwr: 'સ્લિપ દેખો' },
 };
 
 export default function HrPayrollPage() {
   const t = useT(S);
+  const { tenant } = useAuth();
   const [mode, setMode] = useState('month');   // 'month' | 'range'
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [from, setFrom] = useState(firstOfMonth());
@@ -62,6 +67,7 @@ export default function HrPayrollPage() {
   const [busy, setBusy] = useState(false);
   // Blank until a compute comes back and tells us the shop's own cycle.
   const [cycleDay, setCycleDay] = useState('');
+  const [selectedRow, setSelectedRow] = useState(null);
 
   const saveCycle = async () => {
     setBusy(true);
@@ -175,11 +181,17 @@ export default function HrPayrollPage() {
               <thead><tr>
                 <th>{t('staff')}</th><th>{t('base')}</th><th>{t('present')}</th>
                 <th>{t('deduction')}</th>{!data.custom && <th>{t('advance')}</th>}<th>{t('net')}</th>
+                <th style={{ textAlign: 'center' }}>{t('action')}</th>
               </tr></thead>
               <tbody>
                 {data.rows.map((r) => (
-                  <tr key={r.userId}>
-                    <td>{r.name}</td>
+                  <tr
+                    key={r.userId}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setSelectedRow(r)}
+                    title={t('viewSlip')}
+                  >
+                    <td style={{ fontWeight: 600 }}>{r.name}</td>
                     {/* On a range the base IS pro-rated, so show what is actually
                         being paid for rather than the untouched monthly salary. */}
                     <td>{inr(data.custom ? r.gross : r.base)}</td>
@@ -187,15 +199,42 @@ export default function HrPayrollPage() {
                     <td style={{ color: 'var(--red)' }}>− {inr(r.deduction)}</td>
                     {!data.custom && <td style={{ color: 'var(--red)' }}>{r.advanceDeduction ? '− ' + inr(r.advanceDeduction) : '—'}</td>}
                     <td style={{ fontWeight: 700 }}>{inr(r.net)}</td>
+                    <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="btn btn-xs btn-outline"
+                        style={{ fontSize: 11, padding: '3px 8px', borderColor: 'var(--primary)', color: 'var(--primary)', whiteSpace: 'nowrap' }}
+                        data-testid={`view-slip-${r.userId}`}
+                        onClick={() => setSelectedRow(r)}
+                      >
+                        📄 {t('viewSlip')}
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border)' }}>
-                  <td colSpan={data.custom ? 4 : 5}>Total</td><td>{inr(total)}</td>
+                  <td colSpan={data.custom ? 4 : 5}>Total</td><td>{inr(total)}</td><td></td>
                 </tr>
               </tbody>
             </table>
           )}
         </div>
+      )}
+
+      {/* Individual Staff Salary Slip Modal */}
+      {selectedRow && (
+        <StaffSalarySlipModal
+          open={!!selectedRow}
+          onClose={() => setSelectedRow(null)}
+          record={selectedRow}
+          period={{
+            month: data?.month || month,
+            from: data?.from || from,
+            to: data?.to || to,
+            isCustom: custom,
+          }}
+          company={tenant?.name || 'Mr Print World'}
+        />
       )}
     </div>
   );

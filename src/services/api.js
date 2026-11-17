@@ -224,6 +224,7 @@ export const hrApi = {
   // Which day of the month the pay cycle opens on (1 = calendar month).
   setPayrollCycle: (startDay)   => api.post('/hr/payroll/cycle', { startDay }).then(r => r.data),
   payrollGenerate: (month)    => api.post('/hr/payroll/generate', { month }).then(r => r.data),
+  payrollSlips:    (params)   => api.get('/hr/payroll/slips', { params }).then(r => r.data),
   productivity:    (params)   => api.get('/hr/productivity', { params }).then(r => r.data),
   attendance:      (date)     => api.get('/hr/attendance', { params: date ? { date } : {} }).then(r => r.data),
   userAttendance:  (uid, month) => api.get(`/hr/attendance/${uid}`, { params: month ? { month } : {} }).then(r => r.data),
