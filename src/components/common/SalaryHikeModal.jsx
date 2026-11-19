@@ -14,6 +14,7 @@
  * time" is the question that gets asked right before this one is answered.
  */
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { hrApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
@@ -99,10 +100,46 @@ export default function SalaryHikeModal({ user, onClose, onSaved }) {
     } finally { setBusy(false); }
   };
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 210, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <form className="card" onSubmit={submit} style={{ maxWidth: 460, width: '100%', maxHeight: '90vh', overflow: 'auto' }}>
-        <h3 style={{ marginBottom: 4 }}>📈 {t('title')}</h3>
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(0,0,0,.5)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '40px 16px 24px',
+        overflowY: 'auto'
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <form
+        className="card"
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: 460,
+          width: '100%',
+          maxHeight: 'calc(100vh - 80px)',
+          overflowY: 'auto',
+          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.2)'
+        }}
+      >
+        <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
+          <h3 style={{ margin: 0 }}>📈 {t('title')}</h3>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onClose}
+            style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+          >
+            ✕
+          </button>
+        </div>
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>
           {user.name || user.email}
           {user.employeeId ? ` · ${user.employeeId}` : ''}
@@ -189,6 +226,7 @@ export default function SalaryHikeModal({ user, onClose, onSaved }) {
           ))}
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }

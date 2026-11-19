@@ -10,6 +10,7 @@
  * All write controls require admin / superadmin / owner.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ref, onValue, db } from '../services/realtime';
 import { authApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -599,10 +600,46 @@ function PermissionsModal({ u, t, onClose }) {
     } finally { setBusy(false); }
   };
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 520, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        <h3 style={{ marginBottom: 4 }}>{t('accessFor')}</h3>
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(0,0,0,.5)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '40px 16px 24px',
+        overflowY: 'auto'
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="card"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: 520,
+          width: '100%',
+          maxHeight: 'calc(100vh - 80px)',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.2)'
+        }}
+      >
+        <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
+          <h3 style={{ margin: 0 }}>{t('accessFor')}</h3>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onClose}
+            style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+          >
+            ✕
+          </button>
+        </div>
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 10 }}>
           {u.name || u.email} · <span className="badge badge-blue">{u.role || 'pending'}</span>
         </div>
@@ -654,7 +691,8 @@ function PermissionsModal({ u, t, onClose }) {
           <button className="btn btn-ghost" onClick={onClose}>{t('close')}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -692,10 +730,46 @@ function EditUserModal({ u, t, onClose, meId }) {
     } finally { setBusy(false); }
   };
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <form className="card" onSubmit={submit} style={{ maxWidth: 440, width: '100%' }}>
-        <h3 style={{ marginBottom: 14 }}>{t('editUser')}</h3>
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(0,0,0,.5)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '40px 16px 24px',
+        overflowY: 'auto'
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <form
+        className="card"
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: 440,
+          width: '100%',
+          maxHeight: 'calc(100vh - 80px)',
+          overflowY: 'auto',
+          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.2)'
+        }}
+      >
+        <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
+          <h3 style={{ margin: 0 }}>{t('editUser')}</h3>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onClose}
+            style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+          >
+            ✕
+          </button>
+        </div>
 
         <div className="form-group">
           <label>{t('fullName')}</label>
@@ -733,7 +807,8 @@ function EditUserModal({ u, t, onClose, meId }) {
           <button type="button" className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -764,10 +839,46 @@ function AddTeammateModal({ onClose, t, designations = [] }) {
     } finally { setBusy(false); }
   };
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <form className="card" onSubmit={submit} style={{ maxWidth: 440, width: '100%' }}>
-        <h3 style={{ marginBottom: 14 }}>{t('addTeammate')}</h3>
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(0,0,0,.5)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '40px 16px 24px',
+        overflowY: 'auto'
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <form
+        className="card"
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: 440,
+          width: '100%',
+          maxHeight: 'calc(100vh - 80px)',
+          overflowY: 'auto',
+          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.2)'
+        }}
+      >
+        <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
+          <h3 style={{ margin: 0 }}>{t('addTeammate')}</h3>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onClose}
+            style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+          >
+            ✕
+          </button>
+        </div>
 
         <div className="form-group">
           <label>{t('fullName')}</label>
@@ -813,6 +924,7 @@ function AddTeammateModal({ onClose, t, designations = [] }) {
           {t('shareHint')}
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
