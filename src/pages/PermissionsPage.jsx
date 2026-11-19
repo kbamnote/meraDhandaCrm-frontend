@@ -22,10 +22,14 @@ const S = {
   permissionsTeam: { en: '🔐 Permissions & Team', hi: '🔐 परमिशन और टीम', hinglish: '🔐 Permissions & Team', gu: '🔐 પરમિશન અને ટીમ', mr: '🔐 परवानग्या आणि टीम', mwr: '🔐 परमिशन अर टीम' },
   user: { en: 'user', hi: 'यूज़र', hinglish: 'user', gu: 'યૂઝર', mr: 'युझर', mwr: 'यूज़र' },
   users: { en: 'users', hi: 'यूज़र', hinglish: 'users', gu: 'યૂઝર', mr: 'युझर', mwr: 'यूज़र' },
+  allFilter: { en: 'All', hi: 'सभी', hinglish: 'All', gu: 'બધા', mr: 'सर्व', mwr: 'सगळा' },
+  activeFilter: { en: 'Active', hi: 'सक्रिय', hinglish: 'Active', gu: 'સક્રિય', mr: 'सक्रिय', mwr: 'सक्रिय' },
+  inactiveFilter: { en: 'Inactive', hi: 'निष्क्रिय', hinglish: 'Inactive', gu: 'નિષ્ક્રિય', mr: 'निष्क्रिय', mwr: 'निष्क्रिय' },
   readOnly: { en: 'read-only', hi: 'सिर्फ़ देखने के लिए', hinglish: 'read-only', gu: 'ફક્ત વાંચવા માટે', mr: 'फक्त वाचनीय', mwr: 'सिरफ देखण खातर' },
   addTeammate: { en: '+ Add Teammate', hi: '+ टीममेट जोड़ें', hinglish: '+ Teammate add karein', gu: '+ ટીમમેટ ઉમેરો', mr: '+ टीममेट जोडा', mwr: '+ टीममेट जोड़ो' },
   searchPlaceholder: { en: '🔍 Search by name, email, role...', hi: '🔍 नाम, ईमेल, रोल से खोजें...', hinglish: '🔍 Naam, email, role se search karein...', gu: '🔍 નામ, ઈમેલ, રોલથી શોધો...', mr: '🔍 नाव, ईमेल, भूमिकेने शोधा...', mwr: '🔍 नाम, ईमेल, रोल सूं ढूंढो...' },
   noUsers: { en: 'No users yet. Click “+ Add Teammate” to create the first one.', hi: 'अभी तक कोई यूज़र नहीं। पहला बनाने के लिए “+ टीममेट जोड़ें” पर क्लिक करें।', hinglish: 'Abhi tak koi user nahi. Pehla banane ke liye “+ Add Teammate” par click karein.', gu: 'હજુ સુધી કોઈ યૂઝર નથી. પહેલો બનાવવા “+ ટીમમેટ ઉમેરો” પર ક્લિક કરો.', mr: 'अद्याप कोणताही युझर नाही. पहिला तयार करण्यासाठी “+ टीममेट जोडा” वर क्लिक करा.', mwr: 'अजे तांई कोई यूज़र कोनी। पैलो बणावण खातर “+ टीममेट जोड़ो” पर क्लिक करो।' },
+  noMatchingUsers: { en: 'No matching users found.', hi: 'कोई मेल खाता यूज़र नहीं मिला।', hinglish: 'Koi matching user nahi mila.', gu: 'કોઈ મેળ ખાતો યૂઝર મળ્યો નથી.', mr: 'कोणताही जुळणारा युझर सापडला नाही.', mwr: 'कोई मेल खावतो यूज़र कोनी मिल्यो।' },
   thName: { en: 'Name', hi: 'नाम', hinglish: 'Naam', gu: 'નામ', mr: 'नाव', mwr: 'नाम' },
   thEmail: { en: 'Email', hi: 'ईमेल', hinglish: 'Email', gu: 'ઈમેલ', mr: 'ईमेल', mwr: 'ईमेल' },
   thCurrentRole: { en: 'Current role', hi: 'मौजूदा रोल', hinglish: 'Current role', gu: 'વર્તમાન રોલ', mr: 'सध्याची भूमिका', mwr: 'मौजूदा रोल' },
@@ -162,6 +166,7 @@ export default function PermissionsPage() {
   const t = useT(S);
   const [users, setUsers] = useState({});
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [showAdd, setShowAdd] = useState(false);
   const [designations, setDesignations] = useState([]);
 
@@ -184,16 +189,30 @@ export default function PermissionsPage() {
     [users]
   );
 
+  const counts = useMemo(() => {
+    let active = 0;
+    let inactive = 0;
+    for (const u of rows) {
+      if (u.active === false) inactive++;
+      else active++;
+    }
+    return { all: rows.length, active, inactive };
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((u) =>
-      (u.name || '').toLowerCase().includes(q) ||
-      (u.email || '').toLowerCase().includes(q) ||
-      (u.role || '').toLowerCase().includes(q) ||
-      (u.customRole || '').toLowerCase().includes(q)
-    );
-  }, [rows, search]);
+    return rows.filter((u) => {
+      if (statusFilter === 'active' && u.active === false) return false;
+      if (statusFilter === 'inactive' && u.active !== false) return false;
+      if (!q) return true;
+      return (
+        (u.name || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.role || '').toLowerCase().includes(q) ||
+        (u.customRole || '').toLowerCase().includes(q)
+      );
+    });
+  }, [rows, search, statusFilter]);
 
   return (
     <div data-legacy-id="page-permissions">
@@ -201,7 +220,9 @@ export default function PermissionsPage() {
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t('permissionsTeam')}</h2>
           <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-            {filtered.length} {filtered.length === 1 ? t('user') : t('users')}
+            {statusFilter === 'all' && !search.trim()
+              ? `${rows.length} ${rows.length === 1 ? t('user') : t('users')}`
+              : `${filtered.length} of ${rows.length} ${t('users')}`}
             {!canEdit && ` · ${t('readOnly')}`}
           </div>
         </div>
@@ -214,17 +235,84 @@ export default function PermissionsPage() {
 
       {canEdit && <DesignationsPanel t={t} designations={designations} reload={loadDesignations} />}
 
-      <input
-        className="input mb-4"
-        placeholder={t('searchPlaceholder')}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      <div className="flex items-center gap-3 mb-4" style={{ flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            type="button"
+            className="btn btn-xs"
+            data-testid="filter-all"
+            onClick={() => setStatusFilter('all')}
+            style={{
+              background: statusFilter === 'all' ? 'var(--blue, #C05621)' : 'var(--surface2)',
+              color: statusFilter === 'all' ? '#fff' : 'var(--text2)',
+              border: 'none',
+              borderRadius: 14,
+              fontWeight: 600,
+              padding: '6px 14px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            {t('allFilter')} ({counts.all})
+          </button>
+          <button
+            type="button"
+            className="btn btn-xs"
+            data-testid="filter-active"
+            onClick={() => setStatusFilter('active')}
+            style={{
+              background: statusFilter === 'active' ? '#10b981' : 'var(--surface2)',
+              color: statusFilter === 'active' ? '#fff' : 'var(--text2)',
+              border: 'none',
+              borderRadius: 14,
+              fontWeight: 600,
+              padding: '6px 14px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            🟢 {t('activeFilter')} ({counts.active})
+          </button>
+          <button
+            type="button"
+            className="btn btn-xs"
+            data-testid="filter-inactive"
+            onClick={() => setStatusFilter('inactive')}
+            style={{
+              background: statusFilter === 'inactive' ? '#ef4444' : 'var(--surface2)',
+              color: statusFilter === 'inactive' ? '#fff' : 'var(--text2)',
+              border: 'none',
+              borderRadius: 14,
+              fontWeight: 600,
+              padding: '6px 14px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            🔴 {t('inactiveFilter')} ({counts.inactive})
+          </button>
+        </div>
+
+        <div style={{ flex: '1 1 240px', maxWidth: 360, minWidth: 200 }}>
+          <input
+            className="input"
+            style={{ width: '100%', margin: 0 }}
+            placeholder={t('searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
 
       <div className="card" style={{ padding: 0, overflow: 'auto' }}>
         {!filtered.length ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text3)' }}>
-            {t('noUsers')}
+            {!rows.length ? t('noUsers') : (
+              <div>
+                <div style={{ fontSize: 24, marginBottom: 8 }}>🔍</div>
+                <div>{t('noMatchingUsers')}</div>
+              </div>
+            )}
           </div>
         ) : (
           <table className="crm-table">

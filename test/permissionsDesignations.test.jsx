@@ -135,4 +135,22 @@ describe('the Permissions page', () => {
     await waitFor(() => expect(screen.getAllByText(/Asha/).length).toBeGreaterThan(0));
     expect(screen.queryByTestId('designations-panel')).toBeNull();
   });
+
+  it('filters teammates by active and inactive status', async () => {
+    renderScreen(PermissionsPage);
+    await waitFor(() => expect(screen.getByTestId('filter-all')).toBeTruthy());
+    expect(screen.getByTestId('filter-all').textContent).toContain('(2)');
+    expect(screen.getByTestId('filter-active').textContent).toContain('(2)');
+    expect(screen.getByTestId('filter-inactive').textContent).toContain('(0)');
+
+    // Click Inactive filter — no inactive users in USERS
+    fireEvent.click(screen.getByTestId('filter-inactive'));
+    await waitFor(() => expect(screen.queryByText('Asha')).toBeNull());
+    expect(screen.queryByText('Bilal')).toBeNull();
+
+    // Click Active filter — both appear
+    fireEvent.click(screen.getByTestId('filter-active'));
+    await waitFor(() => expect(screen.getByText('Asha')).toBeTruthy());
+    expect(screen.getByText('Bilal')).toBeTruthy();
+  });
 });
