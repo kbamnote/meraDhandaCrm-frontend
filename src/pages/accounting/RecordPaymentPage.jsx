@@ -708,9 +708,19 @@ export default function RecordPaymentPage() {
  * agreed and how the customer's certificate will read — but what is stored is
  * the rupees, since a rate on a part-paid bill is ambiguous about which figure
  * it applies to.
+ *
+ * The rate is taken on the bill BEFORE GST. Where the tax is shown separately
+ * on the invoice it is not the supplier's income, so nothing is withheld from
+ * it (CBDT Circular 23/2017) — taking 2% of a GST-inclusive total deducts 2%
+ * of the customer's own tax as well, and the certificate will not match.
  */
 function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, onClose, onApply }) {
   const isTds = kind === 'tds';
+  // What a TDS rate is taken on: the pre-GST share of what this bill still
+  // owes, which on a fully open bill is simply its taxable value. Older API
+  // responses (and a cached bundle talking to a new server) carry no such
+  // figure, and there the outstanding amount is the only base there is.
+  const tdsBase = bill.dueExGst != null ? R2(bill.dueExGst) : bill.due;
   const [rate, setRate] = useState('');
   const [amount, setAmount] = useState(current ? String(current) : '');
   const [adding, setAdding] = useState(null);   // { code, name, rate }
@@ -725,9 +735,10 @@ function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, on
     if (idx === '') return;
     const s = sections[Number(idx)];
     if (!s) return;
-    // Rates apply to the bill's OUTSTANDING figure, which is what this payment
-    // is settling — not the original total, which may be part paid already.
-    setAmount(String(R2((bill.due * Number(s.defaultRate)) / 100)));
+    // Rates apply to the OUTSTANDING figure net of GST — what this payment is
+    // settling, less the tax that is not withheld from. Not the original
+    // total, which may be part paid already.
+    setAmount(String(R2((tdsBase * Number(s.defaultRate)) / 100)));
   };
 
   const saveRate = async () => {
@@ -745,7 +756,7 @@ function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, on
       const idx = fresh.findIndex((s) => String(s.code) === String(added.code)
         && Number(s.defaultRate) === Number(added.rate));
       setAdding(null);
-      if (idx >= 0) { setRate(String(idx)); setAmount(String(R2((bill.due * Number(added.rate)) / 100))); }
+      if (idx >= 0) { setRate(String(idx)); setAmount(String(R2((tdsBase * Number(added.rate)) / 100))); }
     } catch (e) {
       showToast(describeError(e, 'Could not add that rate'), 'error');
     } finally { setSavingRate(false); }
@@ -767,6 +778,10 @@ function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, on
 
         <div style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 12 }}>
           {bill.no || 'This bill'} · {inr(bill.due)} outstanding
+          {/* Named only when it differs, so a bill with no GST on it does not
+              grow a second figure identical to the first. */}
+          {isTds && Math.abs(tdsBase - bill.due) > 0.005
+            ? <span data-testid="tds-base"> · <strong>{inr(tdsBase)}</strong> before GST</span> : null}
         </div>
 
         {isTds && !adding && (
@@ -821,7 +836,7 @@ function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, on
         )}
 
         <div className="form-group">
-          <label>{isTds ? 'TDS applicable on bill' : 'Discount on bill'}</label>
+          <label>{isTds ? 'TDS applicable on bill (before GST)' : 'Discount on bill'}</label>
           <input className="input" type="number" min="0" step="0.01" autoFocus={!isTds}
             data-testid="apply-amount" value={amount}
             onChange={(e) => { setAmount(e.target.value); setRate(''); }} />
@@ -837,7 +852,7 @@ function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, on
 
         <div style={{ fontSize: 11.5, color: 'var(--text3)', marginBottom: 12 }}>
           {isTds
-            ? 'Tax the customer keeps back and pays to the government. It settles the bill without reaching your account, and is held as TDS Receivable until you claim it.'
+            ? 'Taken on the bill before GST — tax shown separately is not withheld from. The customer keeps it back and pays it to the government, so it settles the bill without reaching your account, and is held as TDS Receivable until you claim it.'
             : 'Written off. It settles the bill alongside the money received.'}
         </div>
 
