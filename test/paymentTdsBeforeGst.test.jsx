@@ -103,3 +103,70 @@ describe('Apply TDS takes the rate on the value before GST', () => {
     expect(Number(screen.getByTestId('apply-amount').value)).toBeCloseTo(390.58, 2);
   });
 });
+
+/**
+ * …and once it is applied, the bill shows what is actually being received.
+ *
+ * Reported from the shop: "when applying the TDS and checking the box it is
+ * not coming in amount received". Applying TDS before typing the receipt is
+ * the natural order — you learn what the customer kept back, which tells you
+ * what they paid — but the spread had no money to place, so the row sat at ₹0
+ * and the receipt had to be worked out by hand.
+ */
+const amountBox = () => screen.getByTestId('bill-allocation');
+const receipt = () => screen.getByTestId('payment-amount');
+
+async function applyTdsRate() {
+  fireEvent.click(screen.getByTestId('bill-tds'));
+  fireEvent.change(screen.getByTestId('tds-rate'), { target: { value: '0' } });
+  fireEvent.click(screen.getByTestId('apply-save'));
+  await waitFor(() => expect(screen.getByTestId('bill-tds-set')).toBeTruthy());
+}
+
+describe('Applying TDS fills in what the bill still needs', () => {
+  beforeEach(() => {
+    openBills.mockReset();
+    openBills.mockResolvedValue({ rows: [BILL], totalDue: BILL.due });
+  });
+
+  it('puts ₹19,198 under Amount Received — the bill less the ₹331 withheld', async () => {
+    mount();
+    await waitFor(() => expect(screen.getByTestId('bill-tds')).toBeTruthy());
+    // Nothing to place yet, so the row is blank.
+    expect(amountBox().value).toBe('');
+    await applyTdsRate();
+    expect(Number(amountBox().value)).toBeCloseTo(19198, 2);
+    expect(Number(receipt().value)).toBeCloseTo(19198, 2);
+    // Money + TDS settles the bill exactly: nothing left on account.
+    expect(screen.queryByTestId('payment-onaccount')).toBeNull();
+  });
+
+  it('never overwrites a receipt the user has already entered', async () => {
+    mount();
+    await waitFor(() => expect(screen.getByTestId('bill-tds')).toBeTruthy());
+    fireEvent.change(receipt(), { target: { value: '15000' } });
+    await applyTdsRate();
+    expect(Number(receipt().value)).toBe(15000);
+  });
+
+  it('leaves the receipt alone for a bill that is not ticked', async () => {
+    mount();
+    await waitFor(() => expect(screen.getByTestId('bill-tds')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('bill-pick'));   // untick
+    await applyTdsRate();
+    expect(receipt().value).toBe('');
+  });
+
+  it('adds up across every ticked bill', async () => {
+    const second = { ...BILL, id: 'inv2', no: 'MW-97', total: 5000, tax: 0, due: 5000, exGst: 5000, dueExGst: 5000 };
+    openBills.mockResolvedValue({ rows: [BILL, second], totalDue: 24529 });
+    mount();
+    await waitFor(() => expect(screen.getAllByTestId('bill-tds')).toHaveLength(2));
+    // TDS on the first bill only; the second still needs its full ₹5,000.
+    fireEvent.click(screen.getAllByTestId('bill-tds')[0]);
+    fireEvent.change(screen.getByTestId('tds-rate'), { target: { value: '0' } });
+    fireEvent.click(screen.getByTestId('apply-save'));
+    await waitFor(() => expect(screen.getByTestId('bill-tds-set')).toBeTruthy());
+    expect(Number(receipt().value)).toBeCloseTo(19198 + 5000, 2);
+  });
+});

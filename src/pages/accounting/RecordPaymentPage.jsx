@@ -271,6 +271,24 @@ export function PaymentForm({
     else setPicked((prev) => new Set([...prev, ...shownBills.map((b) => b.id)]));
   };
 
+  /**
+   * The MONEY the ticked bills still need, once the relief that is NOT money
+   * — TDS the customer withheld, write-offs — is taken off them.
+   *
+   * `pending` carries the figure being applied right now, which has not
+   * reached state yet when this is called from the modal.
+   */
+  const moneyNeeded = (pending) => {
+    const at = (kind, id) => (
+      pending && pending.kind === kind && pending.id === id
+        ? Number(pending.value) || 0
+        : Number((kind === 'tds' ? rowTds : rowDisc)[id] || 0)
+    );
+    return R2(chosenBills.reduce(
+      (a, b) => a + Math.max(0, R2(b.due - at('tds', b.id) - at('discount', b.id))), 0,
+    ));
+  };
+
   const setRow = (billId, value) => {
     setAlloc({ ...effective, [billId]: value });
     setTouched(true);
@@ -679,7 +697,22 @@ export function PaymentForm({
           onClose={() => setApplying(null)}
           onApply={(value) => {
             const set = applying.kind === 'tds' ? setRowTds : setRowDisc;
-            set((m) => ({ ...m, [applying.bill.id]: value }));
+            const billId = applying.bill.id;
+            set((m) => ({ ...m, [billId]: value }));
+            // Saying what the customer kept back says what they are actually
+            // paying. Until an amount is typed there is no money for the
+            // spread to place, so the row read ₹0 and the receipt had to be
+            // worked out by hand — apply 2% TDS to a ₹19,529 bill and nothing
+            // appeared under Amount Received at all. Fill in what the ticked
+            // bills still need; it is an ordinary field and stays editable.
+            //
+            // Only while the amount is still blank. What was received is a
+            // fact the user knows and we do not, so a figure they have
+            // already entered is never rewritten underneath them.
+            if (picked.has(billId) && !(Number(form.amount) > 0)) {
+              const need = moneyNeeded({ id: billId, kind: applying.kind, value });
+              if (need > 0) setForm((f) => ({ ...f, amount: String(need) }));
+            }
             setApplying(null);
           }}
         />
