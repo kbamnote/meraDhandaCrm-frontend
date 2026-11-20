@@ -89,8 +89,9 @@ describe('Apply TDS takes the rate on the value before GST', () => {
     });
     const select = await openTdsModal();
     fireEvent.change(select, { target: { value: '0' } });
+    // 2% of 8,075.42 is 161.51, deducted as a whole ₹162.
     const v = Number(screen.getByTestId('apply-amount').value);
-    expect(v).toBeCloseTo(161.51, 2);
+    expect(v).toBe(162);
     expect(v).toBeLessThan(9529);
   });
 
@@ -100,7 +101,8 @@ describe('Apply TDS takes the rate on the value before GST', () => {
     openBills.mockResolvedValue({ rows: [noExGst], totalDue: BILL.due });
     const select = await openTdsModal();
     fireEvent.change(select, { target: { value: '0' } });
-    expect(Number(screen.getByTestId('apply-amount').value)).toBeCloseTo(390.58, 2);
+    // The whole GST-inclusive total, 2% of it rounded to the rupee.
+    expect(Number(screen.getByTestId('apply-amount').value)).toBe(391);
   });
 });
 
@@ -168,5 +170,59 @@ describe('Applying TDS fills in what the bill still needs', () => {
     fireEvent.click(screen.getByTestId('apply-save'));
     await waitFor(() => expect(screen.getByTestId('bill-tds-set')).toBeTruthy());
     expect(Number(receipt().value)).toBeCloseTo(19198 + 5000, 2);
+  });
+});
+
+/**
+ * TDS is withheld in whole rupees, so the receipt lands on one too.
+ *
+ * Reported from the shop: "the amount received should come in round figure".
+ * The rate is a percentage of a taxable value and lands on paise as often as
+ * not; carrying those through meant the bill asked for ₹19,198.42 when the
+ * customer had banked ₹19,198.
+ */
+describe('A rate is deducted in whole rupees', () => {
+  beforeEach(() => {
+    openBills.mockReset();
+    openBills.mockResolvedValue({ rows: [BILL], totalDue: BILL.due });
+  });
+
+  const isWhole = (n) => Number.isInteger(Number(n));
+
+  it('rounds the TDS a rate produces, and the receipt with it', async () => {
+    // 2% of 16,550 is exactly 331 — a bill that already behaved.
+    mount();
+    await waitFor(() => expect(screen.getByTestId('bill-tds')).toBeTruthy());
+    await applyTdsRate();
+    expect(Number(screen.getByTestId('bill-tds-set').textContent.replace(/[^0-9.]/g, ''))).toBe(331);
+    expect(isWhole(receipt().value)).toBe(true);
+    expect(Number(receipt().value)).toBe(19198);
+  });
+
+  it('rounds a rate that lands on paise', async () => {
+    // 10% of 16,550.49 is 1,655.049 → ₹1,655, and 19,529 − 1,655 = 18,874.
+    openBills.mockResolvedValue({
+      rows: [{ ...BILL, exGst: 16550.49, dueExGst: 16550.49 }], totalDue: BILL.due,
+    });
+    mount();
+    await waitFor(() => expect(screen.getByTestId('bill-tds')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('bill-tds'));
+    fireEvent.change(screen.getByTestId('tds-rate'), { target: { value: '0' } });
+    const v = Number(screen.getByTestId('apply-amount').value);
+    expect(isWhole(v)).toBe(true);
+    expect(v).toBe(331);
+    fireEvent.click(screen.getByTestId('apply-save'));
+    await waitFor(() => expect(screen.getByTestId('bill-tds-set')).toBeTruthy());
+    expect(isWhole(receipt().value)).toBe(true);
+  });
+
+  it('still accepts paise when the figure is typed by hand', async () => {
+    mount();
+    await waitFor(() => expect(screen.getByTestId('bill-tds')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('bill-tds'));
+    fireEvent.change(screen.getByTestId('apply-amount'), { target: { value: '390.58' } });
+    fireEvent.click(screen.getByTestId('apply-save'));
+    await waitFor(() => expect(screen.getByTestId('bill-tds-set')).toBeTruthy());
+    expect(Number(receipt().value)).toBeCloseTo(19138.42, 2);
   });
 });

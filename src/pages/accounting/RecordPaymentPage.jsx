@@ -754,6 +754,12 @@ function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, on
   // responses (and a cached bundle talking to a new server) carry no such
   // figure, and there the outstanding amount is the only base there is.
   const tdsBase = bill.dueExGst != null ? R2(bill.dueExGst) : bill.due;
+  // TDS is deducted in WHOLE RUPEES — that is how the certificate and the
+  // challan read, and it is what keeps the receipt a round figure: ₹19,529
+  // less ₹331 is ₹19,198, where an unrounded ₹330.58 would have asked the
+  // shop to bank ₹19,198.42. Typing an amount by hand still accepts paise;
+  // this rounds only the figure a RATE produces.
+  const fromRate = (pct) => Math.round((tdsBase * (Number(pct) || 0)) / 100);
   const [rate, setRate] = useState('');
   const [amount, setAmount] = useState(current ? String(current) : '');
   const [adding, setAdding] = useState(null);   // { code, name, rate }
@@ -771,7 +777,7 @@ function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, on
     // Rates apply to the OUTSTANDING figure net of GST — what this payment is
     // settling, less the tax that is not withheld from. Not the original
     // total, which may be part paid already.
-    setAmount(String(R2((tdsBase * Number(s.defaultRate)) / 100)));
+    setAmount(String(fromRate(s.defaultRate)));
   };
 
   const saveRate = async () => {
@@ -789,7 +795,7 @@ function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, on
       const idx = fresh.findIndex((s) => String(s.code) === String(added.code)
         && Number(s.defaultRate) === Number(added.rate));
       setAdding(null);
-      if (idx >= 0) { setRate(String(idx)); setAmount(String(R2((tdsBase * Number(added.rate)) / 100))); }
+      if (idx >= 0) { setRate(String(idx)); setAmount(String(fromRate(added.rate))); }
     } catch (e) {
       showToast(describeError(e, 'Could not add that rate'), 'error');
     } finally { setSavingRate(false); }
