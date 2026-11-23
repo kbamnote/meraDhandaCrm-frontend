@@ -323,8 +323,8 @@ function VoucherModal({ t, accounts, entry, onClose, onSaved }) {
     .filter((x) => x.items.length);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
-      <div className="card" style={{ maxWidth: 640, width: '100%', maxHeight: '88vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }} onClick={onClose}>
+      <div className="card" style={{ maxWidth: 640, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
           <h3 style={{ fontSize: 17, fontWeight: 700 }}>{isEdit ? t('editVoucher') : t('newVoucher')}</h3>
           <button className="btn btn-sm btn-ghost" onClick={onClose}>{t('close')}</button>

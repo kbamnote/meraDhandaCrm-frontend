@@ -8,6 +8,7 @@
  * advances the job to the next department (or QC if this was the last).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ordersApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
@@ -206,11 +207,28 @@ export default function CompleteAndSendModal({ job, currentDept, onClose, onDone
   const secTitle = { fontSize: 13, fontWeight: 700, color: 'var(--text)', margin: '18px 0 8px' };
   const lbl = { fontSize: 11, fontWeight: 600, color: 'var(--text3)', display: 'block', marginBottom: 3 };
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 560, width: '100%', maxHeight: '92vh', overflow: 'auto' }}>
+  return createPortal(
+    <div
+      style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="card"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 560, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}
+      >
         {/* Header */}
-        <h3 style={{ marginBottom: 2 }}>{t('header')} {nextName}</h3>
+        <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
+          <h3 style={{ margin: 0 }}>{t('header')} {nextName}</h3>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onClose}
+            style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+          >
+            ✕
+          </button>
+        </div>
         <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'monospace', marginBottom: 4 }}>
           {job.jobNo} — {job.work || ''} — {currentDept?.name || ''}
         </div>
@@ -340,6 +358,7 @@ export default function CompleteAndSendModal({ job, currentDept, onClose, onDone
           <button className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

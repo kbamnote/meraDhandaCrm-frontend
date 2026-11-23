@@ -192,8 +192,8 @@ export default function JobAlertPopup() {
       aria-modal="true"
       style={{
         position: 'fixed', inset: 0, zIndex: 4000,
-        background: 'rgba(0,0,0,0.45)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto',
       }}
       onClick={close}
     >

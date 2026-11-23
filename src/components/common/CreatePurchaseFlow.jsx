@@ -353,8 +353,8 @@ export default function CreatePurchaseFlow({ vendor, purchase, onClose, onCreate
   const lbl = { fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 1040, width: '100%', maxHeight: '94vh', overflow: 'auto', padding: 20 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}>
+      <div className="card" style={{ maxWidth: 1040, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 20, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
           <h3 style={{ margin: 0 }}>
             {isEdit ? `Edit Purchase ${purchase.poNo || ''}` : t('title')}

@@ -164,12 +164,12 @@ export default function PayLinkModal({ invoice, onClose }) {
 }
 
 const overlayStyle = {
-  position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)',
+  position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+  background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)', padding: '40px 16px 24px', overflowY: 'auto',
 };
 const modalStyle = {
   background: 'var(--surface)', borderRadius: 12, padding: 20, width: '100%', maxWidth: 480,
-  maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+  maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
 };
 const inputStyle = {
   width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--border)',

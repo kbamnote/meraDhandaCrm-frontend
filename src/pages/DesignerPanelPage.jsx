@@ -345,11 +345,11 @@ export default function DesignerPanelPage() {
           aria-modal="true"
           onClick={() => (uploading ? null : setCompleteJob(null))}
           style={{
-            position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.45)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+            position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto',
           }}
         >
-          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, padding: 18, textAlign: 'center' }}>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 18, textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
             <div style={{ fontSize: 32 }}>🖼️</div>
             <h3 style={{ margin: '8px 0 4px', fontSize: 16 }}>{t('completeNeedsImage')}</h3>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14 }}>
@@ -380,11 +380,11 @@ export default function DesignerPanelPage() {
           aria-modal="true"
           onClick={() => setPassJob(null)}
           style={{
-            position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.45)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+            position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto',
           }}
         >
-          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, padding: 18 }}>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 18, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
             <h3 style={{ marginTop: 0, marginBottom: 4, fontSize: 16 }}>Why are you passing this job?</h3>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
               <b style={{ fontFamily: 'monospace' }}>{passJob.jobNo}</b> — {passJob.clientName}

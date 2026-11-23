@@ -11,6 +11,7 @@
  * - Historical past slips tab/selector for that staff member
  */
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useT } from '../../i18n/LanguageContext';
 import { amountInWords } from './amountInWords';
 import { hrApi } from '../../services/api';
@@ -375,17 +376,20 @@ export default function StaffSalarySlipModal({ open, onClose, record, period, co
     setActivePeriod(period);
   };
 
-  return (
+  return createPortal(
     <div
       style={{
         position: 'fixed',
         inset: 0,
+        width: '100vw',
+        height: '100vh',
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
         zIndex: 9999,
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'center',
-        padding: 16,
+        padding: '40px 16px 24px',
+        overflowY: 'auto',
         backdropFilter: 'blur(3px)',
       }}
       onClick={onClose}
@@ -591,6 +595,7 @@ export default function StaffSalarySlipModal({ open, onClose, record, period, co
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

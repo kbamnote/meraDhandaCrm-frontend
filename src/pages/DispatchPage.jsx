@@ -207,14 +207,25 @@ function DispatchConfirmModal({ job, gstInvoice, onClose, onDone }) {
   const sectionLabel = { fontSize: 12, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.04em', margin: '16px 0 8px', display: 'block' };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 560, width: '100%', maxHeight: '92vh', overflow: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         {/* Header */}
-        <div style={{ marginBottom: 8 }}>
-          <h3 style={{ margin: 0 }}>{t('confirmTitle')}</h3>
-          <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>
-            <span style={{ fontFamily: 'monospace' }}>{job.jobNo}</span> — {job.work}
+        <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+          <div>
+            <h3 style={{ margin: 0 }}>{t('confirmTitle')}</h3>
+            <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>
+              <span style={{ fontFamily: 'monospace' }}>{job.jobNo}</span> — {job.work}
+            </div>
           </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onClose}
+            style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+          >
+            ✕
+          </button>
         </div>
 
         {/* Dispatch mode */}

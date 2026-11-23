@@ -235,10 +235,18 @@ export default function CreateInvoiceFlow({
 
 function InvoiceTypePicker({ onPick, onCancel, t }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 520, width: '100%', maxHeight: '92vh', overflow: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}>
+      <div className="card" style={{ maxWidth: 520, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
-          <h3>{t('chooseType')}</h3>
+          <h3 style={{ margin: 0 }}>{t('chooseType')}</h3>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onCancel}
+            style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+          >
+            ✕
+          </button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {TYPE_CARDS.map((c) => (
@@ -834,8 +842,8 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 1300, width: '100%', maxHeight: '96vh', overflow: 'auto', padding: 28 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}>
+      <div className="card" style={{ maxWidth: 1300, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 28, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
           <h3 style={{ margin: 0 }}>
             {isEdit ? `Edit Invoice ${invoice.invoiceNo || ''}` : 'Create Sales Invoice'}
@@ -1673,8 +1681,8 @@ function CreditLimitDialog({ info, busy, onCancel, onProceed }) {
     </div>
   );
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 420, width: '100%', padding: 20 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}>
+      <div className="card" style={{ maxWidth: 420, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 20, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>⚠️ Credit limit exceeded</h3>
         <p style={{ fontSize: 12.5, color: 'var(--text3)', margin: '0 0 12px' }}>
           Saving this invoice would take the customer past their approved credit limit.

@@ -220,10 +220,20 @@ export default function PurchaseOrdersPage() {
       })}
 
       {showForm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+        <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, padding: '40px 16px 24px', overflowY: 'auto' }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
-          <div className="card" style={{ width: '100%', maxWidth: 640, padding: 20, maxHeight: '90vh', overflowY: 'auto' }}>
-            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{editItem ? `${t('edit')} ${editItem.poNo}` : t('addNew')}</h3>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 640, padding: 20, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{editItem ? `${t('edit')} ${editItem.poNo}` : t('addNew')}</h3>
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                onClick={() => setShowForm(false)}
+                style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+              >
+                ✕
+              </button>
+            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               <div className="form-group">

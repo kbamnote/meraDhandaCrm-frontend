@@ -264,9 +264,20 @@ function AddWebhookModal({ t, onClose, onCreated }) {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <form className="card" onSubmit={submit} style={{ maxWidth: 460, width: '100%', maxHeight: '90vh', overflow: 'auto' }}>
-        <h3 style={{ marginBottom: 14 }}>{t('add')}</h3>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <form className="card" onSubmit={submit} onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
+          <h3 style={{ margin: 0 }}>{t('add')}</h3>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onClose}
+            style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+          >
+            ✕
+          </button>
+        </div>
 
         <div className="form-group">
           <label>{t('url')}</label>

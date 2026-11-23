@@ -974,9 +974,9 @@ function TransferInvoiceModal({ invoice, fromParty, onClose, onDone }) {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="card" style={{ width: 460, maxWidth: '100%', padding: 16 }}>
+      <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 16, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>Move invoice</h3>
         <div style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 12 }}>
           {invoice.number || 'This invoice'} · {inr(invoice.amount)} — currently billed to{' '}
@@ -1663,10 +1663,11 @@ export function PartyFormModal({ type, t, onClose, onCreated, party: editing }) 
   const lbl = { fontSize: 11.5, color: 'var(--text3)', fontWeight: 600, display: 'block', marginBottom: 4 };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, padding: 16, overflowY: 'auto' }}
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, padding: '40px 16px 24px', overflowY: 'auto' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <form className="card" onSubmit={(e) => { e.preventDefault(); save(false); }}
-        style={{ width: '100%', maxWidth: 1000, padding: 0, margin: 'auto' }}>
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxWidth: 1000, padding: 0, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
 
         {/* Sticky header with the actions, like the reference screen */}
         <div className="flex items-center justify-between"

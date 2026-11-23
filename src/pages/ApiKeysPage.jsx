@@ -152,8 +152,9 @@ function NewKeyModal({ t, onClose, onCreated }) {
     finally { setBusy(false); }
   };
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 420, width: '100%' }}>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         <h3 style={{ marginBottom: 12 }}>{t('generate')}</h3>
         <div className="form-group">
           <label>{t('label')}</label>
@@ -176,8 +177,9 @@ function KeyRevealModal({ t, created, onClose }) {
     catch { showToast(t('failed'), 'error'); }
   };
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" style={{ maxWidth: 480, width: '100%' }}>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         <h3 style={{ marginBottom: 4 }}>{t('keyReady')}</h3>
         {created.label && <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 10 }}>{created.label}</div>}
         <div className="card" style={{ background: 'var(--amber-light, #FEF3E2)', border: '1px solid var(--amber)', marginBottom: 10 }}>

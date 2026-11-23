@@ -238,12 +238,15 @@ export default function SalaryAdmin() {
           style={{
             position: 'fixed',
             inset: 0,
+            width: '100vw',
+            height: '100vh',
             backgroundColor: 'rgba(0, 0, 0, 0.55)',
             zIndex: 9999,
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'center',
-            padding: 16,
+            padding: '40px 16px 24px',
+            overflowY: 'auto',
             backdropFilter: 'blur(2px)',
           }}
           onClick={() => setRecOpen(false)}

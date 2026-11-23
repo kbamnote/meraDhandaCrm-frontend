@@ -534,10 +534,20 @@ function NewGroupModal({ people, onClose, onCreated, t }) {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="card" style={{ width: '100%', maxWidth: 420, padding: 18 }}>
-        <h3 style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 700 }}>{t('newGroupTitle')}</h3>
+      <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 18, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{t('newGroupTitle')}</h3>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onClose}
+            style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+          >
+            ✕
+          </button>
+        </div>
         <div className="form-group">
           <label>{t('groupName')}</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />

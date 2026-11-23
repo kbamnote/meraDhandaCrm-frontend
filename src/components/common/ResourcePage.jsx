@@ -11,6 +11,7 @@
  * page. Pages that need custom UI (Tasks, dashboards) stay hand-written.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ref, onValue, db } from '../../services/realtime';
 import { dbApi } from '../../services/api';
@@ -248,10 +249,28 @@ function RecordModal({ config, record, onClose }) {
     }
   };
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <form className="card" onSubmit={submit} style={{ maxWidth: 480, width: '100%', maxHeight: '90vh', overflow: 'auto' }}>
-        <h3 style={{ marginBottom: 14 }}>{isEdit ? `${t('editPrefix')} ${singular || 'Record'}` : `${t('newPrefix')} ${singular || 'Record'}`}</h3>
+  return createPortal(
+    <div
+      style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <form
+        className="card"
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 480, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}
+      >
+        <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
+          <h3 style={{ margin: 0 }}>{isEdit ? `${t('editPrefix')} ${singular || 'Record'}` : `${t('newPrefix')} ${singular || 'Record'}`}</h3>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={onClose}
+            style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+          >
+            ✕
+          </button>
+        </div>
 
         {fields.map((f) => (
           <div className="form-group" key={f.key}>
@@ -285,6 +304,7 @@ function RecordModal({ config, record, onClose }) {
           <button type="button" className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }

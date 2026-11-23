@@ -252,14 +252,24 @@ export default function BatchesTab() {
 
       {/* Modal */}
       {modal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+        <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, padding: '40px 16px 24px', overflowY: 'auto' }}
           onClick={(e) => { if (e.target === e.currentTarget) setModal(null); }}>
-          <div className="card" style={{ width: '100%', maxWidth: 440, padding: 20 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
-              {modal.kind === 'receive' && t('recvTitle')}
-              {modal.kind === 'issue' && t('issueTitle')}
-              {modal.kind === 'variant' && t('varTitle')}
-            </h3>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 440, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 20, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>
+                {modal.kind === 'receive' && t('recvTitle')}
+                {modal.kind === 'issue' && t('issueTitle')}
+                {modal.kind === 'variant' && t('varTitle')}
+              </h3>
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                onClick={() => setModal(null)}
+                style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+              >
+                ✕
+              </button>
+            </div>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>{modal.item.name}</div>
 
             {modal.kind === 'receive' && (

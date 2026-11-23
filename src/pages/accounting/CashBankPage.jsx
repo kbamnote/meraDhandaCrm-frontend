@@ -604,10 +604,10 @@ function AccountRow({ acc, active, onClick }) {
 function Modal({ title, children, onClose, footer, width = 460 }) {
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="card" style={{ width: '100%', maxWidth: width, maxHeight: '90vh', overflow: 'auto', padding: 18 }}>
+      <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: width, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 18, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h3>
           <button type="button" className="btn btn-xs btn-ghost" onClick={onClose}>✕</button>

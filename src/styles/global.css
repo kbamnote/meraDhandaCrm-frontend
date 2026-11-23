@@ -62,10 +62,7 @@ h1,h2,h3,h4,.sidebar-logo{font-family:var(--font-display);letter-spacing:-0.01em
 .main-area{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;}
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:40;}
 .topbar h1{font-size:16px;font-weight:600;}
-/* content-visibility:auto tells the browser it can skip painting/layout for
-   off-screen sections of a long page, which measurably reduces first-paint
-   time on data-heavy screens (ledger, attendance, invoice lists). */
-.page-content{padding:24px;flex:1;content-visibility:auto;}
+.page-content{padding:24px;flex:1;}
 .menu-toggle{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--text);font-size:20px;}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:49;}
 
@@ -159,6 +156,47 @@ table.crm-table{width:100%;border-collapse:collapse;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
 .center-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;}
+
+/* ── Modals & Popups: Global viewport pinning & top alignment ───────────────── */
+/* Ensures all fixed modal dialogs open at the top of the viewport and scroll smoothly */
+div[style*="position: fixed"][style*="inset"][style*="flex"],
+div[style*="position:fixed"][style*="inset"][style*="flex"],
+div[style*="position: fixed"][style*="inset"][style*="center"],
+div[style*="position:fixed"][style*="inset"][style*="center"],
+div[style*="position: fixed"][style*="top: 0"][style*="flex"],
+div[style*="position: fixed"][style*="top: 0px"][style*="flex"],
+div[style*="position:fixed"][style*="top:0"][style*="flex"],
+div[style*="position:fixed"][style*="top:0px"][style*="flex"],
+.modal-overlay, .modal-backdrop {
+  align-items: flex-start !important;
+  justify-content: center !important;
+  padding: 40px 16px 24px !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+div[style*="position: fixed"][style*="inset"][style*="flex"] > .card,
+div[style*="position:fixed"][style*="inset"][style*="flex"] > .card,
+div[style*="position: fixed"][style*="inset"][style*="center"] > .card,
+div[style*="position:fixed"][style*="inset"][style*="center"] > .card,
+div[style*="position: fixed"][style*="top: 0"][style*="flex"] > .card,
+div[style*="position: fixed"][style*="top: 0px"][style*="flex"] > .card,
+div[style*="position:fixed"][style*="top:0"][style*="flex"] > .card,
+div[style*="position:fixed"][style*="top:0px"][style*="flex"] > .card,
+div[style*="position: fixed"][style*="inset"][style*="flex"] > form.card,
+div[style*="position:fixed"][style*="inset"][style*="flex"] > form.card,
+div[style*="position: fixed"][style*="inset"][style*="center"] > form.card,
+div[style*="position:fixed"][style*="inset"][style*="center"] > form.card,
+div[style*="position: fixed"][style*="top: 0"][style*="flex"] > form.card,
+div[style*="position: fixed"][style*="top: 0px"][style*="flex"] > form.card,
+div[style*="position:fixed"][style*="top:0"][style*="flex"] > form.card,
+div[style*="position:fixed"][style*="top:0px"][style*="flex"] > form.card,
+.modal-dialog, .modal-card {
+  max-height: calc(100vh - 70px) !important;
+  overflow-y: auto !important;
+  margin-top: 0 !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.35), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
 
 /* ── Print ────────────────────────────────────────────────────────────────
    Strip the app chrome so Ctrl+P / "Save as PDF" yields the document alone.

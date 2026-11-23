@@ -805,9 +805,9 @@ function ApplyToBillModal({ bill, kind, sections, onSectionsChanged, current, on
   const tooMuch = value > bill.due + 0.001;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="card" style={{ width: 430, maxWidth: '100%', padding: 16 }}>
+      <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 430, maxWidth: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 16, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
             {isTds ? 'Apply TDS' : 'Apply Discount'}

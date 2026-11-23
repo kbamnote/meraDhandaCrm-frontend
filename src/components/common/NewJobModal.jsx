@@ -15,6 +15,7 @@
  *                     salesPersonId)
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ordersApi, uploadApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
@@ -249,12 +250,30 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
     } finally { setBusy(false); }
   };
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflow: 'auto' }}>
-      <form className="card" onSubmit={submit} style={{ maxWidth: 460, width: '100%', margin: 'auto' }}>
+  return createPortal(
+    <div
+      style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <form
+        className="card"
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 460, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}
+      >
         <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
           <h3 style={{ margin: 0 }}>📋 {isEdit ? t('editJob') : t('newJob')}</h3>
-          {preview ? <span className="badge badge-green" style={{ fontFamily: 'monospace' }}>{preview}</span> : null}
+          <div className="flex items-center gap-2">
+            {preview ? <span className="badge badge-green" style={{ fontFamily: 'monospace' }}>{preview}</span> : null}
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={onClose}
+              style={{ fontSize: 16, lineHeight: 1, padding: '4px 8px' }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* CUSTOMER DETAILS */}
@@ -548,6 +567,7 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
           <button type="submit" className="btn btn-primary flex-1" disabled={busy}>{busy ? '…' : `✅ ${t('create')}`}</button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
