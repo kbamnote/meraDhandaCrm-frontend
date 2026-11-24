@@ -7,7 +7,7 @@ import { accountingApi } from '../../services/api';
 import { useT } from '../../i18n/LanguageContext';
 import { Kpi, KpiGrid, inr } from '../../components/common/DashboardCharts';
 import BranchSelect from '../../components/common/BranchSelect';
-import BankAccountSelect from '../../components/common/BankAccountSelect';
+import BankAccountSelect, { loadFundingAccounts } from '../../components/common/BankAccountSelect';
 
 const round2 = (n) => Math.round(((Number(n) || 0) * 100) + 1e-8) / 100;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -61,6 +61,19 @@ export default function ExpensesPage() {
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [addingCat, setAddingCat] = useState(false);
+  const [fundingAccounts, setFundingAccounts] = useState([]);
+
+  useEffect(() => {
+    loadFundingAccounts().then((accs) => setFundingAccounts(accs || []));
+  }, []);
+
+  const bankNameMap = useMemo(() => {
+    const m = {};
+    fundingAccounts.forEach((a) => {
+      m[a.id] = a.name;
+    });
+    return m;
+  }, [fundingAccounts]);
 
   function emptyForm() {
     return { date: today(), category: 'General', description: '', amount: '', paymentMode: 'cash', bankAccountId: '', vendor: '', invoiceRef: '', branchId: '' };
@@ -131,16 +144,37 @@ export default function ExpensesPage() {
   const topCat = catTotals.length > 0 ? catTotals[0] : null;
 
   const openNew = () => { setIsAddingCat(false); setNewCatName(''); setEditItem(null); setForm(emptyForm()); setShowForm(true); };
-  const openEdit = (e) => { setIsAddingCat(false); setNewCatName(''); setEditItem(e); setForm({ date: e.date || today(), category: e.category || '', description: e.description || '', amount: e.amount || '', paymentMode: e.paymentMode || 'cash', bankAccountId: e.bankAccountId || '', vendor: e.vendor || '', invoiceRef: e.invoiceRef || '', branchId: e.branchId || '' }); setShowForm(true); };
+  const openEdit = (e) => {
+    setIsAddingCat(false);
+    setNewCatName('');
+    setEditItem(e);
+    setForm({
+      date: e.date || today(),
+      category: e.category || 'General',
+      description: e.description || '',
+      amount: e.amount != null ? String(e.amount) : '',
+      paymentMode: e.paymentMode || 'cash',
+      bankAccountId: e.bankAccountId || '',
+      vendor: e.vendor || '',
+      invoiceRef: e.invoiceRef || '',
+      branchId: e.branchId || ''
+    });
+    setShowForm(true);
+  };
 
   const save = async () => {
     if (!form.amount || Number(form.amount) <= 0) return;
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        bankAccountId: form.paymentMode === 'cash' ? null : (form.bankAccountId || null),
+      };
       if (editItem) {
-        await accountingApi.updateExpense(editItem.id, form);
+        const id = editItem.id || editItem._id;
+        await accountingApi.updateExpense(id, payload);
       } else {
-        await accountingApi.createExpense(form);
+        await accountingApi.createExpense(payload);
       }
       setShowForm(false);
       load();
@@ -209,7 +243,7 @@ export default function ExpensesPage() {
             </thead>
             <tbody>
               {filtered.map((e) => (
-                <tr key={e.id}>
+                <tr key={e.id || e._id}>
                   <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{e.date}</td>
                   <td>
                     <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, background: 'var(--blue)', color: '#fff' }}>{e.category || 'General'}</span>
@@ -225,12 +259,14 @@ export default function ExpensesPage() {
                   <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--red)' }}>{inr(e.amount)}</td>
                   <td>
                     <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 11, background: e.paymentMode === 'bank' ? 'var(--green)' : 'var(--amber)', color: '#fff' }}>
-                      {e.paymentMode === 'bank' ? t('bank') : t('cash')}
+                      {e.paymentMode === 'bank'
+                        ? (e.bankAccountId && bankNameMap[e.bankAccountId] ? bankNameMap[e.bankAccountId] : t('bank'))
+                        : t('cash')}
                     </span>
                   </td>
                   <td>
                     <button className="btn btn-xs btn-ghost" onClick={() => openEdit(e)}>{t('edit')}</button>
-                    <button className="btn btn-xs btn-ghost" style={{ color: 'var(--red)' }} onClick={() => remove(e.id)}>{t('delete')}</button>
+                    <button className="btn btn-xs btn-ghost" style={{ color: 'var(--red)' }} onClick={() => remove(e.id || e._id)}>{t('delete')}</button>
                   </td>
                 </tr>
               ))}
