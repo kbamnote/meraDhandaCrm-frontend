@@ -75,6 +75,19 @@ export default function PurchaseDocument({ purchase }) {
   }, [items]);
 
   const qtyTotal = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
+
+  // The job columns — what kind of work, and the size it was quoted at. They
+  // turn on together and only when a line carries some of it, so a bill with
+  // no sizes prints exactly as it always has. Same rule as the sales invoice,
+  // because a purchase bill and the invoice raised from it are read side by
+  // side. Area and the per-line tax are already columns here.
+  const jobNum = (it, k) => Number(it && it[k]) || 0;
+  const hasJob = items.some((it) => String((it && it.jobCategory) || '').trim()
+    || jobNum(it, 'length') > 0 || jobNum(it, 'width') > 0
+    || jobNum(it, 'weight') > 0 || jobNum(it, 'area') > 0);
+  const sizeOf = (it) => (jobNum(it, 'length') > 0 && jobNum(it, 'width') > 0
+    ? `${money(it.length)} × ${money(it.width)}`
+    : '—');
   const charges = Array.isArray(p.additionalCharges) ? p.additionalCharges : [];
   const paid = round2(p.paidAmount || 0);
   const balance = round2(Math.max(0, (Number(p.total) || 0) - paid));
@@ -183,6 +196,10 @@ export default function PurchaseDocument({ purchase }) {
               <tr>
                 <th style={{ width: 26 }}>S.No</th>
                 <th>Item</th>
+                {hasJob && <th style={{ width: 80 }}>Category</th>}
+                {hasJob && <th style={{ width: 58 }}>Size</th>}
+                {hasJob && <th style={{ width: 44 }}>Wt.</th>}
+                {hasJob && <th style={{ width: 58 }}>Area</th>}
                 <th style={{ width: 60 }}>HSN</th>
                 <th style={{ width: 50 }}>Qty</th>
                 <th style={{ width: 66 }}>Rate</th>
@@ -200,6 +217,16 @@ export default function PurchaseDocument({ purchase }) {
                     <b>{it.name || '—'}</b>
                     {it.description && <div style={{ color: '#555' }}>{it.description}</div>}
                   </td>
+                  {hasJob && <td className="pd-c">{it.jobCategory || '—'}</td>}
+                  {hasJob && <td className="pd-c">{sizeOf(it)}</td>}
+                  {hasJob && <td className="pd-c">{jobNum(it, 'weight') > 0 ? money(it.weight) : '—'}</td>}
+                  {hasJob && (
+                    <td className="pd-c">
+                      {jobNum(it, 'area') > 0
+                        ? <>{money(it.area)}{it.unit ? ' ' + it.unit : ''}</>
+                        : '—'}
+                    </td>
+                  )}
                   <td className="pd-c">{it.hsn || '—'}</td>
                   <td className="pd-r">{Number(it.qty) || 0}{it.unit ? ` ${it.unit}` : ''}</td>
                   <td className="pd-r">{money(it.rate)}</td>
@@ -210,7 +237,8 @@ export default function PurchaseDocument({ purchase }) {
                 </tr>
               ))}
               <tr>
-                <td colSpan={3} className="pd-r"><b>Total</b></td>
+                {/* S.No + Item + HSN, plus the job columns when they are on. */}
+                <td colSpan={hasJob ? 7 : 3} className="pd-r"><b>Total</b></td>
                 <td className="pd-r"><b>{qtyTotal}</b></td>
                 <td colSpan={3} />
                 <td className="pd-r"><b>{money(p.taxTotal)}</b></td>

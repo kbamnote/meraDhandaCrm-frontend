@@ -15,7 +15,7 @@
  *   onCreated(inv) — called with the created invoice before onClose()
  */
 import { useEffect, useMemo, useState } from 'react';
-import { accountingApi, ordersApi, uploadApi, dbApi, describeError } from '../../services/api';
+import { accountingApi, ordersApi, uploadApi, dbApi, productionTypesApi, describeError } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
@@ -79,7 +79,39 @@ const TYPE_CARDS = [
 // discountType/discountValue: an optional discount on THIS line only, as a %
 // of the line or a flat ₹ amount. It comes off before GST, and before the
 // bill-level Discount is spread over what is left (the server does the same).
-const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', taxRate: '', itemId: null, discountType: 'percent', discountValue: '', extras: [] });
+const blankItem = () => ({
+  name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', taxRate: '',
+  itemId: null, discountType: 'percent', discountValue: '', extras: [],
+  // The job itself: what kind of work it is and the size it was quoted at.
+  // `rateOn` decides whether the price is per piece or per unit of area;
+  // 'qty' is the default, so a line that carries no size prices as it always
+  // did and nothing on an older bill moves.
+  jobCategory: '', length: '', width: '', weight: '', rateOn: 'qty',
+});
+
+/**
+ * The area a line covers: length x width x qty, in whatever unit the line
+ * names. Nothing is converted — an 8 x 5 inch offset job and a 4 x 8 foot
+ * flex job each multiply out in their own unit, which is the one shown
+ * beside the figure.
+ */
+export const lineArea = (it) => {
+  const l = Number(it && it.length) || 0;
+  const w = Number(it && it.width) || 0;
+  const q = Number(it && it.qty) || 0;
+  return l > 0 && w > 0 ? round2(l * w * q) : 0;
+};
+
+/**
+ * What the line comes to before any discount — the rate times whichever
+ * basis it is charged on. Mirrors sizeOf()/priceLines() on the server, so
+ * the figure on screen is the figure that gets saved.
+ */
+export const lineGross = (it) => {
+  const area = lineArea(it);
+  const basis = it && it.rateOn === 'area' && area > 0 ? area : (Number(it && it.qty) || 0);
+  return round2(basis * (Number(it && it.rate) || 0));
+};
 
 // The ones people reach for most, offered as a starting label so nobody
 // has to think of the word. Anything else can be typed over it.
@@ -392,6 +424,12 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         name: it.name || '', hsn: it.hsn || '',
         qty: it.qty != null ? String(it.qty) : '',
         rate: it.rate != null ? String(it.rate) : '',
+        // Area is derived, so it is not carried back — only what was typed.
+        jobCategory: it.jobCategory || '',
+        length: it.length != null ? String(it.length) : '',
+        width: it.width != null ? String(it.width) : '',
+        weight: it.weight != null ? String(it.weight) : '',
+        rateOn: it.rateOn === 'area' ? 'area' : 'qty',
         // Only a line that was saved with its OWN rate keeps one; on an invoice
         // taxed at a single rate the lines go on inheriting it, so changing the
         // invoice rate still moves every line.
@@ -434,6 +472,19 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const [busy, setBusy] = useState(false);
   // Index of the line whose typed name is being turned into a catalog item.
   const [newItemFor, setNewItemFor] = useState(null);
+  // Job categories, taken from the shop's Production Types so the bill speaks
+  // the same language as the job card. Offered as suggestions, not a closed
+  // list: a one-off job nobody set up a department for still has to be
+  // billable, and typing its name is not an error.
+  const [jobCats, setJobCats] = useState([]);
+  useEffect(() => {
+    productionTypesApi.list()
+      .then((r) => setJobCats((Array.isArray(r) ? r : [])
+        .filter((d) => d && d.enabled !== false)
+        .map((d) => d.name)
+        .filter(Boolean)))
+      .catch(() => setJobCats([]));   // a bill must still be writable offline
+  }, []);
   // Set from the server's 409 when this invoice would breach the customer's
   // credit limit; holds { creditLimit, outstanding, invoiceTotal, projected }.
   const [creditWarning, setCreditWarning] = useState(null);
@@ -600,7 +651,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   const totals = useMemo(() => {
     const noTax = isCash || isComposition || form.reverseCharge;
     const invoiceRate = billGst;
-    const amounts = items.map((it) => round2((Number(it.qty) || 0) * (Number(it.rate) || 0)));
+    const amounts = items.map((it) => lineGross(it));
     // Per-line charges. They are billed and taxed with the line, but sit
     // OUTSIDE the discount base — a discount is agreed on the goods, not on
     // the lorry. Mirrors priceLines() on the server exactly.
@@ -805,6 +856,13 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
           ...(Number(it.discountValue) > 0
             ? { discountType: it.discountType === 'amount' ? 'amount' : 'percent', discountValue: Number(it.discountValue) }
             : {}),
+          // The job itself. The server derives the area from these and prices
+          // the line on whichever basis rateOn names.
+          jobCategory: (it.jobCategory || '').trim() || null,
+          length: Number(it.length) > 0 ? Number(it.length) : null,
+          width: Number(it.width) > 0 ? Number(it.width) : null,
+          weight: Number(it.weight) > 0 ? Number(it.weight) : null,
+          rateOn: it.rateOn === 'area' ? 'area' : 'qty',
         })),
       };
       const inv = isEdit
@@ -975,6 +1033,10 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
             </div>
 
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', margin: '10px 0 6px' }}>Items / Services</div>
+            {/* Shared by every line's Job category box. */}
+            <datalist id="line-job-cats">
+              {jobCats.map((c) => <option key={c} value={c} />)}
+            </datalist>
             <div style={{ display: 'flex', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', padding: '0 2px 4px' }}>
               {/* Must mirror the input row below field-for-field — the header
                   was missing Unit entirely, so every label from Qty rightward
@@ -992,7 +1054,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
               <span style={{ width: 18 }} />
             </div>
             {items.map((it, i) => {
-              const gross = round2((Number(it.qty) || 0) * (Number(it.rate) || 0));
+              const gross = lineGross(it);
               const itemDisc = lineDiscount(it, gross);
               const lineExtras = lineExtrasTotal(it);
               const amount = round2(gross - itemDisc);
@@ -1184,6 +1246,62 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     value={it.description}
                     onChange={(e) => setItem(i, 'description', e.target.value)}
                   />
+                  <span style={{ width: 18 }} />
+                </div>
+
+                {/* The job: what kind of work it is, and the size it was
+                    quoted at. All optional — a line that is just a count of
+                    things leaves it blank and prices on Qty exactly as before.
+
+                    Area is DERIVED (length x width x qty) and shown rather
+                    than typed, so the figure printed on the bill cannot
+                    disagree with the three numbers printed beside it. The
+                    unit is the line's own: an 8 x 5 inch job and a 4 x 8 foot
+                    job each read in their own unit, and nothing converts. */}
+                <div className="flex gap-2" style={{ marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ width: 22 }} />
+                  <input
+                    className="input" data-testid="line-category" list="line-job-cats"
+                    style={{ flex: 1.4, minWidth: 128, fontSize: 12 }}
+                    placeholder="Job category" title="Which kind of work this line is"
+                    value={it.jobCategory}
+                    onChange={(e) => setItem(i, 'jobCategory', e.target.value)}
+                  />
+                  <input
+                    className="input input-num" data-testid="line-length" style={{ width: 72, fontSize: 12 }}
+                    type="number" min="0" step="any" placeholder="Length" title="Length, in this line's unit"
+                    value={it.length} onChange={(e) => setItem(i, 'length', e.target.value)}
+                  />
+                  <span style={{ color: 'var(--text3)', fontSize: 12 }}>×</span>
+                  <input
+                    className="input input-num" data-testid="line-width" style={{ width: 72, fontSize: 12 }}
+                    type="number" min="0" step="any" placeholder="Width" title="Width, in this line's unit"
+                    value={it.width} onChange={(e) => setItem(i, 'width', e.target.value)}
+                  />
+                  <input
+                    className="input input-num" data-testid="line-weight" style={{ width: 78, fontSize: 12 }}
+                    type="number" min="0" step="any" placeholder="Weight"
+                    title="Recorded on the bill; it does not price the line"
+                    value={it.weight} onChange={(e) => setItem(i, 'weight', e.target.value)}
+                  />
+                  <span data-testid="line-area" style={{ fontSize: 12, color: 'var(--text2)', minWidth: 92 }}>
+                    {lineArea(it) > 0
+                      ? <>Area <b>{lineArea(it)}</b>{it.unit ? ' ' + it.unit : ''}</>
+                      : <span style={{ color: 'var(--text3)' }}>Area —</span>}
+                  </span>
+                  {/* Which figure the price multiplies. Offered only once
+                      there IS an area, because "Rate × Area" against no area
+                      would price the line at zero. */}
+                  <select
+                    className="input" data-testid="line-rate-on" style={{ width: 112, fontSize: 12 }}
+                    title="Is the price per piece, or per unit of area?"
+                    disabled={lineArea(it) <= 0}
+                    value={it.rateOn === 'area' && lineArea(it) > 0 ? 'area' : 'qty'}
+                    onChange={(e) => setItem(i, 'rateOn', e.target.value)}
+                  >
+                    <option value="qty">Rate × Qty</option>
+                    <option value="area">Rate × Area</option>
+                  </select>
                   <span style={{ width: 18 }} />
                 </div>
 

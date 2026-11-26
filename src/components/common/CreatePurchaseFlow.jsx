@@ -49,7 +49,29 @@ const S = {
 
 const GST_RATES = ['0', '5', '12', '18', '28'];
 
-const blankItem = () => ({ name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', discount: '', taxRate: '18', itemId: null });
+const blankItem = () => ({
+  name: '', description: '', hsn: '', unit: '', qty: '1', rate: '', discount: '',
+  taxRate: '18', itemId: null,
+  // A supplier bills by area as readily as we do — acrylic and vinyl are
+  // quoted per square foot. Same fields and the same rule as the sales side,
+  // so a bill and the invoice raised from it cannot price a job two ways.
+  jobCategory: '', length: '', width: '', weight: '', rateOn: 'qty',
+});
+
+/** Length x width x qty, in the line's own unit. Nothing is converted. */
+export const lineArea = (it) => {
+  const l = Number(it && it.length) || 0;
+  const w = Number(it && it.width) || 0;
+  const q = Number(it && it.qty) || 0;
+  return l > 0 && w > 0 ? round2(l * w * q) : 0;
+};
+
+/** What the line comes to before discount. Mirrors sizeOf() on the server. */
+export const lineGross = (it) => {
+  const area = lineArea(it);
+  const basis = it && it.rateOn === 'area' && area > 0 ? area : (Number(it && it.qty) || 0);
+  return round2(basis * (Number(it && it.rate) || 0));
+};
 
 const partyName = (v) => (v && (v.name || v.company || v.title)) || '';
 const partyPhone = (v) => (v && (v.phone || v.mobile || v.contact)) || '';
@@ -79,6 +101,12 @@ function itemsFromPurchase(purchase) {
     discount: Number(it.discount) ? str(it.discount) : '',
     taxRate: it.taxRate != null ? str(it.taxRate) : '18',
     itemId: it.itemId || null,
+    // Area is derived, so only what was typed comes back.
+    jobCategory: str(it.jobCategory),
+    length: it.length != null ? str(it.length) : '',
+    width: it.width != null ? str(it.width) : '',
+    weight: it.weight != null ? str(it.weight) : '',
+    rateOn: it.rateOn === 'area' ? 'area' : 'qty',
   }));
 }
 
@@ -248,7 +276,7 @@ export default function CreatePurchaseFlow({ vendor, purchase, onClose, onCreate
   const totals = useMemo(() => {
     let subtotal = 0; let taxTotal = 0;
     const lines = items.map((it) => {
-      const gross = round2(num(it.qty) * num(it.rate));
+      const gross = lineGross(it);
       const lineDiscount = round2(num(it.discount));
       const amount = round2(Math.max(0, gross - lineDiscount));
       const tax = round2((amount * num(it.taxRate)) / 100);
@@ -313,6 +341,11 @@ export default function CreatePurchaseFlow({ vendor, purchase, onClose, onCreate
           qty: num(it.qty), rate: num(it.rate),
           discount: num(it.discount), taxRate: num(it.taxRate),
           itemId: it.itemId || null,
+          jobCategory: trim(it.jobCategory) || null,
+          length: num(it.length) > 0 ? num(it.length) : null,
+          width: num(it.width) > 0 ? num(it.width) : null,
+          weight: num(it.weight) > 0 ? num(it.weight) : null,
+          rateOn: it.rateOn === 'area' ? 'area' : 'qty',
         })),
         discount: num(form.discount),
         additionalCharges: charges
@@ -502,6 +535,41 @@ export default function CreatePurchaseFlow({ vendor, purchase, onClose, onCreate
                     <span style={{ width: 20 }} />
                     <input className="input" style={{ flex: 1, fontSize: 12 }} placeholder="Description (optional)" value={it.description} onChange={(e) => setItem(i, 'description', e.target.value)} />
                     <input className="input" style={{ width: 70, fontSize: 12 }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
+                    <span style={{ width: 18 }} />
+                  </div>
+                  {/* The job and the size it was quoted at — all optional.
+                      Area is derived (length x width x qty) in the line's own
+                      unit, so the printed figure always agrees with the three
+                      numbers beside it. */}
+                  <div className="flex gap-2" style={{ marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ width: 20 }} />
+                    <input className="input" data-testid="po-line-category" style={{ flex: 1.2, minWidth: 120, fontSize: 12 }}
+                      placeholder="Job category" value={it.jobCategory}
+                      onChange={(e) => setItem(i, 'jobCategory', e.target.value)} />
+                    <input className="input input-num" data-testid="po-line-length" style={{ width: 70, fontSize: 12 }}
+                      type="number" min="0" step="any" placeholder="Length"
+                      value={it.length} onChange={(e) => setItem(i, 'length', e.target.value)} />
+                    <span style={{ color: 'var(--text3)', fontSize: 12 }}>×</span>
+                    <input className="input input-num" data-testid="po-line-width" style={{ width: 70, fontSize: 12 }}
+                      type="number" min="0" step="any" placeholder="Width"
+                      value={it.width} onChange={(e) => setItem(i, 'width', e.target.value)} />
+                    <input className="input input-num" data-testid="po-line-weight" style={{ width: 76, fontSize: 12 }}
+                      type="number" min="0" step="any" placeholder="Weight"
+                      title="Recorded on the bill; it does not price the line"
+                      value={it.weight} onChange={(e) => setItem(i, 'weight', e.target.value)} />
+                    <span data-testid="po-line-area" style={{ fontSize: 12, color: 'var(--text2)', minWidth: 88 }}>
+                      {lineArea(it) > 0
+                        ? <>Area <b>{lineArea(it)}</b>{it.unit ? ' ' + it.unit : ''}</>
+                        : <span style={{ color: 'var(--text3)' }}>Area —</span>}
+                    </span>
+                    <select className="input" data-testid="po-line-rate-on" style={{ width: 112, fontSize: 12 }}
+                      title="Is the price per piece, or per unit of area?"
+                      disabled={lineArea(it) <= 0}
+                      value={it.rateOn === 'area' && lineArea(it) > 0 ? 'area' : 'qty'}
+                      onChange={(e) => setItem(i, 'rateOn', e.target.value)}>
+                      <option value="qty">Rate × Qty</option>
+                      <option value="area">Rate × Area</option>
+                    </select>
                     <span style={{ width: 18 }} />
                   </div>
                 </div>
