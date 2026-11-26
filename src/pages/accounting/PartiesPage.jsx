@@ -1109,7 +1109,7 @@ function ProfileTab({ p, t }) {
 
 /* ──────────────────────── Ledger (double entry) ──────────────────────── */
 
-function LedgerTab({ party, t, feed, openingBalance }) {
+export function LedgerTab({ party, t, feed, openingBalance }) {
   const [range, setRange] = useState('all');
   const [custom, setCustom] = useState({ from: '', to: '' });
 
@@ -1142,7 +1142,16 @@ function LedgerTab({ party, t, feed, openingBalance }) {
     let balance = round2(openingBalance || 0);
     const out = list.map((r) => {
       const isDebit = debitTypes.includes(r.docType);
-      const amt = round2(r.amount || 0);
+      // What this row moves the party's balance BY — which for a receipt is
+      // the RELIEF, not the cash. TDS the customer withheld and anything
+      // written off clear the bill just as the money does, and the ledger
+      // credits their account by all three. Crediting only the cash left the
+      // statement showing a balance the customer did not owe — tax they had
+      // already paid the government on our behalf — and made the closing
+      // balance disagree with the ledger by exactly that. Rows that carry no
+      // relief (invoices, notes, and receipts from before this) are their own
+      // amount, as they always were.
+      const amt = round2((r.relief != null ? r.relief : r.amount) || 0);
       balance = round2(balance + (isDebit ? amt : -amt));
       const overdueBy = r.dueDate && r.unpaid > 0 && r.dueDate < today
         ? Math.floor((new Date(today) - new Date(r.dueDate)) / 86400000)
