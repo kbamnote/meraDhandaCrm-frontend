@@ -74,7 +74,14 @@ describe('every screen renders without throwing', () => {
     it(name, async () => {
       const mod = await load();
       const Component = mod.default;
-      expect(Component, `${name} has no default export`).toBeTypeOf('function');
+      // A screen wrapped in React.memo (or forwardRef) exports an OBJECT, not
+      // a function, and renders perfectly well. What matters is that there is
+      // a default export React can render, which the render below proves.
+      expect(Component, `${name} has no default export`).toBeTruthy();
+      expect(
+        typeof Component === 'function' || typeof Component === 'object',
+        `${name}'s default export is not a component`,
+      ).toBe(true);
       const err = tryRender(Component, { props: PROPS[name] || {} });
       if (err) {
         throw new Error(`${name} crashed on render: ${err.message}`);
@@ -138,8 +145,15 @@ describe('the specific bugs that shipped stay fixed', () => {
     expect(canOpenTxn({ collectionName: 'purchaseOrders', id: 'p1' }), 'a purchase bill must open').toBe(true);
     expect(txnTarget({ collectionName: 'purchaseOrders', id: 'p1' })).toBe('/purchase-view?id=p1');
 
+    // A receipt opens its OWN voucher — what was settled, what was withheld,
+    // what each bill still owes — not the invoice it happens to name. The
+    // voucher number column shows that invoice, so landing on the invoice is
+    // the plausible wrong behaviour and the one worth pinning down.
+    expect(canOpenTxn({ collectionName: 'payments', id: 'pay1' }), 'a receipt must open').toBe(true);
+    expect(txnTarget({ collectionName: 'payments', id: 'pay1' })).toBe('/payment-view?id=pay1');
+
     // These still have nowhere to go.
-    for (const c of ['payments', 'creditNotes', 'debitNotes', 'expenses']) {
+    for (const c of ['creditNotes', 'debitNotes', 'expenses']) {
       expect(canOpenTxn({ collectionName: c, id: 'x1' }), `${c} has no document view to open`).toBe(false);
     }
     // Ids are encoded, so one containing a slash or & cannot break the URL.
@@ -158,9 +172,12 @@ describe('the specific bugs that shipped stay fixed', () => {
     ];
     const { container } = renderScreen(TransactionsTab, { props: { rows, t: (k) => k } });
     const clickable = container.querySelectorAll('[role="button"]');
-    expect(clickable.length, 'the invoice row should be clickable; the payment row should not').toBe(1);
+    expect(clickable.length, 'both the bill and the receipt open').toBe(2);
     expect(clickable[0].textContent).toContain('MPW-001');
-    expect(clickable[0].getAttribute('tabindex'), 'a clickable row must be keyboard reachable').toBe('0');
+    expect(clickable[1].textContent).toContain('RCPT-01');
+    for (const row of clickable) {
+      expect(row.getAttribute('tabindex'), 'a clickable row must be keyboard reachable').toBe('0');
+    }
   });
 
   it('CreatePurchaseFlow mounts when opened from a supplier', async () => {
