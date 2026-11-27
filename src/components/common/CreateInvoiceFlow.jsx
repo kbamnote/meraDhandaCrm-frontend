@@ -93,6 +93,7 @@ const blankItem = () => ({
 // price a line exactly as a sales invoice does. Re-exported because callers
 // and tests have been importing it from here.
 import { lineArea, lineGross } from '../../utils/lineSize';
+import { FORM_MODAL_WIDTH } from '../../utils/formModal';
 
 export { lineArea, lineGross };
 
@@ -146,6 +147,7 @@ const DOC_TYPES = [
   { value: 'cash', label: 'Cash / Non-GST Bill' },
 ];
 const GST_RATES = ['0', '5', '12', '18', '28'];
+
 // Anything outside the usual slabs — 1.5% on job work, 0.25% on rough stones,
 // a state cess. Typed rather than chosen, so an unusual supply is not a reason
 // to leave the bill wrong.
@@ -670,6 +672,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
   // word "custom" where a percentage belongs.
   const billGst = form.gstRate === CUSTOM_RATE ? (Number(form.customRate) || 0) : (Number(form.gstRate) || 0);
 
+  // Does this bill carry GST at all? A cash bill, a composition dealer and a
+  // reverse-charge supply all collect none, and the Tax column is noise on
+  // every one of them.
+  const taxedBill = !isCash && !isComposition && !form.reverseCharge;
+
   const totals = useMemo(() => {
     const noTax = isCash || isComposition || form.reverseCharge;
     const invoiceRate = billGst;
@@ -808,7 +815,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
       // to save 18%: the screen showed one figure and the invoice kept another,
       // and an edit that changed only the rate appeared to do nothing at all.
       const billRate = billGst;
-      const lineRates = new Set(billed.map((it) => effectiveRate(it, billRate)));
+      const lineRates = new Set(billed.map((it) => effectiveRate(it, billGst)));
       const mixed = !noTaxDoc && lineRates.size > 1;
       const agreedRate = lineRates.size === 1 ? [...lineRates][0] : (Number(billRate) || 0);
       const body = {
@@ -870,7 +877,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         items: billed.map((it) => ({
           name: it.name, hsn: it.hsn, qty: Number(it.qty), rate: Number(it.rate),
           unit: it.unit || null, description: it.description || null,
-          taxRate: effectiveRate(it, billRate), itemId: it.itemId || null,
+          taxRate: effectiveRate(it, billGst), itemId: it.itemId || null,
           // Blank rows are the ones somebody opened and thought better of.
           extras: (it.extras || [])
             .filter((x) => (x.label || '').trim() || (x.value || '').trim() || Number(x.amount) > 0)
@@ -923,7 +930,11 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}>
-      <div className="card" style={{ maxWidth: 1300, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 28, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
+      {/* Effectively the whole screen. The line table carries eleven
+          columns and a 1300 cap left it scrolling sideways on a 1366 laptop,
+          which is what most of the shop works on. FORM_MODAL_WIDTH is shared
+          with the job card so the two cannot drift apart again. */}
+      <div className="card" style={{ maxWidth: FORM_MODAL_WIDTH, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 20, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
           <h3 style={{ margin: 0 }}>
             {isEdit ? `Edit Invoice ${invoice.invoiceNo || ''}` : 'Create Sales Invoice'}
@@ -1059,23 +1070,43 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
             <datalist id="line-job-cats">
               {jobCats.map((c) => <option key={c} value={c} />)}
             </datalist>
-            <div style={{ display: 'flex', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', padding: '0 2px 4px' }}>
-              {/* Must mirror the input row below field-for-field — the header
-                  was missing Unit entirely, so every label from Qty rightward
-                  sat over the wrong column. */}
-              <span style={{ width: 22 }}>No</span>
-              <span style={{ flex: 3 }}>Item / Service</span>
-              <span style={{ flex: 1.2, minWidth: 60 }}>HSN/SAC</span>
-              <span style={{ width: 68, textAlign: 'right' }}>Qty</span>
-              <span style={{ width: 58 }}>Unit</span>
-              <span style={{ flex: 1.2, minWidth: 82, textAlign: 'right' }}>Price (₹)</span>
-              <span style={{ width: 118 }}>Disc.</span>
-              {!isCash && !isComposition && !form.reverseCharge && <span style={{ width: 74 }}>GST %</span>}
-              <span style={{ flex: 1.2, textAlign: 'right' }}>Amount</span>
-              <span style={{ width: 62 }} />
-              <span style={{ width: 18 }} />
-            </div>
-            {items.map((it, i) => {
+            {/* The lines, as a ruled table — the shape a shop reads a job
+                sheet in, and the one the bill prints in. Everything a line
+                carries is in its own column, and the two fields that belong
+                UNDER another (the description under the name, what the rate
+                is per under the rate) sit inside that field's cell rather
+                than on a second row that breaks the columns. */}
+            <div style={{ overflowX: 'auto' }}>
+            <table className="line-table" style={{ minWidth: 1080 }}>
+              <colgroup>
+                <col style={{ width: 32 }} />
+                <col />
+                <col style={{ width: 128 }} />
+                <col style={{ width: 104 }} />
+                <col style={{ width: 164 }} />
+                <col style={{ width: 104 }} />
+                <col style={{ width: 128 }} />
+                <col style={{ width: 112 }} />
+                {taxedBill && <col style={{ width: 112 }} />}
+                <col style={{ width: 108 }} />
+                <col style={{ width: 62 }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="lt-c">No</th>
+                  <th>Items</th>
+                  <th>Category</th>
+                  <th>HSN/SAC</th>
+                  <th>Size · Weight</th>
+                  <th className="lt-r">Qty</th>
+                  <th className="lt-r">Price (₹)</th>
+                  <th>Discount ₹/%</th>
+                  {taxedBill && <th>Tax</th>}
+                  <th className="lt-r">Amount (₹)</th>
+                  <th />
+                </tr>
+              </thead>
+              {items.map((it, i) => {
               const gross = lineGross(it);
               const itemDisc = lineDiscount(it, gross);
               const lineExtras = lineExtrasTotal(it);
@@ -1098,111 +1129,176 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                 && !catalog.some((c) => String(c.name || '').trim().toLowerCase() === q);
               const trackable = picked && picked.trackStock !== 'no' && picked.type !== 'service';
               const overStock = trackable && picked.stock != null && (Number(it.qty) || 0) > Number(picked.stock);
+              const lineTax = round2((round2(amount + lineExtras) * effectiveRate(it, billGst)) / 100);
               return (
-                <div key={i}>
-                <div className="flex gap-2" style={{ marginBottom: 6, alignItems: 'center' }}>
-                  <span style={{ width: 22, fontSize: 12, color: 'var(--text3)' }}>{i + 1}</span>
-                  <div style={{ position: 'relative', flex: 3 }}>
-                    <input className="input" style={{ width: '100%' }} placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
-                    {(itemMatches.length > 0 || canCreate) && (
-                      <div className="card" style={{ position: 'absolute', zIndex: 5, left: 0, right: 0, top: '100%', marginTop: 2, padding: 0, maxHeight: 200, overflow: 'auto' }}>
-                        {itemMatches.map((p) => (
-                          <div key={p.id} onClick={() => pickCatalogItem(i, p)} style={{ padding: '7px 9px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
-                            <b>{p.name}</b>
-                            {p.sku ? <span style={{ color: 'var(--text3)', marginLeft: 6 }}>{p.sku}</span> : null}
-                            <span style={{ float: 'right', color: 'var(--text2)' }}>
-                              {p.trackStock !== 'no' && p.type !== 'service' && p.stock != null ? `stock ${Number(p.stock)}${p.unit ? ' ' + p.unit : ''}` : ''}
-                              {p.price ? ` · ₹${Number(p.price).toLocaleString('en-IN')}` : ''}
-                            </span>
-                          </div>
-                        ))}
-                        {/* Offered, never automatic. Creating an item behind
-                            someone's back would fill the catalog with typos,
-                            and a typo with an opening stock figure attached is
-                            worse than loose text. */}
-                        {canCreate && (
-                          <div
-                            onClick={() => setNewItemFor(i)}
-                            style={{ padding: '8px 9px', cursor: 'pointer', fontSize: 12.5, color: 'var(--primary, #2563EB)', fontWeight: 600, background: 'var(--surface2)' }}
-                          >
-                            + Add &ldquo;{it.name.trim()}&rdquo; to your items
-                            <span style={{ display: 'block', fontWeight: 400, fontSize: 11, color: 'var(--text3)' }}>
-                              so its stock is counted on every bill
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                <tbody key={i}>
+                <tr>
+                  <td className="lt-c lt-muted" style={{ paddingTop: 10 }}>{i + 1}</td>
+                  <td>
+                    <div className="lt-pop">
+                      <input className="input" placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
+                      {(itemMatches.length > 0 || canCreate) && (
+                        <div className="card" style={{ position: 'absolute', zIndex: 5, left: 0, right: 0, top: '100%', marginTop: 2, padding: 0, maxHeight: 200, overflow: 'auto' }}>
+                          {itemMatches.map((p) => (
+                            <div key={p.id} onClick={() => pickCatalogItem(i, p)} style={{ padding: '7px 9px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
+                              <b>{p.name}</b>
+                              {p.sku ? <span style={{ color: 'var(--text3)', marginLeft: 6 }}>{p.sku}</span> : null}
+                              <span style={{ float: 'right', color: 'var(--text2)' }}>
+                                {p.trackStock !== 'no' && p.type !== 'service' && p.stock != null ? `stock ${Number(p.stock)}${p.unit ? ' ' + p.unit : ''}` : ''}
+                                {p.price ? ` · ₹${Number(p.price).toLocaleString('en-IN')}` : ''}
+                              </span>
+                            </div>
+                          ))}
+                          {/* Offered, never automatic. Creating an item behind
+                              someone's back would fill the catalog with typos,
+                              and a typo with an opening stock figure attached is
+                              worse than loose text. */}
+                          {canCreate && (
+                            <div
+                              onClick={() => setNewItemFor(i)}
+                              style={{ padding: '8px 9px', cursor: 'pointer', fontSize: 12.5, color: 'var(--primary, #2563EB)', fontWeight: 600, background: 'var(--surface2)' }}
+                            >
+                              + Add &ldquo;{it.name.trim()}&rdquo; to your items
+                              <span style={{ display: 'block', fontWeight: 400, fontSize: 11, color: 'var(--text3)' }}>
+                                so its stock is counted on every bill
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {/* Printed under the item name on the bill, so it is typed
+                        under the item name here. */}
+                    <input
+                      className="input" style={{ fontSize: 11.5 }}
+                      placeholder="Description (optional) — printed under the item name"
+                      value={it.description}
+                      onChange={(e) => setItem(i, 'description', e.target.value)}
+                    />
                     {picked && (
-                      <div style={{ fontSize: 10.5, marginTop: 1, color: overStock ? 'var(--red, #DC2626)' : 'var(--text3)' }}>
+                      <div className="lt-muted" style={{ color: overStock ? 'var(--red, #DC2626)' : undefined, padding: '0 6px' }}>
                         {trackable ? `stock ${Number(picked.stock)}${picked.unit ? ' ' + picked.unit : ''}` : 'service / no stock tracking'}
-                        {overStock ? ` — qty exceeds available stock` : ''}
+                        {overStock ? ' — qty exceeds available stock' : ''}
                       </div>
                     )}
                     {/* Says the quiet part out loud: this line bills fine but
                         moves no stock, which is exactly the case that leaves a
                         stock report claiming goods that were sold months ago. */}
                     {!picked && canCreate && (
-                      <div style={{ fontSize: 10.5, marginTop: 1, color: 'var(--amber, #B45309)' }}>
+                      <div className="lt-muted" style={{ color: 'var(--amber, #B45309)', padding: '0 6px' }}>
                         not in your items — stock won&apos;t be counted for this line
                       </div>
                     )}
-                  </div>
+                  </td>
+                  <td>
+                    <input
+                      className="input" data-testid="line-category" list="line-job-cats"
+                      placeholder="Category" title="Which kind of work this line is"
+                      value={it.jobCategory}
+                      onChange={(e) => setItem(i, 'jobCategory', e.target.value)}
+                    />
+                  </td>
                   {/* HSN is a way IN to the catalog, not just a field to fill:
                       people work from a rate chart and know the code before the
                       name. Typing one that belongs to an item offers it. */}
-                  <div style={{ position: 'relative', flex: 1.2, minWidth: 60 }}>
-                    <input className="input" style={{ width: '100%' }} placeholder="HSN/SAC" value={it.hsn}
-                      onChange={(e) => setItem(i, 'hsn', e.target.value)} />
-                    {hsnMatches.length > 0 && (
-                      <div className="card" data-testid="hsn-matches" style={{ position: 'absolute', zIndex: 5, left: 0, minWidth: 220, top: '100%', marginTop: 2, padding: 0, maxHeight: 200, overflow: 'auto' }}>
-                        {hsnMatches.map((pr) => (
-                          <div key={pr.id} onClick={() => pickCatalogItem(i, pr)}
-                            style={{ padding: '7px 9px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
-                            <b>{pr.name}</b>
-                            <span style={{ float: 'right', color: 'var(--text2)' }}>{pr.hsn}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <input className="input input-num" style={{ width: 68 }} placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
-                  <input className="input" style={{ width: 58 }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
-                  <input className="input input-num" style={{ flex: 1.2, minWidth: 82 }} placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
+                  <td>
+                    <div className="lt-pop">
+                      <input className="input" placeholder="HSN/SAC" value={it.hsn}
+                        onChange={(e) => setItem(i, 'hsn', e.target.value)} />
+                      {hsnMatches.length > 0 && (
+                        <div className="card" data-testid="hsn-matches" style={{ position: 'absolute', zIndex: 5, left: 0, minWidth: 220, top: '100%', marginTop: 2, padding: 0, maxHeight: 200, overflow: 'auto' }}>
+                          {hsnMatches.map((pr) => (
+                            <div key={pr.id} onClick={() => pickCatalogItem(i, pr)}
+                              style={{ padding: '7px 9px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
+                              <b>{pr.name}</b>
+                              <span style={{ float: 'right', color: 'var(--text2)' }}>{pr.hsn}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  {/* The size the job was quoted at. Area is DERIVED and shown
+                      rather than typed, so the figure on the bill cannot
+                      disagree with the numbers beside it; nothing converts
+                      between units, so 8 × 5 inches stays 40 of them. */}
+                  <td>
+                    <div className="flex items-center" style={{ gap: 2 }}>
+                      <input className="input input-num" data-testid="line-length" type="number" min="0" step="any"
+                        placeholder="L" title="Length, in this line's unit"
+                        value={it.length} onChange={(e) => setItem(i, 'length', e.target.value)} />
+                      <span className="lt-muted">×</span>
+                      <input className="input input-num" data-testid="line-width" type="number" min="0" step="any"
+                        placeholder="W" title="Width, in this line's unit"
+                        value={it.width} onChange={(e) => setItem(i, 'width', e.target.value)} />
+                      <input className="input input-num" data-testid="line-weight" type="number" min="0" step="any"
+                        placeholder="Wt" title="Recorded on the bill; it does not price the line"
+                        value={it.weight} onChange={(e) => setItem(i, 'weight', e.target.value)} />
+                    </div>
+                    <div className="lt-muted" data-testid="line-area" style={{ padding: '2px 6px 0' }}>
+                      {lineArea(it) > 0
+                        ? <>Area <b>{lineArea(it)}</b>{it.unit ? ' ' + it.unit : ''}</>
+                        : 'Area —'}
+                    </div>
+                  </td>
+                  <td>
+                    <input className="input input-num" placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
+                    <input className="input" style={{ fontSize: 11.5, textAlign: 'right' }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
+                  </td>
+                  <td>
+                    <input className="input input-num" placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
+                    {/* Which figure the price multiplies. Offered only once
+                        there IS an area, because "× Area" against no area
+                        would price the line at zero. */}
+                    <select
+                      className="input" data-testid="line-rate-on" style={{ fontSize: 11.5 }}
+                      title="Is the price per piece, or per unit of area?"
+                      disabled={lineArea(it) <= 0}
+                      value={it.rateOn === 'area' && lineArea(it) > 0 ? 'area' : 'qty'}
+                      onChange={(e) => setItem(i, 'rateOn', e.target.value)}
+                    >
+                      <option value="qty">× Qty</option>
+                      <option value="area">× Area</option>
+                    </select>
+                  </td>
                   {/* Discount on this product only — % of the line or flat ₹.
                       Blank = none; the bill Discount below still applies. */}
-                  <div className="flex" style={{ width: 118, gap: 2 }}>
-                    <input
-                      className="input input-num"
-                      data-testid="line-disc"
-                      style={{ width: 66 }}
-                      placeholder="Disc"
-                      type="number"
-                      min="0"
-                      value={it.discountValue}
-                      onChange={(e) => setItem(i, 'discountValue', e.target.value)}
-                    />
-                    <select
-                      className="input"
-                      data-testid="line-disc-type"
-                      title="Discount as a % of this line, or a flat ₹ amount"
-                      style={{ width: 50, fontSize: 12, padding: '0 2px' }}
-                      value={it.discountType}
-                      onChange={(e) => setItem(i, 'discountType', e.target.value)}
-                    >
-                      <option value="percent">%</option>
-                      <option value="amount">₹</option>
-                    </select>
-                  </div>
+                  <td>
+                    <div className="flex" style={{ gap: 2 }}>
+                      <input
+                        className="input input-num"
+                        data-testid="line-disc"
+                        placeholder="Disc"
+                        type="number"
+                        min="0"
+                        value={it.discountValue}
+                        onChange={(e) => setItem(i, 'discountValue', e.target.value)}
+                      />
+                      <select
+                        className="input"
+                        data-testid="line-disc-type"
+                        title="Discount as a % of this line, or a flat ₹ amount"
+                        style={{ width: 46, fontSize: 12, padding: '0 2px' }}
+                        value={it.discountType}
+                        onChange={(e) => setItem(i, 'discountType', e.target.value)}
+                      >
+                        <option value="percent">%</option>
+                        <option value="amount">₹</option>
+                      </select>
+                    </div>
+                    {itemDisc > 0 && (
+                      <div className="lt-muted lt-r" style={{ padding: '2px 6px 0' }}>− {inr(itemDisc)}</div>
+                    )}
+                  </td>
                   {/* Blank = whatever the invoice's GST Rate is, so a normal
                       single-rate bill needs nothing here. */}
-                  {!isCash && !isComposition && !form.reverseCharge && (
-                    <div className="flex items-center" style={{ gap: 3 }}>
+                  {taxedBill && (
+                    <td>
                       <select
                         className="input"
                         data-testid="line-gst"
                         title={it.taxRate === '' ? `Taxed at the invoice rate (${billGst}%)` : 'This line has its own GST rate'}
-                        style={{ width: 74, fontSize: 12, color: it.taxRate === '' ? 'var(--text3)' : 'var(--text)' }}
+                        style={{ fontSize: 12, color: it.taxRate === '' ? 'var(--text3)' : 'var(--text)' }}
                         value={lineRateSelect(it.taxRate)}
                         onChange={(e) => setItem(i, 'taxRate', e.target.value)}
                       >
@@ -1219,167 +1315,136 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                           className="input input-num"
                           data-testid="line-custom-gst"
                           type="number" step="0.01" min="0" max="100"
-                          style={{ width: 52, fontSize: 12, padding: '0 4px' }}
                           placeholder="%"
                           title="This line's own GST %"
                           value={it.taxRate === CUSTOM_RATE ? '' : it.taxRate}
                           onChange={(e) => setItem(i, 'taxRate', e.target.value === '' ? CUSTOM_RATE : e.target.value)}
                         />
                       )}
-                    </div>
+                      {/* What that rate comes to on this line — the figure the
+                          customer checks, rather than one only the totals know. */}
+                      {lineTax > 0 && (
+                        <div className="lt-muted lt-r" style={{ padding: '2px 6px 0' }} data-testid="line-tax-amt">
+                          ({inr(lineTax)})
+                        </div>
+                      )}
+                    </td>
                   )}
-                  <span style={{ flex: 1.2, textAlign: 'right', fontSize: 13, fontWeight: 600 }} data-testid="line-amount">
+                  <td className="lt-amt" style={{ paddingTop: 10 }} data-testid="line-amount">
                     {inr(round2(amount + lineExtras))}
                     {lineExtras > 0 && (
-                      <span style={{ display: 'block', fontSize: 10.5, fontWeight: 400, color: 'var(--text3)' }}>
+                      <span className="lt-muted" style={{ display: 'block', fontWeight: 400 }}>
                         incl. {inr(lineExtras)} charges
                       </span>
                     )}
                     {itemDisc > 0 && (
-                      <span style={{ display: 'block', fontSize: 10.5, fontWeight: 400, color: 'var(--text3)' }}>
-                        <s>{inr(gross)}</s> − {inr(itemDisc)}
+                      <span className="lt-muted" style={{ display: 'block', fontWeight: 400 }}>
+                        <s>{inr(gross)}</s>
                       </span>
                     )}
-                  </span>
-                  {/* The offer inside the name dropdown is easy to miss, and it
-                      never appears at all for someone who starts from the HSN.
-                      This is the same dialog, always reachable. */}
-                  {!it.itemId && (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-xs"
-                      data-testid="new-item-btn"
-                      style={{ whiteSpace: 'nowrap', color: 'var(--primary, #2563EB)' }}
-                      title="Add this line to your items list"
-                      onClick={() => setNewItemFor(i)}
-                    >
-                      + Item
-                    </button>
-                  )}
-                  <button className="btn btn-ghost btn-xs" style={{ width: 18 }} onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))} disabled={items.length === 1}>×</button>
-                </div>
-                {/* Optional second line printed under the item name on the invoice. */}
-                <div className="flex gap-2" style={{ marginBottom: 8, alignItems: 'center' }}>
-                  <span style={{ width: 22 }} />
-                  <input
-                    className="input"
-                    style={{ flex: 1, fontSize: 12 }}
-                    placeholder="Description (optional) — printed under the item name"
-                    value={it.description}
-                    onChange={(e) => setItem(i, 'description', e.target.value)}
-                  />
-                  <span style={{ width: 18 }} />
-                </div>
-
-                {/* The job: what kind of work it is, and the size it was
-                    quoted at. All optional — a line that is just a count of
-                    things leaves it blank and prices on Qty exactly as before.
-
-                    Area is DERIVED (length x width x qty) and shown rather
-                    than typed, so the figure printed on the bill cannot
-                    disagree with the three numbers printed beside it. The
-                    unit is the line's own: an 8 x 5 inch job and a 4 x 8 foot
-                    job each read in their own unit, and nothing converts. */}
-                <div className="flex gap-2" style={{ marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ width: 22 }} />
-                  <input
-                    className="input" data-testid="line-category" list="line-job-cats"
-                    style={{ flex: 1.4, minWidth: 128, fontSize: 12 }}
-                    placeholder="Job category" title="Which kind of work this line is"
-                    value={it.jobCategory}
-                    onChange={(e) => setItem(i, 'jobCategory', e.target.value)}
-                  />
-                  <input
-                    className="input input-num" data-testid="line-length" style={{ width: 72, fontSize: 12 }}
-                    type="number" min="0" step="any" placeholder="Length" title="Length, in this line's unit"
-                    value={it.length} onChange={(e) => setItem(i, 'length', e.target.value)}
-                  />
-                  <span style={{ color: 'var(--text3)', fontSize: 12 }}>×</span>
-                  <input
-                    className="input input-num" data-testid="line-width" style={{ width: 72, fontSize: 12 }}
-                    type="number" min="0" step="any" placeholder="Width" title="Width, in this line's unit"
-                    value={it.width} onChange={(e) => setItem(i, 'width', e.target.value)}
-                  />
-                  <input
-                    className="input input-num" data-testid="line-weight" style={{ width: 78, fontSize: 12 }}
-                    type="number" min="0" step="any" placeholder="Weight"
-                    title="Recorded on the bill; it does not price the line"
-                    value={it.weight} onChange={(e) => setItem(i, 'weight', e.target.value)}
-                  />
-                  <span data-testid="line-area" style={{ fontSize: 12, color: 'var(--text2)', minWidth: 92 }}>
-                    {lineArea(it) > 0
-                      ? <>Area <b>{lineArea(it)}</b>{it.unit ? ' ' + it.unit : ''}</>
-                      : <span style={{ color: 'var(--text3)' }}>Area —</span>}
-                  </span>
-                  {/* Which figure the price multiplies. Offered only once
-                      there IS an area, because "Rate × Area" against no area
-                      would price the line at zero. */}
-                  <select
-                    className="input" data-testid="line-rate-on" style={{ width: 112, fontSize: 12 }}
-                    title="Is the price per piece, or per unit of area?"
-                    disabled={lineArea(it) <= 0}
-                    value={it.rateOn === 'area' && lineArea(it) > 0 ? 'area' : 'qty'}
-                    onChange={(e) => setItem(i, 'rateOn', e.target.value)}
-                  >
-                    <option value="qty">Rate × Qty</option>
-                    <option value="area">Rate × Area</option>
-                  </select>
-                  <span style={{ width: 18 }} />
-                </div>
+                  </td>
+                  <td className="lt-c" style={{ paddingTop: 8 }}>
+                    {/* The offer inside the name dropdown is easy to miss, and it
+                        never appears at all for someone who starts from the HSN.
+                        This is the same dialog, always reachable. */}
+                    {!it.itemId && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs"
+                        data-testid="new-item-btn"
+                        style={{ whiteSpace: 'nowrap', color: 'var(--primary, #2563EB)', padding: '0 2px' }}
+                        title="Add this line to your items list"
+                        onClick={() => setNewItemFor(i)}
+                      >
+                        + Item
+                      </button>
+                    )}
+                    <button className="btn btn-ghost btn-xs" title="Remove this line"
+                      onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))} disabled={items.length === 1}>×</button>
+                  </td>
+                </tr>
 
                 {/* Extra fields for THIS line. Descriptive — they print with
                     the item but do not change any total; Additional Charges
-                    below is what actually bills for something. */}
-                <div style={{ marginBottom: 8, marginLeft: 22 }}>
-                  {/* Two boxes per row, captioned the first time: "Details"
-                      alone did not read as "this is where the value goes". */}
-                  {(it.extras || []).length > 0 && (
-                    <div className="flex gap-2" style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 2 }}>
-                      <span style={{ width: 150 }}>Field name</span>
-                      <span style={{ width: 96 }}>Amount ₹</span>
-                      <span style={{ flex: 1 }}>Note (optional)</span>
-                      <span style={{ width: 18 }} />
-                    </div>
-                  )}
-                  {(it.extras || []).map((x, k) => (
-                    <div className="flex gap-2" key={k} style={{ marginBottom: 4, alignItems: 'center' }}>
-                      <input className="input" style={{ width: 150, fontSize: 12 }} placeholder="e.g. Transport"
-                        data-testid="line-extra-label" list={`xf${i}`}
-                        value={x.label} onChange={(e) => setExtra(i, k, 'label', e.target.value)} />
-                      <datalist id={`xf${i}`}>
-                        {EXTRA_PRESETS.map((p) => <option key={p} value={p} />)}
-                      </datalist>
-                      {/* An amount here is BILLED and taxed with the line. */}
-                      <input className="input input-num" style={{ width: 96, fontSize: 12 }}
-                        type="number" min="0" step="0.01" placeholder="0.00"
-                        data-testid="line-extra-amount" autoFocus={!!x.label && !x.amount}
-                        value={x.amount} onChange={(e) => setExtra(i, k, 'amount', e.target.value)} />
-                      <input className="input" style={{ flex: 1, fontSize: 12 }}
-                        placeholder="e.g. by road, delivered Sunday"
-                        data-testid="line-extra-value"
-                        value={x.value} onChange={(e) => setExtra(i, k, 'value', e.target.value)} />
-                      <button type="button" className="btn btn-ghost btn-xs" style={{ width: 18 }}
-                        title="Remove this field"
-                        onClick={() => removeExtra(i, k)}>×</button>
-                    </div>
-                  ))}
-                  {/* Said once, where the decision is made: this is a note on
-                      the line, not a charge. Billing for transport is what
-                      Additional Charges further down does. */}
-                  {(it.extras || []).length > 0 && (
-                    <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 4 }}>
-                      An amount is added to this line and taxed at its GST rate. Discounts do not apply to it.
-                    </div>
-                  )}
-                  <button type="button" className="btn btn-ghost btn-xs" data-testid="line-extra-add"
-                    style={{ fontSize: 11.5 }} onClick={() => addExtra(i)}>
-                    + Transport / Installation / other field
-                  </button>
-                </div>
-                </div>
+                    below is what actually bills for something. Full width
+                    under the row they belong to, so they cannot be mistaken
+                    for a column of their own. */}
+                <tr>
+                  <td />
+                  <td colSpan={taxedBill ? 10 : 9} style={{ paddingTop: 2, paddingBottom: 6 }}>
+                    {/* Two boxes per row, captioned the first time: "Details"
+                        alone did not read as "this is where the value goes". */}
+                    {(it.extras || []).length > 0 && (
+                      <div className="flex gap-2 lt-muted" style={{ marginBottom: 2 }}>
+                        <span style={{ width: 150 }}>Field name</span>
+                        <span style={{ width: 96 }}>Amount ₹</span>
+                        <span style={{ flex: 1 }}>Note (optional)</span>
+                        <span style={{ width: 18 }} />
+                      </div>
+                    )}
+                    {(it.extras || []).map((x, k) => (
+                      <div className="flex gap-2" key={k} style={{ marginBottom: 4, alignItems: 'center' }}>
+                        <input className="input" style={{ width: 150, fontSize: 12 }} placeholder="e.g. Transport"
+                          data-testid="line-extra-label" list={`xf${i}`}
+                          value={x.label} onChange={(e) => setExtra(i, k, 'label', e.target.value)} />
+                        <datalist id={`xf${i}`}>
+                          {EXTRA_PRESETS.map((pz) => <option key={pz} value={pz} />)}
+                        </datalist>
+                        {/* An amount here is BILLED and taxed with the line. */}
+                        <input className="input input-num" style={{ width: 96, fontSize: 12 }}
+                          type="number" min="0" step="0.01" placeholder="0.00"
+                          data-testid="line-extra-amount" autoFocus={!!x.label && !x.amount}
+                          value={x.amount} onChange={(e) => setExtra(i, k, 'amount', e.target.value)} />
+                        <input className="input" style={{ flex: 1, fontSize: 12 }}
+                          placeholder="e.g. by road, delivered Sunday"
+                          data-testid="line-extra-value"
+                          value={x.value} onChange={(e) => setExtra(i, k, 'value', e.target.value)} />
+                        <button type="button" className="btn btn-ghost btn-xs" style={{ width: 18 }}
+                          title="Remove this field"
+                          onClick={() => removeExtra(i, k)}>×</button>
+                      </div>
+                    ))}
+                    {/* Said once, where the decision is made: this is a note on
+                        the line, not a charge. Billing for transport is what
+                        Additional Charges further down does. */}
+                    {(it.extras || []).length > 0 && (
+                      <div className="lt-muted" style={{ marginBottom: 4 }}>
+                        An amount is added to this line and taxed at its GST rate. Discounts do not apply to it.
+                      </div>
+                    )}
+                    <button type="button" className="btn btn-ghost btn-xs" data-testid="line-extra-add"
+                      style={{ fontSize: 11.5 }} onClick={() => addExtra(i)}>
+                      + Transport / Installation / other field
+                    </button>
+                  </td>
+                </tr>
+                </tbody>
               );
             })}
-            <button className="btn btn-ghost btn-sm" onClick={() => setItems((a) => [...a, blankItem()])}>+ Add Item</button>
+              <tfoot>
+                <tr>
+                  <td colSpan={2}>
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--primary, #2563EB)' }}
+                      onClick={() => setItems((a) => [...a, blankItem()])}>+ Add Item</button>
+                  </td>
+                  <td colSpan={3} className="lt-r">Items subtotal</td>
+                  <td className="lt-r" data-testid="lines-qty-total">
+                    {items.reduce((a, it) => a + (Number(it.qty) || 0), 0)}
+                  </td>
+                  <td />
+                  <td />
+                  {taxedBill && <td />}
+                  <td className="lt-amt" data-testid="lines-amount-total">
+                    {inr(round2(items.reduce((a, it) => {
+                      const g = lineGross(it);
+                      return a + round2(g - lineDiscount(it, g)) + lineExtrasTotal(it);
+                    }, 0)))}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+            </div>
 
             {/* Always shown, even with nothing uploaded — hiding it meant
                 nobody could tell the option existed. Without the documents on

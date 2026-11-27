@@ -160,9 +160,10 @@ describe('the job card shows its lines the way the bill does', () => {
     expect(screen.getByTestId('job-amount').value).toBe('448');
   });
 
-  it('shows no line table on a card that has none', async () => {
+  it('a card with no lines still shows the empty table, as the bill does', async () => {
     openCard({ id: 'j2', clientName: 'B', work: 'Just a note' });
     await waitFor(() => expect(screen.getByTestId('job-amount')).toBeTruthy());
-    expect(screen.queryByTestId('job-lines')).toBeNull();
+    expect(screen.getByTestId('job-lines')).toBeTruthy();
+    expect(screen.queryAllByTestId('job-line')).toHaveLength(0);
   });
 });

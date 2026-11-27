@@ -13,6 +13,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderScreen } from './renderScreen.jsx';
+import { FORM_MODAL_WIDTH } from '../src/utils/formModal.js';
 
 vi.mock('../src/services/realtime.js', () => ({
   db: {}, socket: { on() {}, off() {}, emit() {} },
@@ -38,17 +39,17 @@ const shellWidth = () => {
 };
 
 describe('the job card and the bill open at the same size', () => {
-  it('the bill form is the wide one it has always been', async () => {
+  it('the bill form opens at the shared width', async () => {
     renderScreen(CreateInvoiceFlow, { props: { onClose: () => {}, onCreated: () => {} } });
     fireEvent.click(screen.getByText(/GST Tax Invoice/i));
     await waitFor(() => expect(screen.getAllByPlaceholderText('Item').length).toBeGreaterThan(0));
-    expect(shellWidth()).toBe(1300);
+    expect(shellWidth()).toBe(FORM_MODAL_WIDTH);
   });
 
   it('and the job card now matches it', async () => {
     renderScreen(NewJobModal, { props: { onClose: () => {}, onCreated: () => {} } });
     await waitFor(() => expect(screen.getByTestId('job-amount')).toBeTruthy());
-    expect(shellWidth()).toBe(1300);
+    expect(shellWidth()).toBe(FORM_MODAL_WIDTH);
   });
 });
 
@@ -60,9 +61,12 @@ describe('the card writes lines the way the bill does', () => {
 
   it('a line can be typed straight in, as on the bill', async () => {
     await openCard();
-    // The search above is the way to a CATALOG item; work nobody stocks is
-    // still work, and the bill has always allowed it.
-    expect(screen.queryByTestId('job-lines')).toBeNull();
+    // The table is there from the start, headed and empty, exactly as the
+    // bill's is — a card with no lines yet should still show you where they
+    // go. The search above is the way to a CATALOG item; work nobody stocks
+    // is still work, and the bill has always allowed it.
+    expect(screen.getByTestId('job-lines')).toBeTruthy();
+    expect(screen.queryAllByTestId('job-line')).toHaveLength(0);
     fireEvent.click(screen.getByTestId('job-add-line'));
     await waitFor(() => expect(screen.getAllByTestId('job-line')).toHaveLength(1));
     expect(screen.getByTestId('job-line-name').value).toBe('');
@@ -88,15 +92,20 @@ describe('the card writes lines the way the bill does', () => {
     expect(first.firstChild.textContent).toBe('1');
   });
 
-  it('the grid defines exactly as many tracks as a row has cells', async () => {
-    // The real alignment invariant. A row with more cells than the grid has
-    // tracks wraps onto a second line and the table reads as nonsense.
+  it('the columns, the header and a row all agree on how many there are', async () => {
+    // The alignment invariant, now that it is a real table: a row with more
+    // cells than the header has columns pushes everything out of line, and a
+    // colgroup that disagrees sizes the wrong ones.
     await openCard();
     fireEvent.click(screen.getByTestId('job-add-line'));
     await waitFor(() => expect(screen.getAllByTestId('job-line')).toHaveLength(1));
-    const row = screen.getAllByTestId('job-line')[0];
-    const tracks = row.style.gridTemplateColumns.trim().split(/\s+/).length;
-    expect(tracks, 'grid tracks vs cells').toBe(row.children.length);
+    const table = screen.getByTestId('job-lines').querySelector('table.line-table');
+    expect(table, 'the lines are in a ruled table').toBeTruthy();
+    const cols = table.querySelectorAll('colgroup col').length;
+    const heads = table.querySelectorAll('thead th').length;
+    const cells = screen.getAllByTestId('job-line')[0].children.length;
+    expect(heads, 'header columns vs colgroup').toBe(cols);
+    expect(cells, 'row cells vs colgroup').toBe(cols);
   });
 
   it('every row holds as many cells as the header', async () => {
