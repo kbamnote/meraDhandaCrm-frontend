@@ -16,7 +16,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ordersApi, uploadApi } from '../../services/api';
+import { ordersApi, uploadApi, productionTypesApi } from '../../services/api';
+import { lineArea, lineGross } from '../../utils/lineSize';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
 
@@ -42,6 +43,32 @@ function JobSection({ icon, title, children }) {
 }
 
 const lbl = { fontSize: 12, color: 'var(--text2)', marginBottom: 3, display: 'block' };
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+// Plain rupees, no symbol: the column is already headed Amount and the
+// figures have to line up under each other.
+const inrPlain = (n) => round2(n).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+/**
+ * A job line, in the same shape an invoice line takes.
+ *
+ * The names match CreateInvoiceFlow's blankItem() deliberately: the bill
+ * raised from a job inherits these lines whole, so a mismatch here would
+ * silently drop a size or a catalog link on the way to the invoice — and
+ * with the catalog link goes the stock movement.
+ */
+const blankLine = () => ({
+  name: '', jobCategory: '', length: '', width: '', weight: '',
+  qty: '1', unit: '', rate: '', hsn: '',
+  // Both ids, same catalog item: the job's own screens read productId and an
+  // invoice reads itemId.
+  productId: null, itemId: null,
+  rateOn: 'qty',
+});
+
+// Category, Particular, L, W, Wt, Qty, Unit, Rate, Amount, ✕
+const JOB_COLS = '1.1fr 1.6fr 52px 52px 52px 58px 56px 68px 86px 20px';
+const cell = { fontSize: 12, padding: '4px 6px', width: '100%' };
+const numCell = { ...cell, textAlign: 'right' };
 const asArr = (d) => (Array.isArray(d) ? d : d ? Object.values(d) : []);
 const idOf = (x) => x.id || x._id;
 
@@ -79,7 +106,12 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
     advance: job.advance != null ? String(job.advance) : '',
     description: job.description || '',
   } : { ...BLANK, ...(prefill || {}) }));
-  const [items, setItems] = useState(() => (Array.isArray(job && job.items) ? job.items : []));
+  // The job's lines, in the same shape an invoice line takes — so the bill
+  // raised from this job inherits them whole, catalog link and all, instead
+  // of one line of free text that counts no stock.
+  const [items, setItems] = useState(() => (Array.isArray(job && job.items)
+    ? job.items.map((it) => ({ ...blankLine(), ...it, qty: it.qty != null ? String(it.qty) : '1' }))
+    : []));
   const [attachments, setAttachments] = useState(() => (Array.isArray(job && job.attachments) ? job.attachments : []));
   // Delivery time as 12-hour + AM/PM. Stored as "5:00 PM" to match the format
   // already used by every existing job (170 of 180 carried this shape).
@@ -102,6 +134,15 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
   // One box that searches AND lists: it used to be a search field beside a
   // dropdown, so the list only narrowed if you typed BEFORE opening it — and
   // opening it first showed hundreds of products in DOM order.
+  const [jobCats, setJobCats] = useState([]);
+  useEffect(() => {
+    productionTypesApi.list()
+      .then((r) => setJobCats((Array.isArray(r) ? r : [])
+        .filter((d) => d && d.enabled !== false)
+        .map((d) => d.name)
+        .filter(Boolean)))
+      .catch(() => setJobCats([]));   // a card must still be writable offline
+  }, []);
   const [prodSearch, setProdSearch] = useState('');
   const [prodOpen, setProdOpen] = useState(false);
   const [picked, setPicked] = useState(null);   // the chosen product, if any
@@ -185,9 +226,25 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
     const name = picked ? (picked.name || picked.title) : prodSearch.trim();
     if (!name) return;
     const p = picked;
-    setItems((arr) => [...arr, { name, qty: Number(prodQty) || 1, productId: p ? idOf(p) : null }]);
+    setItems((arr) => [...arr, {
+      ...blankLine(),
+      name,
+      qty: String(Number(prodQty) || 1),
+      // Both names: the job's own screens read productId, an invoice reads
+      // itemId, and it is the SAME catalog item. Carrying both is what lets
+      // a bill raised from this job move stock.
+      productId: p ? idOf(p) : null,
+      itemId: p ? idOf(p) : null,
+      unit: (p && p.unit) || '',
+      rate: p && p.rate != null ? String(p.rate) : '',
+      hsn: (p && p.hsn) || '',
+    }]);
     setPicked(null); setProdSearch(''); setProdQty('');
   };
+
+  // Every line on the job, totalled the way the invoice totals them.
+  const linesTotal = round2(items.reduce((a, it) => a + lineGross(it), 0));
+  const setLine = (i, k, v) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
 
   const suggestDate = () => {
     // Most urgent = same day; urgent = next day; otherwise size-based.
@@ -232,7 +289,31 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
         creditLimit: form.creditLimit ? Number(form.creditLimit) : null,
         amount: form.amount === '' ? null : Number(form.amount),
         advance: form.advance === '' ? null : Number(form.advance),
-        items,
+        // Saved as numbers, because an input hands back strings and the next
+        // screen to read these — the bill, the materials picker — does
+        // arithmetic on them. Blank stays blank rather than becoming 0: a
+        // line with no width is a line with no width, not one 0 wide.
+        items: items
+          .filter((it) => String(it.name || '').trim())
+          .map((it) => {
+            const n = (v) => (String(v ?? '').trim() === '' || !(Number(v) > 0) ? null : Number(v));
+            return {
+              ...it,
+              name: String(it.name).trim(),
+              jobCategory: String(it.jobCategory || '').trim() || null,
+              unit: String(it.unit || '').trim() || null,
+              hsn: String(it.hsn || '').trim() || null,
+              qty: Number(it.qty) || 0,
+              rate: n(it.rate),
+              length: n(it.length),
+              width: n(it.width),
+              weight: n(it.weight),
+              rateOn: it.rateOn === 'area' ? 'area' : 'qty',
+              // What the line comes to, stamped so the job's own screens and
+              // the WhatsApp summary need not re-derive it.
+              amount: lineGross(it),
+            };
+          }),
         attachments,
         deliveryTime: (dh !== '' && dm !== '') ? `${dh}:${dm} ${dap}` : null,
       };
@@ -377,6 +458,12 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
           </div>
           <div className="form-group">
             <label style={lbl}>🛍 Products/Items (optional — product list se select karein)</label>
+            {/* Job categories from the shop's Production Types, so the card
+                and the bill speak the same language. Suggestions, not a
+                closed list — a one-off job is still a job. */}
+            <datalist id="job-line-cats">
+              {jobCats.map((c) => <option key={c} value={c} />)}
+            </datalist>
             <div className="flex gap-2">
               <div style={{ position: 'relative', flex: 1 }}>
                 <input
@@ -431,12 +518,83 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
             {prodOpen && (
               <div onClick={() => setProdOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
             )}
-            {items.map((it, i) => (
-              <div key={i} className="flex items-center justify-between" style={{ fontSize: 13, padding: '4px 0' }}>
-                <span>• {it.name} × {it.qty}</span>
-                <button type="button" className="btn btn-ghost btn-xs" onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))}>✕</button>
+            {/* The lines, laid out as they are on the bill — so what is
+                quoted here is what gets billed, and the catalog link that
+                moves stock survives the trip. Everything but the name is
+                optional: a job that is just "500 visiting cards" fills in
+                Qty and nothing else. */}
+            {items.length > 0 && (
+              <div style={{ marginTop: 8, overflowX: 'auto' }} data-testid="job-lines">
+                <div style={{ minWidth: 640 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: JOB_COLS, gap: 6, fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', padding: '0 2px 4px' }}>
+                    <span>Category</span><span>Particular</span>
+                    <span style={{ textAlign: 'right' }}>L</span>
+                    <span style={{ textAlign: 'right' }}>W</span>
+                    <span style={{ textAlign: 'right' }}>Wt.</span>
+                    <span style={{ textAlign: 'right' }}>Qty</span>
+                    <span>Unit</span>
+                    <span style={{ textAlign: 'right' }}>Rate</span>
+                    <span style={{ textAlign: 'right' }}>Amount</span>
+                    <span />
+                  </div>
+                  {items.map((it, i) => (
+                    <div key={i} data-testid="job-line" style={{ display: 'grid', gridTemplateColumns: JOB_COLS, gap: 6, alignItems: 'center', padding: '3px 0' }}>
+                      <input className="input" data-testid="job-line-category" list="job-line-cats" style={cell}
+                        placeholder="Category" value={it.jobCategory || ''}
+                        onChange={(e) => setLine(i, 'jobCategory', e.target.value)} />
+                      <input className="input" data-testid="job-line-name" style={cell}
+                        placeholder="Particular" value={it.name || ''}
+                        onChange={(e) => setLine(i, 'name', e.target.value)} />
+                      <input className="input" data-testid="job-line-length" style={numCell} type="number" min="0" step="any"
+                        placeholder="L" value={it.length || ''} onChange={(e) => setLine(i, 'length', e.target.value)} />
+                      <input className="input" style={numCell} type="number" min="0" step="any"
+                        placeholder="W" value={it.width || ''} onChange={(e) => setLine(i, 'width', e.target.value)} />
+                      <input className="input" style={numCell} type="number" min="0" step="any"
+                        placeholder="Wt" title="Recorded on the job; it does not price the line"
+                        value={it.weight || ''} onChange={(e) => setLine(i, 'weight', e.target.value)} />
+                      <input className="input" data-testid="job-line-qty" style={numCell} type="number" min="0" step="any"
+                        placeholder="Qty" value={it.qty} onChange={(e) => setLine(i, 'qty', e.target.value)} />
+                      <input className="input" style={cell} placeholder="Unit"
+                        value={it.unit || ''} onChange={(e) => setLine(i, 'unit', e.target.value)} />
+                      <input className="input" data-testid="job-line-rate" style={numCell} type="number" min="0" step="any"
+                        placeholder="Rate" value={it.rate || ''} onChange={(e) => setLine(i, 'rate', e.target.value)} />
+                      <span style={{ textAlign: 'right', fontSize: 12, fontWeight: 600 }} data-testid="job-line-amount">
+                        {inrPlain(lineGross(it))}
+                        {/* The area the price was taken on, when it was. */}
+                        {lineArea(it) > 0 && (
+                          <span style={{ display: 'block', fontWeight: 400, fontSize: 10, color: 'var(--text3)' }}>
+                            {lineArea(it)}{it.unit ? ' ' + it.unit : ''}
+                            {it.rateOn === 'area' ? ' × rate' : ''}
+                          </span>
+                        )}
+                      </span>
+                      <button type="button" className="btn btn-ghost btn-xs" style={{ width: 20 }}
+                        onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))}>✕</button>
+                    </div>
+                  ))}
+                  {/* Charge by the area instead of the piece, per line. Shown
+                      only for a line that HAS an area, because "per area"
+                      with no area would price it at zero. */}
+                  {items.some((it) => lineArea(it) > 0) && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '6px 2px 0', fontSize: 11.5, color: 'var(--text2)' }}>
+                      {items.map((it, i) => (lineArea(it) > 0 ? (
+                        <label key={i} className="flex items-center" style={{ gap: 4 }}>
+                          <input type="checkbox" data-testid="job-line-per-area"
+                            checked={it.rateOn === 'area'}
+                            onChange={(e) => setLine(i, 'rateOn', e.target.checked ? 'area' : 'qty')} />
+                          {it.name || `Line ${i + 1}`}: rate per area
+                        </label>
+                      ) : null))}
+                    </div>
+                  )}
+                  <div style={{ display: 'grid', gridTemplateColumns: JOB_COLS, gap: 6, padding: '6px 2px 0', borderTop: '1px solid var(--border)', marginTop: 4, fontWeight: 700, fontSize: 12 }}>
+                    <span style={{ gridColumn: '1 / 9', textAlign: 'right' }}>Total</span>
+                    <span style={{ textAlign: 'right' }} data-testid="job-lines-total">{inrPlain(linesTotal)}</span>
+                    <span />
+                  </div>
+                </div>
               </div>
-            ))}
+            )}
           </div>
           <div className="flex gap-2">
             <div className="form-group" style={{ flex: 1 }}>
@@ -460,6 +618,16 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
               <label style={lbl}>Order Amount ₹</label>
               <input className="input" type="number" min="0" step="0.01" placeholder="0" data-testid="job-amount"
                 value={form.amount} onChange={(e) => set('amount', e.target.value)} />
+              {/* Offered, not imposed. What was agreed at the shop is often a
+                  round figure the lines do not add up to, and overwriting it
+                  would lose the only record of what the customer was told. */}
+              {linesTotal > 0 && round2(Number(form.amount) || 0) !== linesTotal && (
+                <button type="button" className="btn btn-ghost btn-xs" data-testid="job-use-lines-total"
+                  style={{ padding: '2px 0', color: 'var(--primary, #2563EB)', fontSize: 11.5 }}
+                  onClick={() => set('amount', String(linesTotal))}>
+                  Lines come to ₹{inrPlain(linesTotal)} — use it
+                </button>
+              )}
             </div>
             <div className="form-group" style={{ flex: 1 }}>
               <label style={lbl}>Advance ₹</label>

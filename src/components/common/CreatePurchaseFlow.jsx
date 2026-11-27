@@ -58,20 +58,10 @@ const blankItem = () => ({
   jobCategory: '', length: '', width: '', weight: '', rateOn: 'qty',
 });
 
-/** Length x width x qty, in the line's own unit. Nothing is converted. */
-export const lineArea = (it) => {
-  const l = Number(it && it.length) || 0;
-  const w = Number(it && it.width) || 0;
-  const q = Number(it && it.qty) || 0;
-  return l > 0 && w > 0 ? round2(l * w * q) : 0;
-};
+// One copy of the size rule, shared with the sales invoice and the job card.
+import { lineArea, lineGross } from '../../utils/lineSize';
 
-/** What the line comes to before discount. Mirrors sizeOf() on the server. */
-export const lineGross = (it) => {
-  const area = lineArea(it);
-  const basis = it && it.rateOn === 'area' && area > 0 ? area : (Number(it && it.qty) || 0);
-  return round2(basis * (Number(it && it.rate) || 0));
-};
+export { lineArea, lineGross };
 
 const partyName = (v) => (v && (v.name || v.company || v.title)) || '';
 const partyPhone = (v) => (v && (v.phone || v.mobile || v.contact)) || '';

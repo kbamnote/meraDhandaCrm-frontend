@@ -89,29 +89,51 @@ const blankItem = () => ({
   jobCategory: '', length: '', width: '', weight: '', rateOn: 'qty',
 });
 
-/**
- * The area a line covers: length x width x qty, in whatever unit the line
- * names. Nothing is converted — an 8 x 5 inch offset job and a 4 x 8 foot
- * flex job each multiply out in their own unit, which is the one shown
- * beside the figure.
- */
-export const lineArea = (it) => {
-  const l = Number(it && it.length) || 0;
-  const w = Number(it && it.width) || 0;
-  const q = Number(it && it.qty) || 0;
-  return l > 0 && w > 0 ? round2(l * w * q) : 0;
-};
+// The size rule lives in one place — the job card and the purchase bill
+// price a line exactly as a sales invoice does. Re-exported because callers
+// and tests have been importing it from here.
+import { lineArea, lineGross } from '../../utils/lineSize';
+
+export { lineArea, lineGross };
 
 /**
- * What the line comes to before any discount — the rate times whichever
- * basis it is charged on. Mirrors sizeOf()/priceLines() on the server, so
- * the figure on screen is the figure that gets saved.
+ * A job-card line, as an invoice line.
+ *
+ * Billing a job used to put ONE free-text line on the bill — the whole of
+ * `job.work` as a sentence — so the catalog link never arrived and the
+ * invoice moved no stock for goods that had just left the shop. The job's
+ * own lines carry that link (a job calls it `productId`, an invoice
+ * `itemId`; it is the same catalog item), along with the category and the
+ * size the work was quoted at.
+ *
+ * Everything is stringified because the form's inputs are controlled and a
+ * number would make them read-only until first edited.
  */
-export const lineGross = (it) => {
-  const area = lineArea(it);
-  const basis = it && it.rateOn === 'area' && area > 0 ? area : (Number(it && it.qty) || 0);
-  return round2(basis * (Number(it && it.rate) || 0));
-};
+export function jobItemToLine(it) {
+  const str = (v) => (v == null || v === '' ? '' : String(v));
+  return {
+    ...blankItem(),
+    name: str(it && it.name),
+    itemId: (it && (it.itemId || it.productId)) || null,
+    hsn: str(it && it.hsn),
+    unit: str(it && it.unit),
+    qty: it && it.qty != null ? String(it.qty) : '1',
+    rate: str(it && it.rate),
+    jobCategory: str(it && it.jobCategory),
+    length: str(it && it.length),
+    width: str(it && it.width),
+    weight: str(it && it.weight),
+    rateOn: it && it.rateOn === 'area' ? 'area' : 'qty',
+  };
+}
+
+/** The lines a bill opens with when it is raised against a job. */
+export function linesFromJob(job) {
+  const items = Array.isArray(job && job.items) ? job.items.filter((it) => it && String(it.name || '').trim()) : [];
+  // A job written before lines existed — or one filled in as free text —
+  // still opens the way it always did, with its work as a single line.
+  return items.length ? items.map(jobItemToLine) : [{ ...blankItem(), name: (job && job.work) || '' }];
+}
 
 // The ones people reach for most, offered as a starting label so nobody
 // has to think of the word. Anything else can be typed over it.
@@ -438,7 +460,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
         discountType: it.discountType === 'amount' ? 'amount' : 'percent',
         discountValue: it.discountValue != null ? String(it.discountValue) : '',
       }))
-      : [job ? { ...blankItem(), name: job.work || '' } : blankItem()]
+      : (job ? linesFromJob(job) : [blankItem()])
   );
   const [attachments, setAttachments] = useState(seed?.attachments || []);
   // Freight, packing, insurance — charged alongside the goods. Untaxed unless

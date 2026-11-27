@@ -86,7 +86,10 @@ describe('the product box', () => {
     expect(screen.queryByTestId('product-list'), 'closes once chosen').toBeNull();
     fireEvent.change(screen.getByPlaceholderText('Qty'), { target: { value: '250' } });
     addLine();
-    expect(await screen.findByText('• Wedding Card — Gold × 250')).toBeTruthy();
+    // The line now lands in the bill-shaped table, not a bullet list.
+    await waitFor(() => expect(screen.getAllByTestId('job-line')).toHaveLength(1));
+    expect(screen.getByTestId('job-line-name').value).toBe('Wedding Card — Gold');
+    expect(screen.getByTestId('job-line-qty').value).toBe('250');
     // And the box is cleared, ready for the next line.
     expect(box().value).toBe('');
   });
@@ -105,7 +108,9 @@ describe('a product that is not on the list yet', () => {
     // Chosen straight away, so the next click is + Add and nothing else.
     await waitFor(() => expect(box().value).toBe('Mug Printing'));
     addLine();
-    expect(await screen.findByText('• Mug Printing × 1')).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByTestId('job-line')).toHaveLength(1));
+    expect(screen.getByTestId('job-line-name').value).toBe('Mug Printing');
+    expect(screen.getByTestId('job-line-qty').value).toBe('1');
   });
 
   it('appears in the list afterwards, without reloading the form', async () => {
@@ -138,7 +143,8 @@ describe('a product that is not on the list yet', () => {
     await openForm();
     type('Some one-off work');
     addLine();
-    expect(await screen.findByText('• Some one-off work × 1')).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByTestId('job-line')).toHaveLength(1));
+    expect(screen.getByTestId('job-line-name').value).toBe('Some one-off work');
     expect(created, 'nothing was added to the catalog').toHaveLength(0);
   });
 });
