@@ -99,9 +99,12 @@ describe('the invoice prints the job columns only when a line uses them', () => 
       qty: 2, rate: 7, amount: 448, tax: 80.64,
     }] });
     const h = headers();
-    for (const col of ['CATEGORY', 'SIZE', 'WT.', 'AREA', 'GST', 'TAX AMT', 'AMOUNT', 'G TOTAL']) {
+    for (const col of ['CATEGORY', 'SIZE', 'AREA', 'GST', 'TAX AMT', 'AMOUNT', 'G TOTAL']) {
       expect(h, `${col} is missing`).toContain(col);
     }
+    // Weight is not one of them. Nothing can be written with a weight any
+    // more — nothing priced from it — so the column would be dashes.
+    expect(h).not.toContain('WT.');
   });
 
   it('shows the size, the area with its unit, and the line gross', () => {
@@ -120,7 +123,8 @@ describe('the invoice prints the job columns only when a line uses them', () => 
     expect(txt).toContain('per area');
   });
 
-  it('a weight is printed but never prices the line', () => {
+  it('a document that DOES carry a weight still prints it', async () => {
+    // A bill written while the field existed has to reprint as it was issued.
     const { container } = show({ ...BASE, items: [{
       name: 'Metal plate', jobCategory: 'Metal Marking', unit: 'Pcs',
       weight: 2.5, qty: 100, rate: 10, amount: 1000, tax: 180,

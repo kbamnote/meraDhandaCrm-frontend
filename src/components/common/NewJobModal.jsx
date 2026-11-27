@@ -19,6 +19,7 @@ import { createPortal } from 'react-dom';
 import { ordersApi, uploadApi, productionTypesApi } from '../../services/api';
 import { lineArea, lineGross } from '../../utils/lineSize';
 import { FORM_MODAL_WIDTH } from '../../utils/formModal';
+import UnitSelect from './UnitSelect';
 import { useT } from '../../i18n/LanguageContext';
 import { showToast } from './toast';
 
@@ -556,15 +557,14 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
             <div style={{ marginTop: 8, overflowX: 'auto' }} data-testid="job-lines">
               <table className="line-table" style={{ minWidth: 1360 }}>
                 <colgroup>
-                  <col style={{ width: 30 }} />
+                  <col style={{ width: 44 }} />
                   <col style={{ width: 118 }} />
                   <col />
-                  <col style={{ width: 58 }} />
-                  <col style={{ width: 58 }} />
-                  <col style={{ width: 58 }} />
                   <col style={{ width: 62 }} />
-                  <col style={{ width: 80 }} />
                   <col style={{ width: 62 }} />
+                  <col style={{ width: 66 }} />
+                  <col style={{ width: 84 }} />
+                  <col style={{ width: 92 }} />
                   <col style={{ width: 84 }} />
                   <col style={{ width: 92 }} />
                   <col style={{ width: 88 }} />
@@ -580,7 +580,6 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
                     <th>Particular</th>
                     <th className="lt-r">Length</th>
                     <th className="lt-r">Width</th>
-                    <th className="lt-r">Weight</th>
                     <th className="lt-r">Qty</th>
                     <th className="lt-r">Area</th>
                     <th>Unit</th>
@@ -625,11 +624,6 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
                           value={it.width || ''} onChange={(e) => setLine(i, 'width', e.target.value)} />
                       </td>
                       <td>
-                        <input className="input input-num" data-testid="job-line-weight" type="number" min="0" step="any"
-                          placeholder="Wt" title="Recorded on the job; it does not price the line"
-                          value={it.weight || ''} onChange={(e) => setLine(i, 'weight', e.target.value)} />
-                      </td>
-                      <td>
                         <input className="input input-num" data-testid="job-line-qty" type="number" min="0" step="any"
                           placeholder="Qty" value={it.qty} onChange={(e) => setLine(i, 'qty', e.target.value)} />
                       </td>
@@ -639,8 +633,7 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
                         {lineArea(it) > 0 ? lineArea(it) : <span className="lt-muted">—</span>}
                       </td>
                       <td>
-                        <input className="input" style={{ fontSize: 12 }} placeholder="Unit"
-                          value={it.unit || ''} onChange={(e) => setLine(i, 'unit', e.target.value)} />
+                        <UnitSelect testId="job-line-unit" value={it.unit} onChange={(v) => setLine(i, 'unit', v)} />
                       </td>
                       <td>
                         <input className="input input-num" data-testid="job-line-rate" type="number" min="0" step="any"
@@ -707,7 +700,7 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
                         + Add line
                       </button>
                     </td>
-                    <td colSpan={4} className="lt-r">Items subtotal</td>
+                    <td colSpan={3} className="lt-r">Items subtotal</td>
                     <td className="lt-r" data-testid="job-lines-qty">
                       {items.reduce((a, it) => a + (Number(it.qty) || 0), 0)}
                     </td>

@@ -507,6 +507,11 @@ export const accountingApi = {
   // The statutory sections plus any this shop added. Each carries
   // { code, name, defaultRate, custom }.
   tdsSections: ()      => api.get('/accounting/tds/sections').then(r => r.data),
+  // What a line is measured in. Not module-gated: it is a picker on the
+  // line of a bill, and whoever may write one must be able to say what it
+  // is measured in.
+  units:         () => api.get('/accounting/units').then(r => r.data),
+  addUnit:       (name) => api.post('/accounting/units', { name }).then(r => r.data),
   addTdsRate: (body)   => api.post('/accounting/tds/rates', body).then(r => r.data),
   deleteTdsRate: (id)  => api.delete(`/accounting/tds/rates/${id}`).then(r => r.data),
   tdsList:     ()      => api.get('/accounting/tds').then(r => r.data),

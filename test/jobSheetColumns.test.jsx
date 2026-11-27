@@ -8,8 +8,9 @@
  * sheet's order so neither screen can quietly drift from it or from the other.
  *
  * The sheet's second size column is labelled "Weight", but its arithmetic on
- * every row is Length × Width × Qty, so that column is a WIDTH. Both are
- * here: Width feeds the area, Weight is recorded only.
+ * every row is Length × Width × Qty — so it is a WIDTH, and that is what the
+ * column is called here. There is no weight column: nothing priced from one,
+ * so it was a column of blanks on every bill.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
@@ -28,7 +29,7 @@ const { default: NewJobModal } = await import('../src/components/common/NewJobMo
 // Unit · Rate · Amount · HSN Code — everything up to the tax columns, which
 // the two screens differ on only by the bill's Discount.
 const SHEET_HEAD = [
-  'Sr No.', 'Job Category', 'Particular', 'Length', 'Width', 'Weight',
+  'Sr No.', 'Job Category', 'Particular', 'Length', 'Width',
   'Qty', 'Area', 'Unit', 'Rate', 'Amount', 'HSN Code',
 ];
 

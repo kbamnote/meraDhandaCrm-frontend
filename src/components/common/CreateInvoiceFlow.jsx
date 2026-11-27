@@ -94,6 +94,7 @@ const blankItem = () => ({
 // and tests have been importing it from here.
 import { lineArea, lineGross } from '../../utils/lineSize';
 import { FORM_MODAL_WIDTH } from '../../utils/formModal';
+import UnitSelect from './UnitSelect';
 
 export { lineArea, lineGross };
 
@@ -1093,15 +1094,14 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                   shop that really does quote by weight needs somewhere to
                   put it. Width feeds the area; Weight is recorded only. */}
               <colgroup>
-                <col style={{ width: 30 }} />
+                <col style={{ width: 44 }} />
                 <col style={{ width: 118 }} />
                 <col />
-                <col style={{ width: 58 }} />
-                <col style={{ width: 58 }} />
-                <col style={{ width: 58 }} />
                 <col style={{ width: 62 }} />
-                <col style={{ width: 80 }} />
                 <col style={{ width: 62 }} />
+                <col style={{ width: 66 }} />
+                <col style={{ width: 84 }} />
+                <col style={{ width: 92 }} />
                 <col style={{ width: 84 }} />
                 <col style={{ width: 92 }} />
                 <col style={{ width: 88 }} />
@@ -1118,7 +1118,6 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                   <th>Particular</th>
                   <th className="lt-r">Length</th>
                   <th className="lt-r">Width</th>
-                  <th className="lt-r">Weight</th>
                   <th className="lt-r">Qty</th>
                   <th className="lt-r">Area</th>
                   <th>Unit</th>
@@ -1238,11 +1237,6 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                       value={it.width} onChange={(e) => setItem(i, 'width', e.target.value)} />
                   </td>
                   <td>
-                    <input className="input input-num" data-testid="line-weight" type="number" min="0" step="any"
-                      placeholder="Wt" title="Recorded on the bill; it does not price the line"
-                      value={it.weight} onChange={(e) => setItem(i, 'weight', e.target.value)} />
-                  </td>
-                  <td>
                     <input className="input input-num" placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
                   </td>
                   {/* DERIVED, never typed — so the figure on the bill cannot
@@ -1251,7 +1245,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     {lineArea(it) > 0 ? lineArea(it) : <span className="lt-muted">—</span>}
                   </td>
                   <td>
-                    <input className="input" style={{ fontSize: 12 }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
+                    <UnitSelect testId="line-unit" value={it.unit} onChange={(v) => setItem(i, 'unit', v)} />
                   </td>
                   <td>
                     <input className="input input-num" placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
@@ -1405,7 +1399,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     for a column of their own. */}
                 <tr>
                   <td />
-                  <td colSpan={taxedBill ? 16 : 13} style={{ paddingTop: 2, paddingBottom: 6 }}>
+                  <td colSpan={taxedBill ? 15 : 12} style={{ paddingTop: 2, paddingBottom: 6 }}>
                     {/* Two boxes per row, captioned the first time: "Details"
                         alone did not read as "this is where the value goes". */}
                     {(it.extras || []).length > 0 && (
@@ -1461,7 +1455,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     <button className="btn btn-ghost btn-sm" style={{ color: 'var(--primary, #2563EB)' }}
                       onClick={() => setItems((a) => [...a, blankItem()])}>+ Add Item</button>
                   </td>
-                  <td colSpan={4} className="lt-r">Items subtotal</td>
+                  <td colSpan={3} className="lt-r">Items subtotal</td>
                   <td className="lt-r" data-testid="lines-qty-total">
                     {items.reduce((a, it) => a + (Number(it.qty) || 0), 0)}
                   </td>

@@ -85,6 +85,11 @@ export default function PurchaseDocument({ purchase }) {
   const hasJob = items.some((it) => String((it && it.jobCategory) || '').trim()
     || jobNum(it, 'length') > 0 || jobNum(it, 'width') > 0
     || jobNum(it, 'weight') > 0 || jobNum(it, 'area') > 0);
+  // Weight is no longer something a bill can be written with — nothing
+  // priced from it, so it was a column of dashes. Documents that DO carry
+  // one still print it, because a reprint has to show the bill as it was
+  // issued.
+  const hasWeight = items.some((it) => jobNum(it, 'weight') > 0);
   const sizeOf = (it) => (jobNum(it, 'length') > 0 && jobNum(it, 'width') > 0
     ? `${money(it.length)} × ${money(it.width)}`
     : '—');
@@ -198,7 +203,7 @@ export default function PurchaseDocument({ purchase }) {
                 <th>Item</th>
                 {hasJob && <th style={{ width: 80 }}>Category</th>}
                 {hasJob && <th style={{ width: 58 }}>Size</th>}
-                {hasJob && <th style={{ width: 44 }}>Wt.</th>}
+                {hasWeight && <th style={{ width: 44 }}>Wt.</th>}
                 {hasJob && <th style={{ width: 58 }}>Area</th>}
                 <th style={{ width: 60 }}>HSN</th>
                 <th style={{ width: 50 }}>Qty</th>
@@ -219,7 +224,7 @@ export default function PurchaseDocument({ purchase }) {
                   </td>
                   {hasJob && <td className="pd-c">{it.jobCategory || '—'}</td>}
                   {hasJob && <td className="pd-c">{sizeOf(it)}</td>}
-                  {hasJob && <td className="pd-c">{jobNum(it, 'weight') > 0 ? money(it.weight) : '—'}</td>}
+                  {hasWeight && <td className="pd-c">{jobNum(it, 'weight') > 0 ? money(it.weight) : '—'}</td>}
                   {hasJob && (
                     <td className="pd-c">
                       {jobNum(it, 'area') > 0
@@ -238,7 +243,7 @@ export default function PurchaseDocument({ purchase }) {
               ))}
               <tr>
                 {/* S.No + Item + HSN, plus the job columns when they are on. */}
-                <td colSpan={hasJob ? 7 : 3} className="pd-r"><b>Total</b></td>
+                <td colSpan={(hasJob ? 6 : 3) + (hasWeight ? 1 : 0)} className="pd-r"><b>Total</b></td>
                 <td className="pd-r"><b>{qtyTotal}</b></td>
                 <td colSpan={3} />
                 <td className="pd-r"><b>{money(p.taxTotal)}</b></td>

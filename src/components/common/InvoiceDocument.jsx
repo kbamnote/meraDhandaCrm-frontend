@@ -155,6 +155,11 @@ export default function InvoiceDocument({ invoice }) {
   const hasJob = items.some((it) => String((it && it.jobCategory) || '').trim()
     || jobNum(it, 'length') > 0 || jobNum(it, 'width') > 0
     || jobNum(it, 'weight') > 0 || jobNum(it, 'area') > 0);
+  // Weight is no longer something a bill can be written with — nothing
+  // priced from it, so it was a column of dashes. Documents that DO carry
+  // one still print it, because a reprint has to show the bill as it was
+  // issued.
+  const hasWeight = items.some((it) => jobNum(it, 'weight') > 0);
   // The size as it was quoted — the two figures the area is derived from, so
   // the arithmetic on the page can be followed.
   const sizeOf = (it) => (jobNum(it, 'length') > 0 && jobNum(it, 'width') > 0
@@ -170,7 +175,7 @@ export default function InvoiceDocument({ invoice }) {
   // money column. On a job card that last column is the line's gross, and
   // AMOUNT (before tax) becomes an ordinary column inside the span.
   const labelSpan = 5 + (showGstCol ? 1 : 0) + (hasLineDisc ? 1 : 0)
-    + (hasJob ? 4 + 1 + 1 : 0);
+    + (hasJob ? 3 + 1 + 1 : 0) + (hasWeight ? 1 : 0);
   const halfRate = round2((Number(inv.gstRate) || 0) / 2);
   const qr = upiQrUrl(inv);
   const co = inv.company || {};
@@ -360,7 +365,7 @@ export default function InvoiceDocument({ invoice }) {
                   <th style={{ textAlign: 'left' }}>ITEMS</th>
                   {hasJob && <th style={{ width: 86 }}>CATEGORY</th>}
                   {hasJob && <th style={{ width: 62 }}>SIZE</th>}
-                  {hasJob && <th style={{ width: 48 }}>WT.</th>}
+                  {hasWeight && <th style={{ width: 48 }}>WT.</th>}
                   {hasJob && <th style={{ width: 62 }}>AREA</th>}
                   <th style={{ width: 72 }}>HSN</th>
                   <th style={{ width: 60 }}>QTY.</th>
@@ -398,7 +403,7 @@ export default function InvoiceDocument({ invoice }) {
                     </td>
                     {hasJob && <td className="inv-c">{it.jobCategory || '—'}</td>}
                     {hasJob && <td className="inv-c">{sizeOf(it)}</td>}
-                    {hasJob && <td className="inv-c">{jobNum(it, 'weight') > 0 ? plain(it.weight) : '—'}</td>}
+                    {hasWeight && <td className="inv-c">{jobNum(it, 'weight') > 0 ? plain(it.weight) : '—'}</td>}
                     {/* The area, in the line's own unit — an 8 × 5 inch job
                         and a 4 × 8 foot job each read in the unit they were
                         quoted in, so the unit is printed with the figure. */}
@@ -499,7 +504,7 @@ export default function InvoiceDocument({ invoice }) {
                 <tr style={{ background: '#e8f0e4', fontWeight: 700 }}>
                   {/* S.NO + ITEMS + HSN, plus the four job columns when they
                       are on, so TOTAL still sits beside the qty it totals. */}
-                  <td colSpan={hasJob ? 7 : 3} className="inv-r">TOTAL</td>
+                  <td colSpan={(hasJob ? 6 : 3) + (hasWeight ? 1 : 0)} className="inv-r">TOTAL</td>
                   <td className="inv-c">{plain(qtyTotal)}</td>
                   <td />
                   {hasLineDisc && <td />}

@@ -111,7 +111,10 @@ vi.mock('../src/services/api.js', async () => ({
   uploadApi: { upload: vi.fn() },
   productionTypesApi: { list: () => Promise.resolve([{ name: 'Flex Printing', enabled: true }]) },
   dbApi: { list: () => Promise.resolve({}) },
-  accountingApi: {},
+  accountingApi: {
+    units: () => Promise.resolve({ units: [{ name: 'Sqft' }, { name: 'Pcs' }] }),
+    addUnit: (name) => Promise.resolve({ name, added: true }),
+  },
   describeError: (e, f) => f,
 }));
 
