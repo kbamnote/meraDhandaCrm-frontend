@@ -65,8 +65,13 @@ const blankLine = () => ({
   rateOn: 'qty',
 });
 
-// Category, Particular, L, W, Wt, Qty, Unit, Rate, Amount, ✕
-const JOB_COLS = '1.1fr 1.6fr 52px 52px 52px 58px 56px 68px 86px 20px';
+// Matches CreateInvoiceFlow's form card. Exported so the two cannot drift.
+export const JOB_MODAL_WIDTH = 1300;
+
+// No., Category, Particular, HSN, L, W, Wt, Qty, Unit, Rate, Amount, ✕ —
+// the bill's own columns, with the three the bill carries on a second row
+// (length, width, weight) brought inline because there is width for them.
+const JOB_COLS = '26px 1.1fr 2fr 84px 64px 64px 64px 70px 72px 84px 96px 104px 24px';
 const cell = { fontSize: 12, padding: '4px 6px', width: '100%' };
 const numCell = { ...cell, textAlign: 'right' };
 const asArr = (d) => (Array.isArray(d) ? d : d ? Object.values(d) : []);
@@ -340,7 +345,13 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
         className="card"
         onSubmit={submit}
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 460, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}
+        // The same shell the bill opens in — 1300, not 460. A job card is a
+        // priced document with a line table on it, and read down a phone-wide
+        // column the table had to scroll sideways to show a row. Keep this in
+        // step with CreateInvoiceFlow's form card; the two are opened for the
+        // same work minutes apart and a different size reads as a different
+        // kind of screen.
+        style={{ maxWidth: JOB_MODAL_WIDTH, width: '100%', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', padding: 28, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.35)' }}
       >
         <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
           <h3 style={{ margin: 0 }}>📋 {isEdit ? t('editJob') : t('newJob')}</h3>
@@ -523,28 +534,43 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
                 moves stock survives the trip. Everything but the name is
                 optional: a job that is just "500 visiting cards" fills in
                 Qty and nothing else. */}
+            {/* The bill lets a line be typed straight in; so does this. The
+                search above is the way to a CATALOG item — which is what
+                carries stock — but work nobody stocks is still work. */}
+            <button type="button" className="btn btn-ghost btn-xs" data-testid="job-add-line"
+              style={{ marginTop: 6, color: 'var(--primary, #2563EB)' }}
+              onClick={() => setItems((a) => [...a, blankLine()])}>
+              + Add line
+            </button>
             {items.length > 0 && (
               <div style={{ marginTop: 8, overflowX: 'auto' }} data-testid="job-lines">
-                <div style={{ minWidth: 640 }}>
+                <div style={{ minWidth: 960 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: JOB_COLS, gap: 6, fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', padding: '0 2px 4px' }}>
-                    <span>Category</span><span>Particular</span>
+                    <span>No</span><span>Category</span><span>Particular</span><span>HSN</span>
                     <span style={{ textAlign: 'right' }}>L</span>
                     <span style={{ textAlign: 'right' }}>W</span>
                     <span style={{ textAlign: 'right' }}>Wt.</span>
                     <span style={{ textAlign: 'right' }}>Qty</span>
                     <span>Unit</span>
                     <span style={{ textAlign: 'right' }}>Rate</span>
+                    <span>Rate on</span>
                     <span style={{ textAlign: 'right' }}>Amount</span>
                     <span />
                   </div>
                   {items.map((it, i) => (
                     <div key={i} data-testid="job-line" style={{ display: 'grid', gridTemplateColumns: JOB_COLS, gap: 6, alignItems: 'center', padding: '3px 0' }}>
+                      <span style={{ fontSize: 11.5, color: 'var(--text3)' }}>{i + 1}</span>
                       <input className="input" data-testid="job-line-category" list="job-line-cats" style={cell}
                         placeholder="Category" value={it.jobCategory || ''}
                         onChange={(e) => setLine(i, 'jobCategory', e.target.value)} />
                       <input className="input" data-testid="job-line-name" style={cell}
                         placeholder="Particular" value={it.name || ''}
                         onChange={(e) => setLine(i, 'name', e.target.value)} />
+                      {/* The bill needs it and the catalog often knows it, so
+                          it is filled in here rather than retyped there. */}
+                      <input className="input" data-testid="job-line-hsn" style={cell}
+                        placeholder="HSN" value={it.hsn || ''}
+                        onChange={(e) => setLine(i, 'hsn', e.target.value)} />
                       <input className="input" data-testid="job-line-length" style={numCell} type="number" min="0" step="any"
                         placeholder="L" value={it.length || ''} onChange={(e) => setLine(i, 'length', e.target.value)} />
                       <input className="input" style={numCell} type="number" min="0" step="any"
@@ -558,6 +584,19 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
                         value={it.unit || ''} onChange={(e) => setLine(i, 'unit', e.target.value)} />
                       <input className="input" data-testid="job-line-rate" style={numCell} type="number" min="0" step="any"
                         placeholder="Rate" value={it.rate || ''} onChange={(e) => setLine(i, 'rate', e.target.value)} />
+                      {/* Which figure the rate multiplies, on the row — the
+                          bill puts it here too. Offered only once the line
+                          HAS an area, because "per area" against no area
+                          would price it at zero. */}
+                      <select className="input" data-testid="job-line-rate-on"
+                        style={{ ...cell, padding: '4px 2px' }}
+                        title="Is the price per piece, or per unit of area?"
+                        disabled={lineArea(it) <= 0}
+                        value={it.rateOn === 'area' && lineArea(it) > 0 ? 'area' : 'qty'}
+                        onChange={(e) => setLine(i, 'rateOn', e.target.value)}>
+                        <option value="qty">× Qty</option>
+                        <option value="area">× Area</option>
+                      </select>
                       <span style={{ textAlign: 'right', fontSize: 12, fontWeight: 600 }} data-testid="job-line-amount">
                         {inrPlain(lineGross(it))}
                         {/* The area the price was taken on, when it was. */}
@@ -572,23 +611,8 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
                         onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))}>✕</button>
                     </div>
                   ))}
-                  {/* Charge by the area instead of the piece, per line. Shown
-                      only for a line that HAS an area, because "per area"
-                      with no area would price it at zero. */}
-                  {items.some((it) => lineArea(it) > 0) && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '6px 2px 0', fontSize: 11.5, color: 'var(--text2)' }}>
-                      {items.map((it, i) => (lineArea(it) > 0 ? (
-                        <label key={i} className="flex items-center" style={{ gap: 4 }}>
-                          <input type="checkbox" data-testid="job-line-per-area"
-                            checked={it.rateOn === 'area'}
-                            onChange={(e) => setLine(i, 'rateOn', e.target.checked ? 'area' : 'qty')} />
-                          {it.name || `Line ${i + 1}`}: rate per area
-                        </label>
-                      ) : null))}
-                    </div>
-                  )}
                   <div style={{ display: 'grid', gridTemplateColumns: JOB_COLS, gap: 6, padding: '6px 2px 0', borderTop: '1px solid var(--border)', marginTop: 4, fontWeight: 700, fontSize: 12 }}>
-                    <span style={{ gridColumn: '1 / 9', textAlign: 'right' }}>Total</span>
+                    <span style={{ gridColumn: '1 / 12', textAlign: 'right' }}>Total</span>
                     <span style={{ textAlign: 'right' }} data-testid="job-lines-total">{inrPlain(linesTotal)}</span>
                     <span />
                   </div>
