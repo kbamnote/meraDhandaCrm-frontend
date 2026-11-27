@@ -125,6 +125,9 @@ export function jobItemToLine(it) {
     width: str(it && it.width),
     weight: str(it && it.weight),
     rateOn: it && it.rateOn === 'area' ? 'area' : 'qty',
+    // A rate agreed at the counter is the rate billed. Blank means none was
+    // agreed, and the line then follows the invoice rate as it always did.
+    taxRate: it && it.taxRate != null && it.taxRate !== '' ? String(it.taxRate) : '',
   };
 }
 
@@ -1077,32 +1080,55 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                 is per under the rate) sit inside that field's cell rather
                 than on a second row that breaks the columns. */}
             <div style={{ overflowX: 'auto' }}>
-            <table className="line-table" style={{ minWidth: 1080 }}>
+            <table className="line-table" style={{ minWidth: 1480 }}>
+              {/* The shop's own job-sheet order, column for column:
+                  Sr No · Job Category · Particular · Length · Width ·
+                  Weight · Qty · Area · Unit · Rate · Amount · HSN · Tax ·
+                  Tax Amt · G Total. Discount sits before Tax because it is
+                  taken before it; the sheet has no discount column.
+
+                  Width and Weight are both here. The sheet labels its second
+                  size column "Weight", but the arithmetic on every row is
+                  Length × Width × Qty, so that column is a WIDTH — and a
+                  shop that really does quote by weight needs somewhere to
+                  put it. Width feeds the area; Weight is recorded only. */}
               <colgroup>
-                <col style={{ width: 32 }} />
+                <col style={{ width: 30 }} />
+                <col style={{ width: 118 }} />
                 <col />
-                <col style={{ width: 128 }} />
-                <col style={{ width: 104 }} />
-                <col style={{ width: 164 }} />
-                <col style={{ width: 104 }} />
-                <col style={{ width: 128 }} />
-                <col style={{ width: 112 }} />
-                {taxedBill && <col style={{ width: 112 }} />}
-                <col style={{ width: 108 }} />
+                <col style={{ width: 58 }} />
+                <col style={{ width: 58 }} />
+                <col style={{ width: 58 }} />
                 <col style={{ width: 62 }} />
+                <col style={{ width: 80 }} />
+                <col style={{ width: 62 }} />
+                <col style={{ width: 84 }} />
+                <col style={{ width: 92 }} />
+                <col style={{ width: 88 }} />
+                <col style={{ width: 94 }} />
+                {taxedBill && <col style={{ width: 74 }} />}
+                {taxedBill && <col style={{ width: 82 }} />}
+                {taxedBill && <col style={{ width: 92 }} />}
+                <col style={{ width: 52 }} />
               </colgroup>
               <thead>
                 <tr>
-                  <th className="lt-c">No</th>
-                  <th>Items</th>
-                  <th>Category</th>
-                  <th>HSN/SAC</th>
-                  <th>Size · Weight</th>
+                  <th className="lt-c">Sr No.</th>
+                  <th>Job Category</th>
+                  <th>Particular</th>
+                  <th className="lt-r">Length</th>
+                  <th className="lt-r">Width</th>
+                  <th className="lt-r">Weight</th>
                   <th className="lt-r">Qty</th>
-                  <th className="lt-r">Price (₹)</th>
+                  <th className="lt-r">Area</th>
+                  <th>Unit</th>
+                  <th className="lt-r">Rate</th>
+                  <th className="lt-r">Amount</th>
+                  <th>HSN Code</th>
                   <th>Discount ₹/%</th>
-                  {taxedBill && <th>Tax</th>}
-                  <th className="lt-r">Amount (₹)</th>
+                  {taxedBill && <th className="lt-r">Tax</th>}
+                  {taxedBill && <th className="lt-r">Tax Amt</th>}
+                  {taxedBill && <th className="lt-r">G Total</th>}
                   <th />
                 </tr>
               </thead>
@@ -1134,6 +1160,14 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                 <tbody key={i}>
                 <tr>
                   <td className="lt-c lt-muted" style={{ paddingTop: 10 }}>{i + 1}</td>
+                  <td>
+                    <input
+                      className="input" data-testid="line-category" list="line-job-cats"
+                      placeholder="Category" title="Which kind of work this line is"
+                      value={it.jobCategory}
+                      onChange={(e) => setItem(i, 'jobCategory', e.target.value)}
+                    />
+                  </td>
                   <td>
                     <div className="lt-pop">
                       <input className="input" placeholder="Item" value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} />
@@ -1190,13 +1224,63 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                       </div>
                     )}
                   </td>
+                  {/* The size the job was quoted at, a column each as the job
+                      sheet has them. Nothing converts between units, so
+                      8 × 5 inches stays 40 of them. */}
                   <td>
-                    <input
-                      className="input" data-testid="line-category" list="line-job-cats"
-                      placeholder="Category" title="Which kind of work this line is"
-                      value={it.jobCategory}
-                      onChange={(e) => setItem(i, 'jobCategory', e.target.value)}
-                    />
+                    <input className="input input-num" data-testid="line-length" type="number" min="0" step="any"
+                      placeholder="L" title="Length, in this line's unit"
+                      value={it.length} onChange={(e) => setItem(i, 'length', e.target.value)} />
+                  </td>
+                  <td>
+                    <input className="input input-num" data-testid="line-width" type="number" min="0" step="any"
+                      placeholder="W" title="Width, in this line's unit — this is what the area is taken from"
+                      value={it.width} onChange={(e) => setItem(i, 'width', e.target.value)} />
+                  </td>
+                  <td>
+                    <input className="input input-num" data-testid="line-weight" type="number" min="0" step="any"
+                      placeholder="Wt" title="Recorded on the bill; it does not price the line"
+                      value={it.weight} onChange={(e) => setItem(i, 'weight', e.target.value)} />
+                  </td>
+                  <td>
+                    <input className="input input-num" placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
+                  </td>
+                  {/* DERIVED, never typed — so the figure on the bill cannot
+                      disagree with the three numbers it came from. */}
+                  <td className="lt-r" data-testid="line-area" style={{ paddingTop: 10, fontSize: 12.5 }}>
+                    {lineArea(it) > 0 ? lineArea(it) : <span className="lt-muted">—</span>}
+                  </td>
+                  <td>
+                    <input className="input" style={{ fontSize: 12 }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
+                  </td>
+                  <td>
+                    <input className="input input-num" placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
+                    {/* Which figure the rate multiplies. Offered only once
+                        there IS an area, because "× Area" against no area
+                        would price the line at zero. */}
+                    <select
+                      className="input" data-testid="line-rate-on" style={{ fontSize: 11 }}
+                      title="Is the price per piece, or per unit of area?"
+                      disabled={lineArea(it) <= 0}
+                      value={it.rateOn === 'area' && lineArea(it) > 0 ? 'area' : 'qty'}
+                      onChange={(e) => setItem(i, 'rateOn', e.target.value)}
+                    >
+                      <option value="qty">× Qty</option>
+                      <option value="area">× Area</option>
+                    </select>
+                  </td>
+                  <td className="lt-amt" style={{ paddingTop: 10 }} data-testid="line-amount">
+                    {inr(round2(amount + lineExtras))}
+                    {lineExtras > 0 && (
+                      <span className="lt-muted" style={{ display: 'block', fontWeight: 400 }}>
+                        incl. {inr(lineExtras)} charges
+                      </span>
+                    )}
+                    {itemDisc > 0 && (
+                      <span className="lt-muted" style={{ display: 'block', fontWeight: 400 }}>
+                        <s>{inr(gross)}</s>
+                      </span>
+                    )}
                   </td>
                   {/* HSN is a way IN to the catalog, not just a field to fill:
                       people work from a rate chart and know the code before the
@@ -1206,7 +1290,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                       <input className="input" placeholder="HSN/SAC" value={it.hsn}
                         onChange={(e) => setItem(i, 'hsn', e.target.value)} />
                       {hsnMatches.length > 0 && (
-                        <div className="card" data-testid="hsn-matches" style={{ position: 'absolute', zIndex: 5, left: 0, minWidth: 220, top: '100%', marginTop: 2, padding: 0, maxHeight: 200, overflow: 'auto' }}>
+                        <div className="card" data-testid="hsn-matches" style={{ position: 'absolute', zIndex: 5, right: 0, minWidth: 220, top: '100%', marginTop: 2, padding: 0, maxHeight: 200, overflow: 'auto' }}>
                           {hsnMatches.map((pr) => (
                             <div key={pr.id} onClick={() => pickCatalogItem(i, pr)}
                               style={{ padding: '7px 9px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
@@ -1217,49 +1301,6 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                         </div>
                       )}
                     </div>
-                  </td>
-                  {/* The size the job was quoted at. Area is DERIVED and shown
-                      rather than typed, so the figure on the bill cannot
-                      disagree with the numbers beside it; nothing converts
-                      between units, so 8 × 5 inches stays 40 of them. */}
-                  <td>
-                    <div className="flex items-center" style={{ gap: 2 }}>
-                      <input className="input input-num" data-testid="line-length" type="number" min="0" step="any"
-                        placeholder="L" title="Length, in this line's unit"
-                        value={it.length} onChange={(e) => setItem(i, 'length', e.target.value)} />
-                      <span className="lt-muted">×</span>
-                      <input className="input input-num" data-testid="line-width" type="number" min="0" step="any"
-                        placeholder="W" title="Width, in this line's unit"
-                        value={it.width} onChange={(e) => setItem(i, 'width', e.target.value)} />
-                      <input className="input input-num" data-testid="line-weight" type="number" min="0" step="any"
-                        placeholder="Wt" title="Recorded on the bill; it does not price the line"
-                        value={it.weight} onChange={(e) => setItem(i, 'weight', e.target.value)} />
-                    </div>
-                    <div className="lt-muted" data-testid="line-area" style={{ padding: '2px 6px 0' }}>
-                      {lineArea(it) > 0
-                        ? <>Area <b>{lineArea(it)}</b>{it.unit ? ' ' + it.unit : ''}</>
-                        : 'Area —'}
-                    </div>
-                  </td>
-                  <td>
-                    <input className="input input-num" placeholder="Qty" type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} />
-                    <input className="input" style={{ fontSize: 11.5, textAlign: 'right' }} placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, 'unit', e.target.value)} />
-                  </td>
-                  <td>
-                    <input className="input input-num" placeholder="Price" type="number" value={it.rate} onChange={(e) => setItem(i, 'rate', e.target.value)} />
-                    {/* Which figure the price multiplies. Offered only once
-                        there IS an area, because "× Area" against no area
-                        would price the line at zero. */}
-                    <select
-                      className="input" data-testid="line-rate-on" style={{ fontSize: 11.5 }}
-                      title="Is the price per piece, or per unit of area?"
-                      disabled={lineArea(it) <= 0}
-                      value={it.rateOn === 'area' && lineArea(it) > 0 ? 'area' : 'qty'}
-                      onChange={(e) => setItem(i, 'rateOn', e.target.value)}
-                    >
-                      <option value="qty">× Qty</option>
-                      <option value="area">× Area</option>
-                    </select>
                   </td>
                   {/* Discount on this product only — % of the line or flat ₹.
                       Blank = none; the bill Discount below still applies. */}
@@ -1321,28 +1362,21 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                           onChange={(e) => setItem(i, 'taxRate', e.target.value === '' ? CUSTOM_RATE : e.target.value)}
                         />
                       )}
-                      {/* What that rate comes to on this line — the figure the
-                          customer checks, rather than one only the totals know. */}
-                      {lineTax > 0 && (
-                        <div className="lt-muted lt-r" style={{ padding: '2px 6px 0' }} data-testid="line-tax-amt">
-                          ({inr(lineTax)})
-                        </div>
-                      )}
                     </td>
                   )}
-                  <td className="lt-amt" style={{ paddingTop: 10 }} data-testid="line-amount">
-                    {inr(round2(amount + lineExtras))}
-                    {lineExtras > 0 && (
-                      <span className="lt-muted" style={{ display: 'block', fontWeight: 400 }}>
-                        incl. {inr(lineExtras)} charges
-                      </span>
-                    )}
-                    {itemDisc > 0 && (
-                      <span className="lt-muted" style={{ display: 'block', fontWeight: 400 }}>
-                        <s>{inr(gross)}</s>
-                      </span>
-                    )}
-                  </td>
+                  {/* What that rate comes to on this line, and what the line
+                      comes to with it on — the two figures a customer checks a
+                      job against, which only the totals used to know. */}
+                  {taxedBill && (
+                    <td className="lt-r" style={{ paddingTop: 10, fontSize: 12.5 }} data-testid="line-tax-amt">
+                      {lineTax > 0 ? inr(lineTax) : <span className="lt-muted">—</span>}
+                    </td>
+                  )}
+                  {taxedBill && (
+                    <td className="lt-amt" style={{ paddingTop: 10 }} data-testid="line-gtotal">
+                      {inr(round2(round2(amount + lineExtras) + lineTax))}
+                    </td>
+                  )}
                   <td className="lt-c" style={{ paddingTop: 8 }}>
                     {/* The offer inside the name dropdown is easy to miss, and it
                         never appears at all for someone who starts from the HSN.
@@ -1371,7 +1405,7 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     for a column of their own. */}
                 <tr>
                   <td />
-                  <td colSpan={taxedBill ? 10 : 9} style={{ paddingTop: 2, paddingBottom: 6 }}>
+                  <td colSpan={taxedBill ? 16 : 13} style={{ paddingTop: 2, paddingBottom: 6 }}>
                     {/* Two boxes per row, captioned the first time: "Details"
                         alone did not read as "this is where the value goes". */}
                     {(it.extras || []).length > 0 && (
@@ -1427,19 +1461,24 @@ function NewInvoiceModal({ onClose, onCreated, t, initialType = 'invoice', job, 
                     <button className="btn btn-ghost btn-sm" style={{ color: 'var(--primary, #2563EB)' }}
                       onClick={() => setItems((a) => [...a, blankItem()])}>+ Add Item</button>
                   </td>
-                  <td colSpan={3} className="lt-r">Items subtotal</td>
+                  <td colSpan={4} className="lt-r">Items subtotal</td>
                   <td className="lt-r" data-testid="lines-qty-total">
                     {items.reduce((a, it) => a + (Number(it.qty) || 0), 0)}
                   </td>
                   <td />
                   <td />
-                  {taxedBill && <td />}
+                  <td />
                   <td className="lt-amt" data-testid="lines-amount-total">
                     {inr(round2(items.reduce((a, it) => {
                       const g = lineGross(it);
                       return a + round2(g - lineDiscount(it, g)) + lineExtrasTotal(it);
                     }, 0)))}
                   </td>
+                  <td />
+                  <td />
+                  {taxedBill && <td />}
+                  {taxedBill && <td />}
+                  {taxedBill && <td />}
                   <td />
                 </tr>
               </tfoot>
