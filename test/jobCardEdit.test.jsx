@@ -70,7 +70,9 @@ describe('the Job Cards page', () => {
     await openEdit();
     expect(field('Sharma Traders')).toBeTruthy();
     expect(field('9000000000')).toBeTruthy();
-    expect(field('Wedding cards')).toBeTruthy();
+    // No Work box any more; a card written before the line table shows what
+    // it said, read-only, rather than looking blank.
+    expect(screen.getByTestId('job-legacy-work').textContent).toContain('Wedding cards');
     expect(field('2026-10-01')).toBeTruthy();
     expect(field('Gold foil')).toBeTruthy();
     // Its own number, not the next one that would be issued. (It also appears
@@ -82,17 +84,36 @@ describe('the Job Cards page', () => {
 
   it('saving corrects that card instead of raising a new one', async () => {
     await openEdit();
-    fireEvent.change(field('Wedding cards'), { target: { value: 'Wedding cards — gold foil' } });
+    fireEvent.change(field('Gold foil'), { target: { value: 'Gold foil, double sided' } });
     submit();
     await waitFor(() => expect(updated).toHaveLength(1));
     expect(updated[0].id).toBe('j1');
-    expect(updated[0].body.work).toBe('Wedding cards — gold foil');
+    expect(updated[0].body.notes).toBe('Gold foil, double sided');
     expect(created, 'an edit must never create a second job').toHaveLength(0);
+  });
+
+  it('a card with no lines keeps the words it was written with', async () => {
+    // Nothing to derive `work` from, and the job list and the WhatsApp
+    // summary both read it — dropping it would blank them.
+    await openEdit();
+    submit();
+    await waitFor(() => expect(updated).toHaveLength(1));
+    expect(updated[0].body.work).toBe('Wedding cards');
+  });
+
+  it('once there are lines, they are what the job says it is', async () => {
+    await openEdit();
+    fireEvent.click(screen.getByTestId('job-add-line'));
+    await waitFor(() => expect(screen.getAllByTestId('job-line')).toHaveLength(1));
+    fireEvent.change(screen.getByTestId('job-line-name'), { target: { value: 'Flex banner' } });
+    fireEvent.change(screen.getByTestId('job-line-qty'), { target: { value: '3' } });
+    submit();
+    await waitFor(() => expect(updated).toHaveLength(1));
+    expect(updated[0].body.work).toBe('Flex banner x3');
   });
 
   it('keeps the rest of the card as it was', async () => {
     await openEdit();
-    fireEvent.change(field('Wedding cards'), { target: { value: 'Banners' } });
     submit();
     await waitFor(() => expect(updated).toHaveLength(1));
     const b = updated[0].body;

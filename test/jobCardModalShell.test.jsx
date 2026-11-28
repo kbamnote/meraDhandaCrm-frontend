@@ -117,3 +117,68 @@ describe('the card writes lines the way the bill does', () => {
     expect(screen.getAllByTestId('job-line')[0].children.length).toBe(header.children.length);
   });
 });
+
+/**
+ * The card does not fall off the screen when you miss a field.
+ *
+ * It holds a customer, a line table and a delivery promise. A mis-aimed
+ * click on the backdrop used to throw all of it away with no warning and no
+ * undo, which is a bad trade for a convenience nobody asked for. The ✕ is
+ * the way out and it is always on screen.
+ */
+describe('closing the job card', () => {
+  const open = async (onClose) => {
+    renderScreen(NewJobModal, { props: { onClose, onCreated: () => {} } });
+    await waitFor(() => expect(screen.getByTestId('job-add-line')).toBeTruthy());
+  };
+  // The backdrop is the fixed, full-screen layer the card sits on.
+  const backdrop = () => screen.getByTestId('job-modal-backdrop');
+
+  it('a click on the backdrop leaves it open', async () => {
+    const onClose = vi.fn();
+    await open(onClose);
+    expect(backdrop(), 'the backdrop is there to click').toBeTruthy();
+    fireEvent.click(backdrop());
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('job-add-line'), 'still open').toBeTruthy();
+  });
+
+  it('a click inside it leaves it open too', async () => {
+    const onClose = vi.fn();
+    await open(onClose);
+    fireEvent.click(screen.getByTestId('job-add-line'));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The upper fields read as a form, not as a row of very wide boxes.
+ *
+ * The card is as wide as the screen because the line table needs to be; a
+ * ten-digit mobile number does not, and stretched across 1700px it reads as
+ * a mistake.
+ */
+describe('the field layout', () => {
+  it('lays the customer fields out in columns', async () => {
+    renderScreen(NewJobModal, { props: { onClose: () => {}, onCreated: () => {} } });
+    await waitFor(() => expect(screen.getByPlaceholderText('Client ka poora naam...')).toBeTruthy());
+    const grid = screen.getByPlaceholderText('Client ka poora naam...').closest('div[style*="grid"]');
+    expect(grid, 'the name sits in a grid, not a full-width row').toBeTruthy();
+    expect(grid.style.gridTemplateColumns).toContain('minmax');
+  });
+
+  it('has no Work box — the lines are the work', async () => {
+    renderScreen(NewJobModal, { props: { onClose: () => {}, onCreated: () => {} } });
+    await waitFor(() => expect(screen.getByTestId('job-add-line')).toBeTruthy());
+    expect(document.querySelector('textarea')).toBeNull();
+  });
+
+  it('puts Sales Person above the line table', async () => {
+    renderScreen(NewJobModal, { props: { onClose: () => {}, onCreated: () => {} } });
+    await waitFor(() => expect(screen.getByTestId('job-lines')).toBeTruthy());
+    const sales = screen.getByPlaceholderText('Sales person ka naam');
+    const table = screen.getByTestId('job-lines');
+    // Node.compareDocumentPosition: 4 = the table FOLLOWS the sales box.
+    expect(sales.compareDocumentPosition(table) & 4).toBeTruthy();
+  });
+});

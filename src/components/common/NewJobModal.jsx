@@ -46,6 +46,26 @@ function JobSection({ icon, title, children }) {
 
 const lbl = { fontSize: 12, color: 'var(--text2)', marginBottom: 3, display: 'block' };
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+/**
+ * Fields sit in columns of a sensible width rather than stretching to the
+ * card.
+ *
+ * The card is as wide as the screen because the LINE TABLE needs to be. A
+ * name or a mobile number does not, and stretched across 1700px it reads as
+ * a mistake — the eye has to travel the whole width to find a ten-digit box
+ * with two characters in it. auto-fit means the same markup is three columns
+ * on a desktop and one on a laptop, without a breakpoint to maintain.
+ */
+const fieldGrid = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+  gap: '0 14px',
+  alignItems: 'start',
+};
+// For the one or two fields that genuinely want room (a search box, an
+// address) without taking the whole card.
+const wideField = { maxWidth: 560 };
 // The slabs, same list the bill offers.
 const JOB_GST_RATES = ['0', '5', '12', '18', '28'];
 // Plain rupees, no symbol: the column is already headed Amount and the
@@ -255,6 +275,31 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
   const linesTax = round2(items.reduce(
     (a, it) => a + round2((lineGross(it) * (Number(it.taxRate) || 0)) / 100), 0,
   ));
+  // What the customer is told the job comes to — the lines WITH their tax,
+  // which is the G Total the table shows. Offering the pre-tax figure for
+  // the order amount was the mismatch: the table said ₹528.64 and the box
+  // beside it offered ₹448.
+  const linesGross = round2(linesTotal + linesTax);
+
+  /**
+   * One line of plain words saying what the job is.
+   *
+   * There is no Work box any more — the lines ARE the work, and keeping a
+   * second free-text copy of them beside the table meant the two disagreed
+   * the moment anybody edited one. But the job list, the alert popup and
+   * the WhatsApp summary all read `work`, so it is derived rather than
+   * dropped. A card with no lines keeps whatever it was saved with.
+   */
+  const workFromLines = () => {
+    const named = items
+      .map((it) => String(it.name || '').trim())
+      .filter(Boolean)
+      .map((name, i) => {
+        const q = Number(items[i].qty) || 0;
+        return q > 1 ? `${name} x${q}` : name;
+      });
+    return named.length ? named.join(', ').slice(0, 300) : String(form.work || '').trim();
+  };
   const setLine = (i, k, v) => setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
 
   const suggestDate = () => {
@@ -293,6 +338,7 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
 
       const payload = {
         ...form,
+        work: workFromLines(),
         ...(extra || {}),
         designNeeded: isDesignNeeded,
         designerId: hasDesigner ? form.designerId : null,
@@ -347,13 +393,16 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
 
   return createPortal(
     <div
+      data-testid="job-modal-backdrop"
       style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 24px', overflowY: 'auto' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      // Deliberately NOT closed by a click on the backdrop. This card holds a
+      // customer, a line table and a delivery promise — a mis-aimed click
+      // while reaching for a field used to throw all of it away with no
+      // warning and no undo. The ✕ is the way out, and it is always on screen.
     >
       <form
         className="card"
         onSubmit={submit}
-        onClick={(e) => e.stopPropagation()}
         // The same shell the bill opens in — 1300, not 460. A job card is a
         // priced document with a line table on it, and read down a phone-wide
         // column the table had to scroll sideways to show a row. Keep this in
@@ -379,7 +428,7 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
 
         {/* CUSTOMER DETAILS */}
         <JobSection icon="👤" title="Customer Details">
-          <div className="form-group" style={{ position: 'relative' }}>
+          <div className="form-group" style={{ position: 'relative', ...wideField }}>
             <label style={lbl}>Search Existing Client (Mobile / Name / GST)</label>
             <input className="input" placeholder="Mobile number ya naam type karein..." value={clientQ} onChange={(e) => setClientQ(e.target.value)} />
             {clientMatches.length > 0 && (
@@ -440,29 +489,29 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
               <button type="button" className="btn btn-ghost btn-xs" onClick={clearExistingClient}>Clear</button>
             </div>
           )}
-          <div className="form-group">
-            <label style={lbl}>Client Name *</label>
-            <input className="input" placeholder="Client ka poora naam..." value={form.clientName} onChange={(e) => set('clientName', e.target.value)} autoFocus required />
-          </div>
-          <div className="flex gap-2">
-            <div className="form-group" style={{ flex: 1 }}>
+          <div style={fieldGrid}>
+            <div className="form-group">
+              <label style={lbl}>Client Name *</label>
+              <input className="input" placeholder="Client ka poora naam..." value={form.clientName} onChange={(e) => set('clientName', e.target.value)} autoFocus required />
+            </div>
+            <div className="form-group">
               <label style={lbl}>Mobile * (10 digits)</label>
               <input className="input" type="tel" placeholder="10 digit mobile..." value={form.clientMobile} onChange={(e) => set('clientMobile', e.target.value)} />
             </div>
-            <div className="form-group" style={{ flex: 1 }}>
+            <div className="form-group">
+              <label style={lbl}>Email</label>
+              <input className="input" type="email" placeholder="email@example.com" value={form.clientEmail} onChange={(e) => set('clientEmail', e.target.value)} />
+            </div>
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label style={lbl}>Address</label>
               <input className="input" placeholder="Client address..." value={form.address} onChange={(e) => set('address', e.target.value)} />
             </div>
-          </div>
-          <div className="form-group">
-            <label style={lbl}>Email</label>
-            <input className="input" type="email" placeholder="email@example.com" value={form.clientEmail} onChange={(e) => set('clientEmail', e.target.value)} />
           </div>
           <button type="button" className="btn btn-ghost btn-xs" onClick={() => setShowGst((v) => !v)}>
             {showGst ? '▲' : '▼'} GST / PAN / Credit Details (optional)
           </button>
           {showGst && (
-            <div className="flex gap-2" style={{ marginTop: 8 }}>
+            <div style={{ ...fieldGrid, marginTop: 8 }}>
               <div className="form-group" style={{ flex: 1 }}><label style={lbl}>GST No.</label><input className="input" value={form.gstNo} onChange={(e) => set('gstNo', e.target.value)} /></div>
               <div className="form-group" style={{ flex: 1 }}><label style={lbl}>PAN</label><input className="input" value={form.pan} onChange={(e) => set('pan', e.target.value)} /></div>
               <div className="form-group" style={{ flex: 1 }}><label style={lbl}>Credit ₹</label><input className="input" type="number" min="0" value={form.creditLimit} onChange={(e) => set('creditLimit', e.target.value)} /></div>
@@ -472,9 +521,30 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
 
         {/* JOB DETAILS */}
         <JobSection icon="🗒" title="Job Details">
-          <div className="form-group">
-            <label style={lbl}>Work / Particulars (zaroori — ya neeche product select karein)</label>
-            <textarea className="input" rows={3} placeholder={'Line 1: Flex banner 10x4 ft\nLine 2: Visiting cards 500 pcs'} value={form.work} onChange={(e) => set('work', e.target.value)} />
+          {/* A card written before the line table, reopened. The lines are
+              the work now, but this one has none and its words would
+              otherwise vanish from the screen — kept on save either way, so
+              showing them is the difference between a card that still says
+              what it is for and one that looks blank. Add a line and the
+              lines take over.  */}
+          {!items.length && String(form.work || '').trim() && (
+            <div data-testid="job-legacy-work"
+              style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--surface2)', fontSize: 12.5 }}>
+              <span style={{ color: 'var(--text3)' }}>Work: </span>{form.work}
+            </div>
+          )}
+          {/* Who sold it and anything special about it — above the lines,
+              because they are about the JOB and the lines are the detail. */}
+          <div style={fieldGrid}>
+            <div className="form-group">
+              <label style={lbl}>Sales Person</label>
+              <input className="input" list="np-salespeople" placeholder="Sales person ka naam" value={form.salesPerson} onChange={(e) => set('salesPerson', e.target.value)} />
+              <datalist id="np-salespeople">{salespeople.map((u) => <option key={idOf(u)} value={u.name || u.email} />)}</datalist>
+            </div>
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <label style={lbl}>Special Notes</label>
+              <input className="input" placeholder="Any special instructions..." value={form.notes} onChange={(e) => set('notes', e.target.value)} />
+            </div>
           </div>
           <div className="form-group">
             <label style={lbl}>🛍 Products/Items (optional — product list se select karein)</label>
@@ -718,54 +788,43 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
               </table>
             </div>
           </div>
-          <div className="flex gap-2">
-            <div className="form-group" style={{ flex: 1 }}>
-              <label style={lbl}>Special Notes</label>
-              <input className="input" placeholder="Any special instructions..." value={form.notes} onChange={(e) => set('notes', e.target.value)} />
-            </div>
-            <div className="form-group" style={{ flex: 1 }}>
-              <label style={lbl}>Sales Person</label>
-              <input className="input" list="np-salespeople" placeholder="Sales person ka naam" value={form.salesPerson} onChange={(e) => set('salesPerson', e.target.value)} />
-              <datalist id="np-salespeople">{salespeople.map((u) => <option key={idOf(u)} value={u.name || u.email} />)}</datalist>
-            </div>
-          </div>
           {/* Order value and what was taken up front. Part of the job card in
               the data model all along, but there was nowhere to enter them —
               they only survived an edit. Without the amount a job raised from a
               shop visit records a ₹0 order, which is exactly the number the
               rep's own dashboard adds up. The invoice later carries the real
               money; this is what was agreed at the shop. */}
-          <div className="flex gap-2">
-            <div className="form-group" style={{ flex: 1 }}>
+          <div style={fieldGrid}>
+            <div className="form-group">
               <label style={lbl}>Order Amount ₹</label>
               <input className="input" type="number" min="0" step="0.01" placeholder="0" data-testid="job-amount"
                 value={form.amount} onChange={(e) => set('amount', e.target.value)} />
               {/* Offered, not imposed. What was agreed at the shop is often a
                   round figure the lines do not add up to, and overwriting it
                   would lose the only record of what the customer was told. */}
-              {linesTotal > 0 && round2(Number(form.amount) || 0) !== linesTotal && (
+              {linesGross > 0 && round2(Number(form.amount) || 0) !== linesGross && (
                 <button type="button" className="btn btn-ghost btn-xs" data-testid="job-use-lines-total"
                   style={{ padding: '2px 0', color: 'var(--primary, #2563EB)', fontSize: 11.5 }}
-                  onClick={() => set('amount', String(linesTotal))}>
-                  Lines come to ₹{inrPlain(linesTotal)} — use it
+                  onClick={() => set('amount', String(linesGross))}>
+                  Lines come to ₹{inrPlain(linesGross)} — use it
                 </button>
               )}
             </div>
-            <div className="form-group" style={{ flex: 1 }}>
+            <div className="form-group">
               <label style={lbl}>Advance ₹</label>
               <input className="input" type="number" min="0" step="0.01" placeholder="0" data-testid="job-advance"
                 value={form.advance} onChange={(e) => set('advance', e.target.value)} />
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <div className="form-group" style={{ flex: 1 }}>
+          <div style={fieldGrid}>
+            <div className="form-group">
               <label style={lbl}>Delivery Date *
                 <button type="button" className="btn btn-ghost btn-xs" style={{ marginLeft: 6 }} onClick={suggestDate}>⚡ AI Suggest</button>
               </label>
               <input className="input" type="date" value={form.deliveryDate} onChange={(e) => set('deliveryDate', e.target.value)} />
             </div>
-            <div className="form-group" style={{ width: 190 }}>
+            <div className="form-group">
               <label style={lbl}>Delivery Time</label>
               <div className="flex gap-2">
                 <select className="input" value={dh} onChange={(e) => setDh(e.target.value)}>
@@ -788,8 +847,8 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
               ) : null}
             </div>
           </div>
-          <div className="flex gap-2">
-            <div className="form-group" style={{ flex: 1 }}>
+          <div style={fieldGrid}>
+            <div className="form-group">
               <label style={lbl}>Priority</label>
               <select className="input" value={form.priority} onChange={(e) => set('priority', e.target.value)}>
                 <option value="normal">Normal</option>
@@ -797,7 +856,7 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
                 <option value="most_urgent">🔥 Most Urgent</option>
               </select>
             </div>
-            <div className="form-group" style={{ flex: 1 }}>
+            <div className="form-group">
               <label style={lbl}>Design Required?</label>
               <select className="input" value={form.designNeeded} onChange={(e) => {
                 const v = e.target.value;
@@ -810,7 +869,7 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
             </div>
           </div>
           {form.designNeeded === 'yes' && (
-            <div className="form-group">
+            <div className="form-group" style={wideField}>
               <label style={lbl}>Assign Designer (optional)</label>
               <select className="input" value={form.designerId || ''} onChange={(e) => set('designerId', e.target.value)}>
                 <option value="">Broadcast to All Designers (Open Pool)</option>
@@ -820,12 +879,12 @@ export default function NewJobModal({ onClose, onCreated, job, prefill, extra, c
               </select>
             </div>
           )}
-          <div className="flex gap-2">
-            <div className="form-group" style={{ flex: 1 }}>
+          <div style={fieldGrid}>
+            <div className="form-group">
               <label style={lbl}>Event Type</label>
               <input className="input" placeholder="e.g. Wedding, Birthday, Corporate" value={form.eventType} onChange={(e) => set('eventType', e.target.value)} />
             </div>
-            <div className="form-group" style={{ flex: 1 }}>
+            <div className="form-group">
               <label style={lbl}>Bill Number (optional)
                 <button type="button" className="btn btn-ghost btn-xs" style={{ marginLeft: 6 }} onClick={autoBill}>⚡ Auto</button>
               </label>
