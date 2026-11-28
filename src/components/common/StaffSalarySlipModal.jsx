@@ -14,7 +14,8 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '../../i18n/LanguageContext';
 import { amountInWords } from './amountInWords';
-import { hrApi } from '../../services/api';
+import { hrApi, describeError } from '../../services/api';
+import { showToast } from './toast';
 
 const S = {
   title:        { en: 'Staff Salary Slip', hi: 'स्टाफ सैलरी स्लिप', hinglish: 'Staff Salary Slip', gu: 'સ્ટાફ પગાર સ્લિપ', mr: 'कर्मचारी पगार स्लिप', mwr: 'स्टाफ सैलरी स्लिप' },
@@ -336,12 +337,19 @@ export async function downloadSlipPdf(record, period, companyName = 'MeraDhanda 
   }
 }
 
-export default function StaffSalarySlipModal({ open, onClose, record, period, company }) {
+export default function StaffSalarySlipModal({ open, onClose, record, period, company, canEdit = false, onSaved }) {
   const t = useT(S);
   const [historySlips, setHistorySlips] = useState([]);
   const [activeRecord, setActiveRecord] = useState(record);
   const [activePeriod, setActivePeriod] = useState(period);
   const companyName = company || 'Mr Print World';
+  // Correcting the slip by hand. The computed figures are right for the
+  // ordinary month and wrong for the month somebody worked a Sunday, broke
+  // a machine, or was promised a bonus at the counter — and the shop pays
+  // what was agreed, not what the formula said.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setActiveRecord(record);
@@ -356,6 +364,67 @@ export default function StaffSalarySlipModal({ open, onClose, record, period, co
       })
       .catch(() => setHistorySlips([]));
   }, [open, record?.userId]);
+
+  const startEdit = () => {
+    setDraft({
+      gross: String(activeRecord.gross ?? ''),
+      deduction: String(activeRecord.deduction ?? ''),
+      advanceDeduction: String(activeRecord.advanceDeduction ?? ''),
+      net: String(activeRecord.net ?? ''),
+      note: '',
+    });
+    setEditing(true);
+  };
+
+  // Net follows the parts as they are typed, because a slip whose net does
+  // not equal gross less the deductions is one nobody can check — but it
+  // stays editable, since the figure that was actually agreed wins.
+  const setField = (k, v) => setDraft((d) => {
+    const next = { ...d, [k]: v };
+    if (k !== 'net' && k !== 'note') {
+      const n = (x) => Number(next[x]) || 0;
+      next.net = String(Math.round((n('gross') - n('deduction') - n('advanceDeduction')) * 100) / 100);
+    }
+    return next;
+  });
+
+  const saveEdit = async () => {
+    if (!activeRecord.id && !activeRecord._id) {
+      showToast('This slip has not been generated yet — run payroll for the month first', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = {
+        gross: Number(draft.gross) || 0,
+        deduction: Number(draft.deduction) || 0,
+        advanceDeduction: Number(draft.advanceDeduction) || 0,
+        net: Number(draft.net) || 0,
+        note: draft.note || undefined,
+      };
+      const saved = await hrApi.editSlip(activeRecord.id || activeRecord._id, body);
+      setActiveRecord(saved);
+      setEditing(false);
+      showToast('Salary slip updated', 'success');
+      if (onSaved) onSaved(saved);
+    } catch (e) {
+      showToast(describeError(e, 'Could not update this slip'), 'error');
+    } finally { setSaving(false); }
+  };
+
+  const resetEdit = async () => {
+    if (!window.confirm('Put this slip back to the figures payroll computed?\n\nWhatever was corrected by hand is lost.')) return;
+    setSaving(true);
+    try {
+      const saved = await hrApi.resetSlip(activeRecord.id || activeRecord._id);
+      setActiveRecord(saved);
+      setEditing(false);
+      showToast('Back to the computed figures', 'success');
+      if (onSaved) onSaved(saved);
+    } catch (e) {
+      showToast(describeError(e, 'Could not reset this slip'), 'error');
+    } finally { setSaving(false); }
+  };
 
   if (!open || !activeRecord) return null;
 
@@ -574,11 +643,67 @@ export default function StaffSalarySlipModal({ open, onClose, record, period, co
           </div>
         </div>
 
+        {/* Corrected by hand: say so on the slip, with who and why. A figure
+            that does not match the formula and does not say why is the one
+            somebody queries at the counter. */}
+        {activeRecord.edited && !editing && (
+          <div data-testid="slip-edited-note"
+            style={{ marginTop: 14, padding: '8px 10px', borderRadius: 8, background: 'var(--surface2)', fontSize: 12, color: 'var(--text2)' }}>
+            <b>Corrected by hand</b>
+            {activeRecord.editedByName ? ' by ' + activeRecord.editedByName : ''}
+            {activeRecord.editNote ? ' — ' + activeRecord.editNote : ''}
+            {activeRecord.computed && activeRecord.computed.net != null && (
+              <div style={{ color: 'var(--text3)', marginTop: 2 }}>
+                Payroll computed ₹{(Number(activeRecord.computed.net) || 0).toLocaleString('en-IN')}. A payroll re-run leaves this slip alone.
+              </div>
+            )}
+          </div>
+        )}
+
+        {editing && (
+          <div data-testid="slip-edit" style={{ marginTop: 14, padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Correct this slip</div>
+            <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+              {[['gross', 'Gross ₹'], ['deduction', 'Absence ₹'], ['advanceDeduction', 'Advance ₹'], ['net', 'Net ₹']].map(([k, label]) => (
+                <div className="form-group" key={k} style={{ flex: 1, minWidth: 120, margin: 0 }}>
+                  <label style={{ fontSize: 11, color: 'var(--text2)' }}>{label}</label>
+                  <input className="input input-num" data-testid={`slip-${k}`} type="number" min="0" step="0.01"
+                    value={draft[k]} onChange={(e) => setField(k, e.target.value)} />
+                </div>
+              ))}
+            </div>
+            <div className="form-group" style={{ marginTop: 8, marginBottom: 0 }}>
+              <label style={{ fontSize: 11, color: 'var(--text2)' }}>Why (printed on nothing, kept on the record)</label>
+              <input className="input" data-testid="slip-note" placeholder="e.g. Sunday working agreed with owner"
+                value={draft.note} onChange={(e) => setField('note', e.target.value)} />
+            </div>
+          </div>
+        )}
+
         {/* Modal Bottom Buttons */}
         <div className="flex justify-end gap-2" style={{ marginTop: 18 }}>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
             {t('close')}
           </button>
+          {canEdit && !editing && (
+            <button type="button" className="btn btn-outline btn-sm" data-testid="slip-edit-btn" onClick={startEdit}>
+              ✎ Edit
+            </button>
+          )}
+          {canEdit && !editing && activeRecord.edited && (
+            <button type="button" className="btn btn-ghost btn-sm" data-testid="slip-reset-btn"
+              disabled={saving} onClick={resetEdit}>
+              Reset to computed
+            </button>
+          )}
+          {editing && (
+            <>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={saving}
+                onClick={() => setEditing(false)}>Cancel</button>
+              <button type="button" className="btn btn-primary btn-sm" data-testid="slip-save"
+                disabled={saving} onClick={saveEdit}>{saving ? 'Saving…' : 'Save'}</button>
+            </>
+          )}
           <button
             type="button"
             className="btn btn-outline btn-sm"

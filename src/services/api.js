@@ -230,6 +230,13 @@ export const hrApi = {
   payrollGenerate: (month)    => api.post('/hr/payroll/generate', { month }).then(r => r.data),
   payrollSlips:    (params)   => api.get('/hr/payroll/slips', { params }).then(r => r.data),
   productivity:    (params)   => api.get('/hr/productivity', { params }).then(r => r.data),
+  // Correcting a slip by hand. Payroll runs then leave that slip alone, so
+  // a correction already paid out is not undone by the next re-run.
+  editSlip:        (id, body) => api.patch(`/hr/payroll/slips/${id}`, body).then(r => r.data),
+  resetSlip:       (id)       => api.post(`/hr/payroll/slips/${id}/reset`).then(r => r.data),
+  // What a day counts as. A half day is half a day's pay on the next run.
+  setDayStatus:    (uid, date, body) =>
+    api.post(`/hr/attendance/${uid}/${date}/status`, body).then(r => r.data),
   attendance:      (date)     => api.get('/hr/attendance', { params: date ? { date } : {} }).then(r => r.data),
   userAttendance:  (uid, month) => api.get(`/hr/attendance/${uid}`, { params: month ? { month } : {} }).then(r => r.data),
   // Custom date range (inclusive, YYYY-MM-DD). Per-teammate totals for the range…

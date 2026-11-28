@@ -55,7 +55,14 @@ const S = {
 
 export default function HrPayrollPage() {
   const t = useT(S);
-  const { tenant } = useAuth();
+  const { tenant, profile } = useAuth();
+  // Who may correct a slip. Mirrors hrAccess('payroll', 'write') on the
+  // server: admins, HR, or an explicit grant — and an explicit revoke wins.
+  const payRole = profile && profile.role;
+  const payPerms = (profile && profile.permissions) || {};
+  const canEditSlip = ['superadmin', 'admin', 'owner'].includes(payRole)
+    || (payPerms['payroll.write'] === true
+      || (payPerms['payroll.write'] !== false && payRole === 'hr'));
   const [mode, setMode] = useState('month');   // 'month' | 'range'
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [from, setFrom] = useState(firstOfMonth());
@@ -234,6 +241,11 @@ export default function HrPayrollPage() {
             isCustom: custom,
           }}
           company={tenant?.name || 'Mr Print World'}
+          canEdit={canEditSlip}
+          // The row behind the modal is the computed preview; a saved
+          // correction has to replace it, or closing and reopening shows
+          // the old figure back again.
+          onSaved={(saved) => setSelectedRow((r) => ({ ...r, ...saved }))}
         />
       )}
     </div>

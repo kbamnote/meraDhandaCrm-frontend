@@ -8,7 +8,7 @@
  * Read-only (the punch itself happens on the app).
  */
 import { useEffect, useState, useCallback } from 'react';
-import { hrApi } from '../services/api';
+import { hrApi, describeError } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useT } from '../i18n/LanguageContext';
 import { showToast } from '../components/common/toast';
@@ -91,6 +91,44 @@ export function listDays(from, to, today) {
 }
 
 const STATUS_BADGE = { present: 'badge-green', absent: 'badge-red', leave: 'badge-amber', 'half-day': 'badge-amber', late: 'badge-amber' };
+// What a day can be set to. 'late' is not offered: it is a fact about the
+// check-in time, not a decision, and the screen already derives it.
+const SETTABLE = ['present', 'half-day', 'absent', 'leave'];
+
+/**
+ * What a day counts as, changeable by whoever may write attendance.
+ *
+ * A half day is half a day's pay on the next payroll run, so the control is
+ * on the register rather than buried in payroll — the person correcting the
+ * day is the person who knows what happened.
+ */
+function DayStatus({ row, date, onChanged }) {
+  const [busy, setBusy] = useState(false);
+  const current = String(row.status || '').toLowerCase();
+  const set = async (status) => {
+    if (!status || status === current) return;
+    setBusy(true);
+    try {
+      await hrApi.setDayStatus(row.userId, date, { status });
+      showToast(`${row.username || 'Marked'}: ${status}`, 'success');
+      if (onChanged) onChanged();
+    } catch (e) {
+      showToast(describeError(e, 'Could not change that day'), 'error');
+    } finally { setBusy(false); }
+  };
+  return (
+    <select
+      className="input" data-testid="day-status" disabled={busy}
+      style={{ fontSize: 11.5, padding: '2px 4px', width: 96 }}
+      title="What this day counts as. A half day pays half."
+      value={SETTABLE.includes(current) ? current : ''}
+      onChange={(e) => set(e.target.value)}
+    >
+      {!SETTABLE.includes(current) && <option value="">{current || 'set…'}</option>}
+      {SETTABLE.map((v) => <option key={v} value={v}>{v}</option>)}
+    </select>
+  );
+}
 const fmt = (ms) => {
   if (!ms) return '—';
   return new Date(ms).toLocaleTimeString('en-IN', {
@@ -343,7 +381,14 @@ function UserAttendanceModal({ user, range, onClose, companyName }) {
 
 export default function HrAttendancePage() {
   const t = useT(S);
-  const { tenant } = useAuth();
+  const { tenant, profile } = useAuth();
+  // Who may correct a day. Mirrors hrAccess('attendance', 'write') on the
+  // server: admins, HR, or an explicit grant — and an explicit revoke wins.
+  const attRole = profile && profile.role;
+  const attPerms = (profile && profile.permissions) || {};
+  const canWrite = ['superadmin', 'admin', 'owner'].includes(attRole)
+    || (attPerms['attendance.write'] === true
+      || (attPerms['attendance.write'] !== false && attRole === 'hr'));
   const companyName = tenant?.name || 'MeraDhanda CRM';
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
@@ -552,6 +597,21 @@ export default function HrAttendancePage() {
                       <span className={`badge ${STATUS_BADGE[String(effectiveStatus || '').toLowerCase()] || 'badge-blue'}`}>
                         {effectiveStatus}
                       </span>
+                      {/* Why it is a half day, when nobody decided it was:
+                          the sweep closes a day that was never punched out
+                          of, and that reads very differently from a manager
+                          marking somebody. */}
+                      {r.autoHalfDay && (
+                        <div className="lt-muted" style={{ fontSize: 10.5, color: 'var(--text3)' }}>no punch-out</div>
+                      )}
+                      {r.statusSetByName && (
+                        <div style={{ fontSize: 10.5, color: 'var(--text3)' }}>by {r.statusSetByName}</div>
+                      )}
+                      {canWrite && (
+                        <div style={{ marginTop: 3 }}>
+                          <DayStatus row={r} date={date} onChanged={() => load(date)} />
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div>
